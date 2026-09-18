@@ -1,0 +1,22 @@
+@import "tailwindcss";
+/* src/index.css */
+
+/* Personalización del input date para iOS style */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  background-color: #f1f5f9; /* slate-100 */
+  padding: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background-color: #e2e8f0; /* slate-200 */
+  transform: scale(1.05);
+}
+
+/* Ocultar el texto placeholder feo de "dd/mm/aaaa" en algunos navegadores cuando está vacío */
+input[type="date"] {
+  position: relative;
+  font-family: inherit;
+}
