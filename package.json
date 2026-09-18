@@ -18,6 +18,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.10",
