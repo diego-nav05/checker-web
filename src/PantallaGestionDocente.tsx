@@ -24,8 +24,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState<any | null>(null);
   const [cargandoHistorialAsig, setCargandoHistorialAsig] = useState(false);
-  
-  // Nuevo estado para el modal de Exportación Global
   const [modalExportadorGlobal, setModalExportadorGlobal] = useState(false);
 
   const [fechaInicio, setFechaInicio] = useState<string>('');
@@ -219,20 +217,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setFechaFin('');
   };
 
-  // --- REPORTES INDIVIDUALES ---
+  // --- MOTOR PIVOT ROBUSTO (Resuelve columnas sobreescritas) ---
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
     const { data: sesionesDataRaw } = await supabase.from('sesiones').select('*').eq('asignatura_id', asignaturaSeleccionada.id);
     if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
-      mostrarNotificacion("No hay clases registradas en esta materia.", 'info');
+      mostrarNotificacion("La materia no tiene clases registradas.", 'info');
       return null;
     }
     const sesionIds = sesionesDataRaw.map(s => s.id);
 
     const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
     if (!asistData || asistData.length === 0) {
-      mostrarNotificacion("Ningún alumno ha registrado asistencia en esta materia.", 'info');
+      mostrarNotificacion("Ningún alumno ha registrado asistencia.", 'info');
       return null;
     }
 
@@ -241,16 +239,18 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const mapPerfiles: Record<string, string> = {};
     perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
+    // Mapeamos las fechas incluyendo HORA EXACTA para evitar sobreescritura de columnas
     const sesionesConFecha = sesionesDataRaw.map(ses => {
       let fechaIso = ses.created_at;
       if (!fechaIso) {
-        const primeraAsist = asistData.find(a => a.sesion_id === ses.id && a.hora_entrada);
-        fechaIso = primeraAsist ? primeraAsist.hora_entrada : new Date().toISOString();
+        const asistRef = asistData.find(a => a.sesion_id === ses.id && a.hora_entrada);
+        fechaIso = asistRef ? asistRef.hora_entrada : new Date().toISOString();
       }
+      const d = new Date(fechaIso);
       return {
         ...ses,
-        fechaStr: new Date(fechaIso).toLocaleDateString(),
-        fechaYMD: new Date(fechaIso).toISOString().split('T')[0]
+        fechaYMD: d.toISOString().split('T')[0],
+        fechaStr: `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`
       };
     });
 
@@ -268,7 +268,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const reporteAlumnos: Record<string, any> = {};
 
     aluIds.forEach(aluId => {
-      reporteAlumnos[aluId] = { Alumno: mapPerfiles[aluId] || 'Estudiante' };
+      reporteAlumnos[aluId] = { Alumno: mapPerfiles[aluId] || 'Estudiante Desconocido' };
       sesionesFiltradas.forEach(ses => { reporteAlumnos[aluId][ses.fechaStr] = 'AUSENTE'; });
     });
 
@@ -292,8 +292,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const libro = XLSX.utils.book_new();
       const hoja = XLSX.utils.json_to_sheet(data.filas);
       XLSX.utils.book_append_sheet(libro, hoja, 'Asistencias');
-      XLSX.writeFile(libro, `Reporte_${asignaturaSeleccionada.nombre.replace(/ /g, '_')}_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
-      mostrarNotificacion('Archivo Excel descargado.', 'exito');
+      
+      const nombreClaseLimpiado = asignaturaSeleccionada.nombre.replace(/[/\\?%*:|"<>]/g, '-');
+      XLSX.writeFile(libro, `${nombreClaseLimpiado}.xlsx`);
+      
+      mostrarNotificacion(`Excel de ${nombreClaseLimpiado} descargado.`, 'exito');
     } catch {
       mostrarNotificacion('Error generando el archivo.', 'error');
     } finally {
@@ -313,26 +316,30 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         ...data.filas.map((fila) => cabeceras.map((campo) => `${fila[campo] || ''}`).join('\t'))
       ].join('\n');
 
-      const textArea = document.createElement("textarea");
-      textArea.value = lineasTSV;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-999999px";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-
-      let copiadoConExito = false;
-      try { copiadoConExito = document.execCommand('copy'); } catch (err) { console.error("Fallo execCommand:", err); }
-      document.body.removeChild(textArea);
-
-      if (!copiadoConExito && navigator.clipboard) {
-        await navigator.clipboard.writeText(lineasTSV);
+      // Sistema de copiado híbrido a prueba de fallos
+      let copiado = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(lineasTSV);
+          copiado = true;
+        } catch (e) { console.warn("Clipboard API failed"); }
+      }
+      
+      if (!copiado) {
+        const textArea = document.createElement("textarea");
+        textArea.value = lineasTSV;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        try { document.execCommand('copy'); copiado = true; } catch (e) {}
+        document.body.removeChild(textArea);
       }
 
       window.open('https://sheets.new', '_blank');
-      mostrarNotificacion('¡Copiado! Abre Sheets y pega con Ctrl+V (o Cmd+V) en A1.', 'exito');
+      mostrarNotificacion(`Datos de ${data.filas.length} alumnos copiados. Pega en A1.`, 'exito');
     } catch (e) {
-      mostrarNotificacion('Tu navegador ha bloqueado el portapapeles.', 'error');
+      mostrarNotificacion('Error procesando los datos.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -352,7 +359,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const asigIds = asigs.map(a => a.id);
     const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds);
     if (!sesiones || sesiones.length === 0) {
-      mostrarNotificacion('No hay clases registradas aún.', 'info');
+      mostrarNotificacion('Ninguna clase ha sido registrada aún.', 'info');
       return null;
     }
 
@@ -380,7 +387,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           const asistRef = asistencias.find(a => a.sesion_id === ses.id && a.hora_entrada);
           f = asistRef ? asistRef.hora_entrada : new Date().toISOString();
         }
-        return { ...ses, fechaStr: new Date(f).toLocaleDateString() };
+        const d = new Date(f);
+        return { ...ses, fechaStr: `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}` };
       });
 
       const asistsDeEstaAsig = asistencias.filter(a => sesAsig.some(s => s.id === a.sesion_id));
@@ -390,7 +398,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const alumnosEnEstaAsig = [...new Set(asistsDeEstaAsig.map(a => a.alumno_id))];
 
       alumnosEnEstaAsig.forEach(idAlu => {
-        reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante' };
+        reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante Desconocido' };
         sesConFechas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
       });
 
@@ -440,31 +448,28 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       let lineasTSV = "";
 
-      // Apilamos las asignaturas en formato TSV
       datos.forEach((asig, index) => {
          if (index > 0) lineasTSV += "\n\n"; 
          lineasTSV += `[ MATERIA: ${asig.nombre.toUpperCase()} ]\n`;
-         
          const cabeceras = Object.keys(asig.filas[0]);
          lineasTSV += cabeceras.join('\t') + '\n';
-         
          lineasTSV += asig.filas.map(fila => cabeceras.map(campo => `${fila[campo] || ''}`).join('\t')).join('\n');
       });
 
-      const textArea = document.createElement("textarea");
-      textArea.value = lineasTSV;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-999999px";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-
-      let copiadoConExito = false;
-      try { copiadoConExito = document.execCommand('copy'); } catch (err) { console.error("Fallo execCommand:", err); }
-      document.body.removeChild(textArea);
-
-      if (!copiadoConExito && navigator.clipboard) {
-        await navigator.clipboard.writeText(lineasTSV);
+      let copiado = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try { await navigator.clipboard.writeText(lineasTSV); copiado = true; } catch (e) {}
+      }
+      
+      if (!copiado) {
+        const textArea = document.createElement("textarea");
+        textArea.value = lineasTSV;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(textArea);
       }
 
       window.open('https://sheets.new', '_blank');
@@ -477,7 +482,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
   };
 
-  // --- EDICIÓN DE AULAS ---
   const iniciarEdicionAula = (id: string, aulaActual: string) => {
     setEditandoAulaId(id);
     setAulaTemp(aulaActual);
