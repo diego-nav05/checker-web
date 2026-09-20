@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import CryptoJS from 'crypto-js';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
-import type { FaseSesion, EstadoAsistencia, Asignatura } from './types';
+import type { Asignatura } from './types';
 
 interface Props {
   onVolver: () => void;
@@ -18,9 +18,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [tabActual, setTabActual] = useState<TabAlumno>('HORARIO');
   const [camaraActiva, setCamaraActiva] = useState(false);
   
-  // Sistema de notificaciones (Estilo iOS Toast)
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
-
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
   const [asistenciasActivas, setAsistenciasActivas] = useState<any[]>([]);
@@ -32,14 +30,11 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
-  const qrCodeInstanceRef = useRef<Html5Qrcode | null>(null);
-
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
     setNotificacion({ texto, tipo });
     setTimeout(() => setNotificacion(null), 4000);
   };
 
-  // 1. CARGA AISLADA DE CLASES (Solo ve sus propias materias)
   const cargarAsignaturas = async () => {
     if (!alumnoId) return;
     setCargandoClases(true);
@@ -50,11 +45,10 @@ export default function PantallaAlumno({ onVolver }: Props) {
         return;
       }
       const sesionIds = [...new Set(misAsistencias.map(a => a.sesion_id))];
-      
       const { data: sesiones } = await supabase.from('sesiones').select('asignatura_id').in('id', sesionIds);
       if (!sesiones || sesiones.length === 0) return;
+      
       const asigIds = [...new Set(sesiones.map(s => s.asignatura_id))];
-
       const { data: asignaturas } = await supabase.from('asignaturas').select('*').in('id', asigIds).order('horario', { ascending: true });
       if (asignaturas) setClasesHoy(asignaturas as Asignatura[]);
     } catch (err) {
@@ -75,7 +69,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
     cargarAsistenciasActivas(); 
   }, [alumnoId]);
 
-  // 2. CALENDARIO ROBUSTO (Muestra todo el historial real)
   useEffect(() => {
     const cargarHistorial = async () => {
       if (!alumnoId || tabActual !== 'CALENDARIO') return;
@@ -96,7 +89,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
               fecha: fechaBase
             };
           }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
-
           setHistorial(historialMapeado);
         }
       } finally {
@@ -106,75 +98,92 @@ export default function PantallaAlumno({ onVolver }: Props) {
     cargarHistorial();
   }, [tabActual, alumnoId]);
 
-  // 3. CONTROL DE CÁMARA TRASERA AUTOMATIZADA
+  // --- MOTOR DE ESCÁNER ANTI-CRASHEOS ---
   useEffect(() => {
-    const arrancarEscaner = async () => {
-      if (!camaraActiva) {
-        if (qrCodeInstanceRef.current) {
-          try { await qrCodeInstanceRef.current.stop(); } catch (e) {}
-          qrCodeInstanceRef.current.clear();
-          qrCodeInstanceRef.current = null;
-        }
-        return;
-      }
+    let isMounted = true;
+    let html5QrCode: Html5Qrcode | null = null;
+    let scannerActivo = false;
 
-      // Forzar petición de permisos nativa de iOS/Android
+    const arrancar = async () => {
+      if (!camaraActiva) return;
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         stream.getTracks().forEach(track => track.stop());
       } catch (err) {
-        mostrarNotificacion('Permite el acceso a la cámara en los ajustes de tu navegador.', 'error');
+        if (!isMounted) return;
+        mostrarNotificacion('Permite la cámara en tu navegador.', 'error');
         setCamaraActiva(false);
         return;
       }
 
       setTimeout(async () => {
-        const html5QrCode = new Html5Qrcode('qr-reader');
-        qrCodeInstanceRef.current = html5QrCode;
-
+        if (!isMounted || !camaraActiva) return;
+        html5QrCode = new Html5Qrcode('qr-reader');
+        
         const onScanSuccess = async (decodedText: string) => {
-          try {
-            if (qrCodeInstanceRef.current) await qrCodeInstanceRef.current.stop();
-            setCamaraActiva(false);
+          if (!scannerActivo) return; // Evita doble lectura y crasheo
+          scannerActivo = false;
+          
+          // Ocultar cámara de inmediato (el useEffect limpiará la instancia nativa)
+          setCamaraActiva(false);
 
+          try {
             const payload = JSON.parse(decodedText);
             const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload;
 
             const { data: sesion } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
-            if (!sesion || sesion.fase === 'CERRADA') return mostrarNotificacion('Código expirado o clase cerrada.', 'error');
-
-            if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) return mostrarNotificacion('QR caducado. Enfoca de nuevo.', 'error');
-
+            if (!sesion || sesion.fase === 'CERRADA') return mostrarNotificacion('Código caducado.', 'error');
+            
+            if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) return mostrarNotificacion('QR caducado.', 'error');
+            
             const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
-            if (token !== tokenEsperado) return mostrarNotificacion('Código QR no válido.', 'error');
+            if (token !== tokenEsperado) return mostrarNotificacion('QR inválido.', 'error');
 
             const ahora = new Date().toISOString();
+            
+            // Inserción Blindada (2 Pasos)
             if (fase === 'ENTRADA') {
-              await supabase.from('asistencias').upsert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora }, { onConflict: 'sesion_id,alumno_id' });
-              mostrarNotificacion('Entrada registrada con éxito.', 'exito');
+               const { data: existe } = await supabase.from('asistencias').select('id').match({ sesion_id: sesionId, alumno_id: alumnoId }).maybeSingle();
+               if (existe) {
+                 await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
+               } else {
+                 await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
+               }
+               mostrarNotificacion('Entrada registrada.', 'exito');
             } else {
-              await supabase.from('asistencias').update({ hora_salida: ahora }).match({ sesion_id: sesionId, alumno_id: alumnoId });
-              mostrarNotificacion('Salida completada.', 'exito');
+               await supabase.from('asistencias').update({ hora_salida: ahora }).match({ sesion_id: sesionId, alumno_id: alumnoId });
+               mostrarNotificacion('Salida completada.', 'exito');
             }
 
             cargarAsistenciasActivas();
             cargarAsignaturas();
           } catch (e) {
-            mostrarNotificacion('Error leyendo el QR.', 'error');
+            mostrarNotificacion('Error procesando QR.', 'error');
           }
         };
 
         try {
-          await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
+          await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
+          scannerActivo = true;
         } catch (err) {
-          mostrarNotificacion('Error al iniciar la lente trasera.', 'error');
-          setCamaraActiva(false);
+          if (isMounted) {
+            mostrarNotificacion('Fallo al cargar lente.', 'error');
+            setCamaraActiva(false);
+          }
         }
-      }, 100);
+      }, 50);
     };
 
-    arrancarEscaner();
-    return () => { if (qrCodeInstanceRef.current) { qrCodeInstanceRef.current.stop().catch(()=>{}); } };
+    if (camaraActiva) arrancar();
+
+    return () => {
+      isMounted = false;
+      if (html5QrCode && scannerActivo) {
+        // Limpieza segura silenciosa
+        html5QrCode.stop().catch(() => {});
+      }
+    };
   }, [camaraActiva, alumnoId]);
 
   const confirmarSalidaSegura = async () => {
@@ -215,7 +224,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
   return (
     <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
       
-      {/* Pop-up de notificación iOS 27 */}
       {notificacion && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
           notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
@@ -226,7 +234,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Header Minimalista */}
       <div className="flex items-center justify-between bg-white/70 backdrop-blur-3xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 mb-8 max-w-4xl mx-auto w-full">
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
@@ -241,8 +248,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
       </div>
 
       <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col">
-        
-        {/* ESCÁNER ACTIVO */}
         {camaraActiva && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-6 mb-8 flex flex-col items-center animate-[fade-in_0.3s_ease-out]">
             <div className="w-full max-w-sm overflow-hidden rounded-[2rem] bg-black relative min-h-[350px] flex items-center justify-center shadow-inner">
@@ -252,11 +257,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
           </div>
         )}
 
-        {/* PESTAÑA: HORARIO / INICIO */}
         {tabActual === 'HORARIO' && !camaraActiva && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-[fade-in_0.4s_ease-out]">
-            
-            {/* Botón Principal de Escaneo */}
             <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto bg-[#0090d0] rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer active:scale-[0.97] transition-transform shadow-[0_15px_30px_rgb(0,144,208,0.25)] hover:shadow-[0_20px_40px_rgb(0,144,208,0.35)] relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 transition-transform group-hover:scale-150"></div>
               <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8">
@@ -265,10 +267,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               <h3 className="text-3xl font-black tracking-tight text-white leading-none">Registrar<br/>Asistencia</h3>
             </button>
 
-            {/* Panel de Clases */}
             <div className="md:col-span-2 bg-white/70 backdrop-blur-3xl rounded-[2.5rem] p-8 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 flex flex-col">
-              
-              {/* Clases en curso */}
               {asistenciasActivas.length > 0 && (
                 <div className="mb-8">
                   <h4 className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>En Clase</h4>
@@ -290,7 +289,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               {cargandoClases ? (
                 <div className="flex justify-center py-8 text-slate-400 font-medium animate-pulse">Sincronizando...</div>
               ) : clasesHoy.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center"><p className="text-sm font-medium text-slate-400">Aún no tienes asignaturas registradas.</p></div>
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center"><p className="text-sm font-medium text-slate-400">Escanea un QR para unirte a tu primera clase.</p></div>
               ) : (
                 <div className="space-y-3">
                   {clasesHoy.map((clase) => (
@@ -308,7 +307,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
           </div>
         )}
 
-        {/* PESTAÑA: CALENDARIO */}
         {tabActual === 'CALENDARIO' && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] p-8 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 animate-[fade-in_0.4s_ease-out]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
@@ -345,7 +343,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
         )}
       </div>
 
-      {/* Modal de Contraseña para Anular */}
       {modalSalir && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">

@@ -29,7 +29,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const [historialSesiones, setHistorialSesiones] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState<boolean>(false);
 
-  // Sistema de notificaciones (Estilo iOS Toast)
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
@@ -59,15 +58,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
       .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura })
       .select().single();
 
-    if (sesionError || !sesionData) {
-      return mostrarNotificacion('Error iniciando el aula.', 'error');
-    }
+    if (sesionError || !sesionData) return mostrarNotificacion('Error iniciando el aula.', 'error');
 
     setSesionId(sesionData.id);
 
-    // Precargar alumnos que ya han venido antes (para marcar ausencias si no escanean)
+    // Inserción inicial directa (sin upsert, para evitar fallos de base de datos)
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
-    
     if (pastSesiones && pastSesiones.length > 0) {
       const sesionIds = pastSesiones.map(s => s.id);
       const { data: pastAsistencias } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', sesionIds);
@@ -80,7 +76,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           estado: 'FALTA_INJUSTIFICADA' as EstadoAsistencia,
           manual: false
         }));
-        await supabase.from('asistencias').upsert(asistenciasIniciales, { onConflict: 'sesion_id,alumno_id' });
+        await supabase.from('asistencias').insert(asistenciasIniciales);
       }
     }
 
@@ -93,12 +89,24 @@ export default function PantallaProfesor({ onVolver }: Props) {
     if (data) setAsistencias(data as Asistencia[]);
   };
 
+  // --- MOTOR DE SINCRONIZACIÓN HÍBRIDO (Realtime + Polling cada 3 seg) ---
   useEffect(() => {
     if (!sesionId) return;
+    
+    // 1. WebSocket Inmediato
     const channel = supabase.channel('cambios-asistencia')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => cargarAsistencias(sesionId))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+      
+    // 2. Respaldo por Polling (Si la red universitaria bloquea los sockets, recarga manual)
+    const intervaloRespaldo = setInterval(() => {
+      cargarAsistencias(sesionId);
+    }, 3000);
+
+    return () => { 
+      supabase.removeChannel(channel); 
+      clearInterval(intervaloRespaldo);
+    };
   }, [sesionId]);
 
   useEffect(() => {
@@ -125,7 +133,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const intentarCerrarAula = () => {
     if (fase === 'ENTRADA') {
-      const confirmar = window.confirm('Aviso: No activaste la salida.\nSi cierras ahora, se validará la asistencia a todos los que entraron.\n¿Cerrar de todos modos?');
+      const confirmar = window.confirm('Aviso: No activaste la salida.\nSi cierras ahora, se validará la asistencia a todos.\n¿Cerrar?');
       if (!confirmar) return;
     }
     setMostrarModalCierre(true);
@@ -159,7 +167,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setMostrarModalCierre(false);
       setPassInput('');
       cargarAsistencias(sesionId);
-      mostrarNotificacion('Clase cerrada y archivada.', 'exito');
+      mostrarNotificacion('Clase archivada.', 'exito');
 
     } catch (error: any) {
       mostrarNotificacion(error.message, 'error');
@@ -170,11 +178,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const cambiarEstadoManual = async (asistenciaId: string, nuevoEstado: EstadoAsistencia) => {
     await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
-    setAsistencias((prev) => prev.map((a) => (a.id === asistenciaId ? { ...a, estado: nuevoEstado, manual: true } : a)));
+    cargarAsistencias(sesionId!); // Recargar directo para evitar cuelgues
   };
 
   const expulsarAlumno = async (asistenciaId: string, nombre: string) => {
-    const confirmar = window.confirm(`¿Expulsar a ${nombre} de la clase?`);
+    const confirmar = window.confirm(`¿Expulsar a ${nombre}?`);
     if (!confirmar) return;
     await supabase.from('asistencias').update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true }).eq('id', asistenciaId);
     if (sesionId) cargarAsistencias(sesionId);
@@ -223,7 +231,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
   return (
     <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
       
-      {/* Pop-up de notificación iOS 27 */}
       {notificacion && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
           notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
@@ -234,7 +241,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Header Docente */}
       <div className="flex items-center justify-between bg-white/70 backdrop-blur-3xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 mb-8 max-w-7xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
@@ -301,13 +307,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 max-w-7xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
           
-          {/* Zona de Proyección QR */}
           <div className="lg:col-span-5 bg-white/70 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 flex flex-col items-center justify-center text-center">
             {fase !== 'CERRADA' ? (
               <>
                 <div className="mb-8">
                   <span className="text-[10px] uppercase tracking-widest font-bold text-[#0090d0] bg-[#0090d0]/10 px-4 py-2 rounded-full">
-                    {fase === 'ENTRADA' ? '📍 Escaneo de Entrada' : '🚪 Escaneo de Salida'}
+                    {fase === 'ENTRADA' ? '📍 Escaneo Entrada' : '🚪 Escaneo Salida'}
                   </span>
                 </div>
                 <div className="p-4 bg-white rounded-[2rem] shadow-xl border border-slate-100">
@@ -315,7 +320,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                 </div>
                 <div className="mt-8 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  En Vivo
+                  Sincronizado
                 </div>
               </>
             ) : (
@@ -326,13 +331,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
             )}
           </div>
 
-          {/* Lista de Alumnos */}
           <div className="lg:col-span-7 bg-white/70 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 flex flex-col">
             <h2 className="text-xl font-black text-[#002b5c] tracking-tight mb-6">Alumnos ({asistencias.length})</h2>
             
             <div className="flex-1 overflow-y-auto max-h-[500px] pr-2 space-y-3">
               {asistencias.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-400 text-sm font-medium">Esperando conexiones...</div>
+                <div className="h-full flex items-center justify-center text-slate-400 text-sm font-medium">Esperando alumnos...</div>
               ) : (
                 asistencias.map((item) => (
                   <div key={item.id} className="p-4 bg-slate-50/50 hover:bg-white rounded-[1.5rem] flex items-center justify-between gap-4 transition-colors border border-transparent hover:border-slate-100">
@@ -374,7 +378,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Modal Cerrar Aula */}
       {mostrarModalCierre && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
@@ -389,7 +392,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Modal Historial Global */}
       {mostrarModalHistorial && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-lg w-full shadow-2xl border border-white/60">
