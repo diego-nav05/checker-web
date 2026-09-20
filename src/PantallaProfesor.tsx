@@ -25,6 +25,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const [clasesHoy, setClasesHoy] = useState<any[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
 
+  // NUEVO: Diccionario local para no depender del JOIN relacional de Postgres
+  const [diccionarioAlumnos, setDiccionarioAlumnos] = useState<Record<string, any>>({});
+
   const [mostrarModalHistorial, setMostrarModalHistorial] = useState<boolean>(false);
   const [historialSesiones, setHistorialSesiones] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState<boolean>(false);
@@ -37,8 +40,18 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   useEffect(() => {
-    const cargarAsignaturas = async () => {
+    const arrancarDatos = async () => {
       setCargandoClases(true);
+      
+      // 1. Descargamos todos los perfiles a la memoria local
+      const { data: perfilesData } = await supabase.from('perfiles').select('id, nombre_completo, email');
+      if (perfilesData) {
+        const dict: Record<string, any> = {};
+        perfilesData.forEach(p => dict[p.id] = p);
+        setDiccionarioAlumnos(dict);
+      }
+
+      // 2. Cargamos las asignaturas del profesor
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('horario', { ascending: true });
@@ -46,31 +59,23 @@ export default function PantallaProfesor({ onVolver }: Props) {
       }
       setCargandoClases(false);
     };
-    cargarAsignaturas();
+    arrancarDatos();
   }, []);
 
   const iniciarClase = async (idAsignatura: string) => {
     const nuevoSecret = Math.random().toString(36).substring(2, 10);
     setSecretTotp(nuevoSecret);
 
-    // SISTEMA BLINDADO: Dejamos que Supabase gestione las fechas automáticamente
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
-      .insert({ 
-        fase: 'ENTRADA', 
-        secret_totp: nuevoSecret, 
-        asignatura_id: idAsignatura 
-      })
+      .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura })
       .select()
       .single();
 
-    if (sesionError || !sesionData) {
-      return mostrarNotificacion(`Error BD: ${sesionError?.message || 'No se pudo crear la sesión'}`, 'error');
-    }
+    if (sesionError || !sesionData) return mostrarNotificacion(`Error BD: ${sesionError?.message || 'Fallo al abrir'}`, 'error');
 
     setSesionId(sesionData.id);
 
-    // Precargar alumnos anteriores (sin forzar fechas)
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
     if (pastSesiones && pastSesiones.length > 0) {
       const sesionIds = pastSesiones.map(s => s.id);
@@ -88,39 +93,44 @@ export default function PantallaProfesor({ onVolver }: Props) {
       }
     }
 
-    cargarAsistencias(sesionData.id);
+    cargarAsistencias(sesionData.id, diccionarioAlumnos);
     mostrarNotificacion('Aula iniciada correctamente.', 'exito');
   };
 
-  const cargarAsistencias = async (id: string) => {
-    const { data } = await supabase
-      .from('asistencias')
-      .select('*, perfiles(nombre_completo, email)')
-      .eq('sesion_id', id);
-
-    if (data) setAsistencias(data as Asistencia[]);
+  // SISTEMA A PRUEBA DE FALLOS: Petición plana y mapeo en React
+  const cargarAsistencias = async (idSesion: string, dict = diccionarioAlumnos) => {
+    // Pedimos solo los datos puros sin JOIN (nunca fallará si hay conexión)
+    const { data } = await supabase.from('asistencias').select('*').eq('sesion_id', idSesion);
+    
+    if (data) {
+      // Unimos los nombres usando el diccionario local de React
+      const datosCompletos = data.map(item => ({
+        ...item,
+        perfiles: dict[item.alumno_id] || { nombre_completo: 'Alumno Registrado' }
+      }));
+      setAsistencias(datosCompletos as Asistencia[]);
+    }
   };
 
   useEffect(() => {
     if (!sesionId) return;
 
-    cargarAsistencias(sesionId);
+    cargarAsistencias(sesionId, diccionarioAlumnos);
 
-    // Motor de Sincronización Absoluta (Triple Capa)
     const instantChannel = supabase.channel('aula-realtime')
       .on('broadcast', { event: 'update-lista' }, () => {
-        cargarAsistencias(sesionId);
+        cargarAsistencias(sesionId, diccionarioAlumnos);
       })
       .subscribe();
 
     const dbChannel = supabase.channel('aula-db')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => {
-        cargarAsistencias(sesionId);
+        cargarAsistencias(sesionId, diccionarioAlumnos);
       })
       .subscribe();
 
     const intervaloRespaldo = setInterval(() => {
-      cargarAsistencias(sesionId);
+      cargarAsistencias(sesionId, diccionarioAlumnos);
     }, 2000);
 
     return () => { 
@@ -128,7 +138,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       supabase.removeChannel(dbChannel);
       clearInterval(intervaloRespaldo);
     };
-  }, [sesionId]);
+  }, [sesionId, diccionarioAlumnos]);
 
   useEffect(() => {
     if (!sesionId || !secretTotp || fase === 'CERRADA') return;
@@ -187,7 +197,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setFase('CERRADA');
       setMostrarModalCierre(false);
       setPassInput('');
-      cargarAsistencias(sesionId);
+      cargarAsistencias(sesionId, diccionarioAlumnos);
       mostrarNotificacion('Clase archivada.', 'exito');
 
     } catch (error: any) {
@@ -199,14 +209,14 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const cambiarEstadoManual = async (asistenciaId: string, nuevoEstado: EstadoAsistencia) => {
     await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
-    cargarAsistencias(sesionId!); 
+    cargarAsistencias(sesionId!, diccionarioAlumnos); 
   };
 
   const expulsarAlumno = async (asistenciaId: string, nombre: string) => {
     const confirmar = window.confirm(`¿Expulsar a ${nombre}?`);
     if (!confirmar) return;
     await supabase.from('asistencias').update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true }).eq('id', asistenciaId);
-    cargarAsistencias(sesionId!);
+    cargarAsistencias(sesionId!, diccionarioAlumnos);
     mostrarNotificacion('Alumno expulsado.', 'info');
   };
 
@@ -233,11 +243,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   const descargarExcelPasado = async (sesionPasadaId: string, asigNombre: string, fecha: string) => {
-    const { data } = await supabase.from('asistencias').select('*, perfiles(nombre_completo)').eq('sesion_id', sesionPasadaId);
+    const { data } = await supabase.from('asistencias').select('*').eq('sesion_id', sesionPasadaId);
     if (!data || data.length === 0) return mostrarNotificacion('No hay registros en esta clase.', 'error');
     
     const filas = data.map((a: any) => ({
-      Alumno: a.perfiles?.nombre_completo || 'Desconocido',
+      Alumno: diccionarioAlumnos[a.alumno_id]?.nombre_completo || 'Desconocido',
       Estado: a.estado.replace(/_/g, ' '),
       Entrada: a.hora_entrada ? new Date(a.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '-',
       Salida: a.hora_salida ? new Date(a.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '-',

@@ -147,7 +147,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
               const ahora = new Date().toISOString();
               
-              // INSERCIÓN A BASE DE DATOS
+              // INSERCIÓN A BASE DE DATOS PLANA
               if (fase === 'ENTRADA') {
                  const { data: existe } = await supabase.from('asistencias').select('id').eq('sesion_id', sesionId).eq('alumno_id', alumnoId).maybeSingle();
                  if (existe) {
@@ -161,17 +161,17 @@ export default function PantallaAlumno({ onVolver }: Props) {
                  mostrarNotificacion('¡Salida completada!', 'exito');
               }
 
-              // SISTEMA INNOVADOR: Disparo de "Ping" ultrasónico al profesor para forzar refresco
+              // SISTEMA INNOVADOR: Enviar el PING de refresco obligatorio
               try {
                 const pingChannel = supabase.channel('aula-realtime');
                 pingChannel.subscribe((status) => {
                   if (status === 'SUBSCRIBED') {
-                    pingChannel.send({ type: 'broadcast', event: 'update-lista', payload: { ts: Date.now() } });
-                    setTimeout(() => supabase.removeChannel(pingChannel), 1000); // Limpieza rápida
+                    pingChannel.send({ type: 'broadcast', event: 'update-lista', payload: { action: 'refresh' } });
+                    setTimeout(() => supabase.removeChannel(pingChannel), 1000);
                   }
                 });
               } catch (e) {
-                 // Falla silenciosa si la red es débil, el polling del profesor lo salvará
+                 // Ignorar si el socket falla
               }
 
               cargarAsistenciasActivas();
