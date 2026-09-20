@@ -25,13 +25,15 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState<any | null>(null);
   const [cargandoHistorialAsig, setCargandoHistorialAsig] = useState(false);
   
+  // Nuevo estado para el modal de Exportación Global
+  const [modalExportadorGlobal, setModalExportadorGlobal] = useState(false);
+
   const [fechaInicio, setFechaInicio] = useState<string>('');
   const [fechaFin, setFechaFin] = useState<string>('');
 
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
 
-  // Estados para el nuevo panel de Gestión de Alumno
   const [alumnoGestion, setAlumnoGestion] = useState<any | null>(null);
   const [asignaturasAlumno, setAsignaturasAlumno] = useState<any[]>([]);
   const [cargandoAlumno, setCargandoAlumno] = useState(false);
@@ -40,7 +42,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
     setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 4000);
+    setTimeout(() => setNotificacion(null), 5000);
   };
 
   const cargarAlumnos = async () => {
@@ -49,7 +51,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Solo traemos alumnos que estén en materias de ESTE profesor
       const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user.id);
       if (!asigs || asigs.length === 0) return setAlumnos([]);
       
@@ -91,7 +92,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     if (tabActual === 'ASIGNATURAS') cargarAsignaturas();
   }, [tabActual]);
 
-  // --- NUEVO SISTEMA DE GESTIÓN DE ALUMNOS ---
   const abrirGestionAlumno = async (alumno: any) => {
     setAlumnoGestion(alumno);
     setCargandoAlumno(true);
@@ -135,7 +135,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   };
 
   const expulsarDeAsignatura = async (alumnoId: string, asigId: string) => {
-    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se borrará su historial de asistencia solo en esta clase.');
+    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se borrará su historial solo de esta clase.');
     if (!confirmar) return;
 
     const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
@@ -143,15 +143,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const sIds = sesiones.map((s: any) => s.id);
       await supabase.from('asistencias').delete().eq('alumno_id', alumnoId).in('sesion_id', sIds);
     }
-
     mostrarNotificacion('Expulsado de la materia.', 'exito');
     setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
-    if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); // Si ya no le quedan clases, cerramos modal
+    if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
     cargarAlumnos();
   };
 
   const expulsarDeTodas = async (alumnoId: string) => {
-    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS de forma permanente? El alumno no podrá volver a entrar a tus clases.');
+    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS de forma permanente?');
     if (!confirmar) return;
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -166,12 +165,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         await supabase.from('asistencias').delete().eq('alumno_id', alumnoId).in('sesion_id', sIds);
       }
     }
-
     mostrarNotificacion('Alumno erradicado de tus clases.', 'exito');
     setAlumnoGestion(null);
     cargarAlumnos();
   };
-  // ---------------------------------------------
 
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +219,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setFechaFin('');
   };
 
+  // --- REPORTES INDIVIDUALES ---
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
@@ -230,7 +228,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       mostrarNotificacion("No hay clases registradas en esta materia.", 'info');
       return null;
     }
-
     const sesionIds = sesionesDataRaw.map(s => s.id);
 
     const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
@@ -264,7 +261,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     });
 
     if (sesionesFiltradas.length === 0) {
-      mostrarNotificacion("No hay clases dentro del rango de fechas seleccionado.", 'info');
+      mostrarNotificacion("No hay clases en ese rango de fechas.", 'info');
       return null;
     }
 
@@ -290,15 +287,15 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setCargandoHistorialAsig(true);
     try {
       const data = await generarMatrizReporte();
-      if (!data) return;
+      if (!data || data.filas.length === 0) return;
 
       const libro = XLSX.utils.book_new();
       const hoja = XLSX.utils.json_to_sheet(data.filas);
       XLSX.utils.book_append_sheet(libro, hoja, 'Asistencias');
       XLSX.writeFile(libro, `Reporte_${asignaturaSeleccionada.nombre.replace(/ /g, '_')}_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
-      mostrarNotificacion('Archivo Excel generado con éxito.', 'exito');
+      mostrarNotificacion('Archivo Excel descargado.', 'exito');
     } catch {
-      mostrarNotificacion('Error al procesar el archivo Excel.', 'error');
+      mostrarNotificacion('Error generando el archivo.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -308,97 +305,179 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setCargandoHistorialAsig(true);
     try {
       const data = await generarMatrizReporte();
-      if (!data) return;
+      if (!data || data.filas.length === 0) return;
 
       const cabeceras = Object.keys(data.filas[0]);
       const lineasTSV = [
         cabeceras.join('\t'),
-        ...data.filas.map((fila) => cabeceras.map((campo) => `"${fila[campo] || ''}"`).join('\t'))
+        ...data.filas.map((fila) => cabeceras.map((campo) => `${fila[campo] || ''}`).join('\t'))
       ].join('\n');
 
-      await navigator.clipboard.writeText(lineasTSV);
+      const textArea = document.createElement("textarea");
+      textArea.value = lineasTSV;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      let copiadoConExito = false;
+      try { copiadoConExito = document.execCommand('copy'); } catch (err) { console.error("Fallo execCommand:", err); }
+      document.body.removeChild(textArea);
+
+      if (!copiadoConExito && navigator.clipboard) {
+        await navigator.clipboard.writeText(lineasTSV);
+      }
+
       window.open('https://sheets.new', '_blank');
-      mostrarNotificacion('Datos copiados. Pega con Cmd+V o Ctrl+V en la celda A1.', 'exito');
-    } catch {
-      mostrarNotificacion('Error copiando al portapapeles.', 'error');
+      mostrarNotificacion('¡Copiado! Abre Sheets y pega con Ctrl+V (o Cmd+V) en A1.', 'exito');
+    } catch (e) {
+      mostrarNotificacion('Tu navegador ha bloqueado el portapapeles.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
   };
 
-  const exportarTodoGlobal = async () => {
-    setCargando(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  // --- REPORTES GLOBALES ---
+  const generarDatosGlobales = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
 
-      const { data: asigs } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id);
-      if (!asigs || asigs.length === 0) return mostrarNotificacion('No tienes asignaturas registradas.', 'error');
+    const { data: asigs } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id);
+    if (!asigs || asigs.length === 0) {
+      mostrarNotificacion('No tienes asignaturas registradas.', 'error');
+      return null;
+    }
 
-      const asigIds = asigs.map(a => a.id);
-      const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds);
-      if (!sesiones || sesiones.length === 0) return mostrarNotificacion('No hay clases registradas aún.', 'info');
+    const asigIds = asigs.map(a => a.id);
+    const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds);
+    if (!sesiones || sesiones.length === 0) {
+      mostrarNotificacion('No hay clases registradas aún.', 'info');
+      return null;
+    }
 
-      const sesionIds = sesiones.map(s => s.id);
-      const { data: asistencias } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-      if (!asistencias || asistencias.length === 0) return mostrarNotificacion('No hay asistencias registradas en ninguna materia.', 'info');
+    const sesionIds = sesiones.map(s => s.id);
+    const { data: asistencias } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
+    if (!asistencias || asistencias.length === 0) {
+      mostrarNotificacion('No hay asistencias registradas.', 'info');
+      return null;
+    }
 
-      const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
-      const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
-      const mapPerfiles: Record<string, string> = {};
-      perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
+    const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
+    const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+    const mapPerfiles: Record<string, string> = {};
+    perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
-      const libro = XLSX.utils.book_new();
+    const resultadosGlobales: { nombre: string, filas: any[] }[] = [];
 
-      asigs.forEach(asig => {
-        const sesAsig = sesiones.filter(s => s.asignatura_id === asig.id);
-        if (sesAsig.length === 0) return;
+    asigs.forEach(asig => {
+      const sesAsig = sesiones.filter(s => s.asignatura_id === asig.id);
+      if (sesAsig.length === 0) return;
 
-        const sesConFechas = sesAsig.map(ses => {
-          let f = ses.created_at;
-          if (!f) {
-            const asistRef = asistencias.find(a => a.sesion_id === ses.id && a.hora_entrada);
-            f = asistRef ? asistRef.hora_entrada : new Date().toISOString();
-          }
-          return { ...ses, fechaStr: new Date(f).toLocaleDateString() };
-        });
+      const sesConFechas = sesAsig.map(ses => {
+        let f = ses.created_at;
+        if (!f) {
+          const asistRef = asistencias.find(a => a.sesion_id === ses.id && a.hora_entrada);
+          f = asistRef ? asistRef.hora_entrada : new Date().toISOString();
+        }
+        return { ...ses, fechaStr: new Date(f).toLocaleDateString() };
+      });
 
-        const asistsDeEstaAsig = asistencias.filter(a => sesAsig.some(s => s.id === a.sesion_id));
-        if (asistsDeEstaAsig.length === 0) return;
+      const asistsDeEstaAsig = asistencias.filter(a => sesAsig.some(s => s.id === a.sesion_id));
+      if (asistsDeEstaAsig.length === 0) return;
 
-        const reporte: Record<string, any> = {};
-        const alumnosEnEstaAsig = [...new Set(asistsDeEstaAsig.map(a => a.alumno_id))];
+      const reporte: Record<string, any> = {};
+      const alumnosEnEstaAsig = [...new Set(asistsDeEstaAsig.map(a => a.alumno_id))];
 
-        alumnosEnEstaAsig.forEach(idAlu => {
-          reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante' };
-          sesConFechas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
-        });
+      alumnosEnEstaAsig.forEach(idAlu => {
+        reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante' };
+        sesConFechas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
+      });
 
-        asistsDeEstaAsig.forEach(a => {
-          const sesion = sesConFechas.find(s => s.id === a.sesion_id);
-          if (sesion && reporte[a.alumno_id]) {
-            reporte[a.alumno_id][sesion.fechaStr] = a.estado.replace(/_/g, ' ');
-          }
-        });
-
-        const filas = Object.values(reporte).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
-        if (filas.length > 0) {
-          const hoja = XLSX.utils.json_to_sheet(filas);
-          XLSX.utils.book_append_sheet(libro, hoja, asig.nombre.substring(0, 31));
+      asistsDeEstaAsig.forEach(a => {
+        const sesion = sesConFechas.find(s => s.id === a.sesion_id);
+        if (sesion && reporte[a.alumno_id]) {
+          reporte[a.alumno_id][sesion.fechaStr] = a.estado.replace(/_/g, ' ');
         }
       });
 
-      if (libro.SheetNames.length === 0) return mostrarNotificacion('No hay asistencias registradas para exportar.', 'info');
+      const filas = Object.values(reporte).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
+      if (filas.length > 0) {
+        resultadosGlobales.push({ nombre: asig.nombre, filas });
+      }
+    });
+
+    return resultadosGlobales;
+  };
+
+  const exportarGlobalExcel = async () => {
+    setCargandoHistorialAsig(true);
+    try {
+      const datos = await generarDatosGlobales();
+      if (!datos || datos.length === 0) return;
+
+      const libro = XLSX.utils.book_new();
+      datos.forEach(asig => {
+        const hoja = XLSX.utils.json_to_sheet(asig.filas);
+        XLSX.utils.book_append_sheet(libro, hoja, asig.nombre.substring(0, 31));
+      });
       
-      XLSX.writeFile(libro, `Reporte_Global_Clases_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
-      mostrarNotificacion('Exportación global completada con éxito.', 'exito');
+      XLSX.writeFile(libro, `Reporte_Global_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+      mostrarNotificacion('Descarga completada.', 'exito');
+      setModalExportadorGlobal(false);
     } catch {
-      mostrarNotificacion('Error durante la exportación global.', 'error');
+      mostrarNotificacion('Error durante la exportación a Excel.', 'error');
     } finally {
-      setCargando(false);
+      setCargandoHistorialAsig(false);
     }
   };
 
+  const exportarGlobalSheets = async () => {
+    setCargandoHistorialAsig(true);
+    try {
+      const datos = await generarDatosGlobales();
+      if (!datos || datos.length === 0) return;
+
+      let lineasTSV = "";
+
+      // Apilamos las asignaturas en formato TSV
+      datos.forEach((asig, index) => {
+         if (index > 0) lineasTSV += "\n\n"; 
+         lineasTSV += `[ MATERIA: ${asig.nombre.toUpperCase()} ]\n`;
+         
+         const cabeceras = Object.keys(asig.filas[0]);
+         lineasTSV += cabeceras.join('\t') + '\n';
+         
+         lineasTSV += asig.filas.map(fila => cabeceras.map(campo => `${fila[campo] || ''}`).join('\t')).join('\n');
+      });
+
+      const textArea = document.createElement("textarea");
+      textArea.value = lineasTSV;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      let copiadoConExito = false;
+      try { copiadoConExito = document.execCommand('copy'); } catch (err) { console.error("Fallo execCommand:", err); }
+      document.body.removeChild(textArea);
+
+      if (!copiadoConExito && navigator.clipboard) {
+        await navigator.clipboard.writeText(lineasTSV);
+      }
+
+      window.open('https://sheets.new', '_blank');
+      mostrarNotificacion('¡Copiado! Abre Sheets y pega con Ctrl+V (o Cmd+V) en A1.', 'exito');
+      setModalExportadorGlobal(false);
+    } catch (e) {
+      mostrarNotificacion('Tu navegador ha bloqueado el portapapeles.', 'error');
+    } finally {
+      setCargandoHistorialAsig(false);
+    }
+  };
+
+  // --- EDICIÓN DE AULAS ---
   const iniciarEdicionAula = (id: string, aulaActual: string) => {
     setEditandoAulaId(id);
     setAulaTemp(aulaActual);
@@ -492,7 +571,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
               <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Materias</h2>
               <div className="flex gap-3">
-                <button onClick={exportarTodoGlobal} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
+                <button onClick={() => setModalExportadorGlobal(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
                   Exportador Global ↓
                 </button>
                 <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
@@ -547,6 +626,43 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         )}
       </div>
 
+      {/* --- MODAL: EXPORTADOR GLOBAL --- */}
+      {modalExportadorGlobal && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">
+            <div className="flex items-center justify-between mb-8 shrink-0">
+              <div>
+                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Exportación Global</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Descarga todas tus asignaturas</p>
+              </div>
+              <button onClick={() => setModalExportadorGlobal(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+            </div>
+            
+            <div className="bg-slate-50/80 rounded-[2rem] p-6">
+              <p className="text-xs text-slate-500 font-medium mb-6 text-center">Selecciona el formato en el que deseas extraer los registros de tus alumnos.</p>
+
+              <div className="space-y-3">
+                <button 
+                  onClick={exportarGlobalSheets}
+                  disabled={cargandoHistorialAsig}
+                  className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {cargandoHistorialAsig ? 'Procesando...' : 'Copiar para Google Sheets'}
+                </button>
+
+                <button 
+                  onClick={exportarGlobalExcel}
+                  disabled={cargandoHistorialAsig}
+                  className="w-full py-3.5 bg-white text-[#002b5c] border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                >
+                  {cargandoHistorialAsig ? 'Procesando...' : 'Descargar Excel (.xlsx)'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- MODAL: GESTIÓN DE ALUMNO --- */}
       {alumnoGestion && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
@@ -560,8 +676,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             </div>
 
             <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2">
-              
-              {/* Sección Dispositivo */}
               <div className="bg-slate-50/80 rounded-[2rem] p-5">
                 <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Dispositivo de Fichaje</h4>
                 <div className="flex items-center justify-between">
@@ -579,7 +693,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 </div>
               </div>
 
-              {/* Sección Asignaturas */}
               <div className="bg-slate-50/80 rounded-[2rem] p-5">
                 <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Matriculado en tus materias</h4>
                 {cargandoAlumno ? (
@@ -600,7 +713,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 )}
               </div>
 
-              {/* Peligro: Expulsión total */}
               <button 
                 onClick={() => expulsarDeTodas(alumnoGestion.id)}
                 className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95"
@@ -613,7 +725,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         </div>
       )}
 
-      {/* --- OTROS MODALES (Crear, Eliminar, Exportar) --- */}
+      {/* --- OTROS MODALES (Crear, Eliminar, Exportar Individual) --- */}
       {modalAsignatura && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
@@ -675,7 +787,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   disabled={cargandoHistorialAsig}
                   className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  {cargandoHistorialAsig ? 'Generando...' : 'Abrir en Google Sheets'}
+                  {cargandoHistorialAsig ? 'Procesando...' : 'Abrir en Google Sheets'}
                 </button>
 
                 <button 
@@ -683,7 +795,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   disabled={cargandoHistorialAsig}
                   className="w-full py-3.5 bg-white text-[#002b5c] border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  {cargandoHistorialAsig ? 'Generando...' : 'Descargar Excel (.xlsx)'}
+                  {cargandoHistorialAsig ? 'Procesando...' : 'Descargar Excel (.xlsx)'}
                 </button>
               </div>
             </div>
