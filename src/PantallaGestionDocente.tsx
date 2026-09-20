@@ -98,23 +98,23 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const { data: asigs } = await supabase.from('asignaturas').select('*').eq('profesor_id', user?.id);
 
     if (asigs && asigs.length > 0) {
-      const asigIds = asigs.map((a:any) => a.id);
+      const asigIds = asigs.map((a: any) => a.id);
       const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
 
       if (sesiones && sesiones.length > 0) {
-         const sesionIds = sesiones.map((s:any) => s.id);
-         const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesionIds);
+        const sesionIds = sesiones.map((s: any) => s.id);
+        const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesionIds);
 
-         if (asists && asists.length > 0) {
-            const attendedSesionIds = asists.map((a:any) => a.sesion_id);
-            const attendedAsigIds = [...new Set(sesiones.filter((s:any) => attendedSesionIds.includes(s.id)).map((s:any) => s.asignatura_id))];
-            const asigsActivas = asigs.filter((a:any) => attendedAsigIds.includes(a.id));
-            setAsignaturasAlumno(asigsActivas);
-         } else {
-            setAsignaturasAlumno([]);
-         }
+        if (asists && asists.length > 0) {
+          const attendedSesionIds = asists.map((a: any) => a.sesion_id);
+          const attendedAsigIds = [...new Set(sesiones.filter((s: any) => attendedSesionIds.includes(s.id)).map((s: any) => s.asignatura_id))];
+          const asigsActivas = asigs.filter((a: any) => attendedAsigIds.includes(a.id));
+          setAsignaturasAlumno(asigsActivas);
+        } else {
+          setAsignaturasAlumno([]);
+        }
       } else {
-         setAsignaturasAlumno([]);
+        setAsignaturasAlumno([]);
       }
     }
     setCargandoAlumno(false);
@@ -217,7 +217,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setFechaFin('');
   };
 
-  // --- MOTOR PIVOT ROBUSTO (Resuelve columnas sobreescritas) ---
+  // --- MOTOR PIVOT ROBUSTO ---
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
@@ -239,7 +239,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const mapPerfiles: Record<string, string> = {};
     perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
-    // Mapeamos las fechas incluyendo HORA EXACTA para evitar sobreescritura de columnas
     const sesionesConFecha = sesionesDataRaw.map(ses => {
       let fechaIso = ses.created_at;
       if (!fechaIso) {
@@ -316,28 +315,45 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         ...data.filas.map((fila) => cabeceras.map((campo) => `${fila[campo] || ''}`).join('\t'))
       ].join('\n');
 
-      // Sistema de copiado híbrido a prueba de fallos
-      let copiado = false;
-      if (navigator.clipboard && window.isSecureContext) {
+      const textArea = document.createElement("textarea");
+      textArea.value = lineasTSV;
+      textArea.style.position = "fixed";
+      textArea.style.top = "50%";
+      textArea.style.left = "50%";
+      textArea.style.width = "10px";
+      textArea.style.height = "10px";
+      textArea.style.opacity = "0.01";
+      document.body.appendChild(textArea);
+      
+      textArea.focus();
+      textArea.select();
+
+      let exito = false;
+      try {
+        exito = document.execCommand('copy');
+      } catch (err) {
+        console.error("Fallo execCommand fallback:", err);
+      }
+      document.body.removeChild(textArea);
+
+      if (!exito && navigator.clipboard) {
         try {
           await navigator.clipboard.writeText(lineasTSV);
-          copiado = true;
-        } catch (e) { console.warn("Clipboard API failed"); }
-      }
-      
-      if (!copiado) {
-        const textArea = document.createElement("textarea");
-        textArea.value = lineasTSV;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-999999px";
-        document.body.appendChild(textArea);
-        textArea.select();
-        try { document.execCommand('copy'); copiado = true; } catch (e) {}
-        document.body.removeChild(textArea);
+          exito = true;
+        } catch (e) {
+          console.error("Fallo writeText:", e);
+        }
       }
 
-      window.open('https://sheets.new', '_blank');
-      mostrarNotificacion(`Datos de ${data.filas.length} alumnos copiados. Pega en A1.`, 'exito');
+      if (exito) {
+        mostrarNotificacion('¡Datos en el portapapeles! Abriendo Sheets...', 'exito');
+        setTimeout(() => {
+          window.open('https://sheets.new', '_blank');
+        }, 1200);
+      } else {
+        mostrarNotificacion('Tu navegador bloquea el portapapeles. Usa descargar Excel.', 'error');
+      }
+
     } catch (e) {
       mostrarNotificacion('Error procesando los datos.', 'error');
     } finally {
@@ -449,34 +465,46 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       let lineasTSV = "";
 
       datos.forEach((asig, index) => {
-         if (index > 0) lineasTSV += "\n\n"; 
-         lineasTSV += `[ MATERIA: ${asig.nombre.toUpperCase()} ]\n`;
-         const cabeceras = Object.keys(asig.filas[0]);
-         lineasTSV += cabeceras.join('\t') + '\n';
-         lineasTSV += asig.filas.map(fila => cabeceras.map(campo => `${fila[campo] || ''}`).join('\t')).join('\n');
+        if (index > 0) lineasTSV += "\n\n"; 
+        lineasTSV += `[ MATERIA: ${asig.nombre.toUpperCase()} ]\n`;
+        const cabeceras = Object.keys(asig.filas[0]);
+        lineasTSV += cabeceras.join('\t') + '\n';
+        lineasTSV += asig.filas.map(fila => cabeceras.map(campo => `${fila[campo] || ''}`).join('\t')).join('\n');
       });
 
-      let copiado = false;
-      if (navigator.clipboard && window.isSecureContext) {
-        try { await navigator.clipboard.writeText(lineasTSV); copiado = true; } catch (e) {}
-      }
+      const textArea = document.createElement("textarea");
+      textArea.value = lineasTSV;
+      textArea.style.position = "fixed";
+      textArea.style.top = "50%";
+      textArea.style.left = "50%";
+      textArea.style.width = "10px";
+      textArea.style.height = "10px";
+      textArea.style.opacity = "0.01";
+      document.body.appendChild(textArea);
       
-      if (!copiado) {
-        const textArea = document.createElement("textarea");
-        textArea.value = lineasTSV;
-        textArea.style.position = "fixed";
-        textArea.style.left = "-999999px";
-        document.body.appendChild(textArea);
-        textArea.select();
-        try { document.execCommand('copy'); } catch (e) {}
-        document.body.removeChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      let exito = false;
+      try { exito = document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(textArea);
+
+      if (!exito && navigator.clipboard) {
+        try { await navigator.clipboard.writeText(lineasTSV); exito = true; } catch (e) {}
       }
 
-      window.open('https://sheets.new', '_blank');
-      mostrarNotificacion('¡Copiado! Abre Sheets y pega con Ctrl+V (o Cmd+V) en A1.', 'exito');
-      setModalExportadorGlobal(false);
+      if (exito) {
+        mostrarNotificacion('¡Datos en el portapapeles! Abriendo Sheets...', 'exito');
+        setModalExportadorGlobal(false);
+        setTimeout(() => {
+          window.open('https://sheets.new', '_blank');
+        }, 1200);
+      } else {
+        mostrarNotificacion('Tu navegador bloquea el copiado. Usa descargar Excel.', 'error');
+      }
+
     } catch (e) {
-      mostrarNotificacion('Tu navegador ha bloqueado el portapapeles.', 'error');
+      mostrarNotificacion('Error procesando los datos.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
