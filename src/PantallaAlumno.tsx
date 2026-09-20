@@ -17,7 +17,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   
   const [tabActual, setTabActual] = useState<TabAlumno>('HORARIO');
   const [camaraActiva, setCamaraActiva] = useState(false);
-  const [procesandoQr, setProcesandoQr] = useState(false); // Nuevo estado para la congelación
+  const [procesandoQr, setProcesandoQr] = useState(false);
   
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
@@ -31,7 +31,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
-  // Referencia para limpiar el escáner al desmontar
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
@@ -44,10 +43,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
     setCargandoClases(true);
     try {
       const { data: misAsistencias } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumnoId);
-      if (!misAsistencias || misAsistencias.length === 0) {
-        setClasesHoy([]);
-        return;
-      }
+      if (!misAsistencias || misAsistencias.length === 0) return setClasesHoy([]);
+      
       const sesionIds = [...new Set(misAsistencias.map(a => a.sesion_id))];
       const { data: sesiones } = await supabase.from('sesiones').select('asignatura_id').in('id', sesionIds);
       if (!sesiones || sesiones.length === 0) return;
@@ -55,8 +52,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
       const asigIds = [...new Set(sesiones.map(s => s.asignatura_id))];
       const { data: asignaturas } = await supabase.from('asignaturas').select('*').in('id', asigIds).order('horario', { ascending: true });
       if (asignaturas) setClasesHoy(asignaturas as Asignatura[]);
-    } catch (err) {
-      console.error(err);
     } finally {
       setCargandoClases(false);
     }
@@ -78,22 +73,26 @@ export default function PantallaAlumno({ onVolver }: Props) {
       if (!alumnoId || tabActual !== 'CALENDARIO') return;
       setCargandoHistorial(true);
       try {
-        const { data: asistData } = await supabase.from('asistencias').select('id, estado, hora_entrada, hora_salida, sesiones(created_at, asignatura_id)').eq('alumno_id', alumnoId);
-        const { data: asigData } = await supabase.from('asignaturas').select('id, nombre');
+        const { data: asistData } = await supabase.from('asistencias').select('*').eq('alumno_id', alumnoId);
+        if (asistData && asistData.length > 0) {
+          const sesionIds = [...new Set(asistData.map(a => a.sesion_id))];
+          const { data: sesionesData } = await supabase.from('sesiones').select('id, created_at, asignatura_id').in('id', sesionIds);
+          const asigIds = [...new Set(sesionesData?.map(s => s.asignatura_id) || [])];
+          const { data: asigData } = await supabase.from('asignaturas').select('id, nombre').in('id', asigIds);
 
-        if (asistData && asigData) {
           const historialMapeado = asistData.map((registro: any) => {
-            const asigId = registro.sesiones?.asignatura_id;
-            const asignatura = asigData.find((a) => a.id === asigId);
-            const fechaBase = registro.hora_entrada || registro.sesiones?.created_at || new Date().toISOString();
-            
+            const ses = sesionesData?.find(s => s.id === registro.sesion_id);
+            const asig = asigData?.find(a => a.id === ses?.asignatura_id);
             return {
               ...registro,
-              asignatura_nombre: asignatura ? asignatura.nombre : 'Clase archivada',
-              fecha: fechaBase
+              asignatura_nombre: asig ? asig.nombre : 'Clase registrada',
+              fecha: registro.hora_entrada || ses?.created_at || new Date().toISOString()
             };
           }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
           setHistorial(historialMapeado);
+        } else {
+          setHistorial([]);
         }
       } finally {
         setCargandoHistorial(false);
@@ -102,7 +101,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
     cargarHistorial();
   }, [tabActual, alumnoId]);
 
-  // --- NUEVO SISTEMA DE ESCÁNER (Pausar -> Procesar DB -> Cerrar) ---
   useEffect(() => {
     let isMounted = true;
     let isProcessingLocally = false;
@@ -112,12 +110,11 @@ export default function PantallaAlumno({ onVolver }: Props) {
       setProcesandoQr(false);
       
       try {
-        // Pedir permiso al sistema nativo primero
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         stream.getTracks().forEach(track => track.stop());
-      } catch (err) {
+      } catch {
         if (isMounted) {
-          mostrarNotificacion('Permite el acceso a la cámara en los ajustes.', 'error');
+          mostrarNotificacion('Activa la cámara en los ajustes de tu móvil.', 'error');
           setCamaraActiva(false);
         }
         return;
@@ -131,79 +128,71 @@ export default function PantallaAlumno({ onVolver }: Props) {
           qrScannerRef.current = html5QrCode;
           
           const onScanSuccess = async (decodedText: string) => {
-            // Evitar múltiples lecturas por segundo
             if (isProcessingLocally) return;
             isProcessingLocally = true;
-            
-            // 1. CONGELAR CÁMARA (No apagar, solo pausar el análisis visual)
-            if (html5QrCode.getState() === 2) { // 2 = scanning
-              html5QrCode.pause();
-            }
-            setProcesandoQr(true); // Pantalla de carga superpuesta
+            if (html5QrCode.getState() === 2) html5QrCode.pause();
+            setProcesandoQr(true);
 
             try {
               const payload = JSON.parse(decodedText);
               const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload;
 
-              // Validaciones
               const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
-              if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El código de la clase ya no es válido.');
+              if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
               
-              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. El profesor debe mostrar uno nuevo.');
+              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. Vuelve a enfocar.');
               
               const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
-              if (token !== tokenEsperado) throw new Error('El QR ha sido manipulado.');
+              if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
 
               const ahora = new Date().toISOString();
               
-              // 2. INYECCIÓN BLINDADA A BASE DE DATOS
+              // INSERCIÓN A BASE DE DATOS
               if (fase === 'ENTRADA') {
                  const { data: existe } = await supabase.from('asistencias').select('id').eq('sesion_id', sesionId).eq('alumno_id', alumnoId).maybeSingle();
                  if (existe) {
-                   const { error } = await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
-                   if (error) throw new Error('Error al actualizar registro.');
+                   await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
                  } else {
-                   const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
-                   if (error) throw new Error('Error al crear registro.');
+                   await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
                  }
-                 mostrarNotificacion('¡Entrada registrada con éxito!', 'exito');
+                 mostrarNotificacion('¡Entrada registrada!', 'exito');
               } else {
-                 const { error } = await supabase.from('asistencias').update({ hora_salida: ahora }).eq('sesion_id', sesionId).eq('alumno_id', alumnoId);
-                 if (error) throw new Error('Error registrando salida.');
+                 await supabase.from('asistencias').update({ hora_salida: ahora }).eq('sesion_id', sesionId).eq('alumno_id', alumnoId);
                  mostrarNotificacion('¡Salida completada!', 'exito');
+              }
+
+              // SISTEMA INNOVADOR: Disparo de "Ping" ultrasónico al profesor para forzar refresco
+              try {
+                const pingChannel = supabase.channel('aula-realtime');
+                pingChannel.subscribe((status) => {
+                  if (status === 'SUBSCRIBED') {
+                    pingChannel.send({ type: 'broadcast', event: 'update-lista', payload: { ts: Date.now() } });
+                    setTimeout(() => supabase.removeChannel(pingChannel), 1000); // Limpieza rápida
+                  }
+                });
+              } catch (e) {
+                 // Falla silenciosa si la red es débil, el polling del profesor lo salvará
               }
 
               cargarAsistenciasActivas();
               cargarAsignaturas();
               
-              // 3. APAGADO SEGURO
-              if (html5QrCode.getState() !== 1) { // 1 = not started
-                await html5QrCode.stop();
-              }
+              if (html5QrCode.getState() !== 1) await html5QrCode.stop();
               html5QrCode.clear();
-              setCamaraActiva(false); // Volver al menú
+              setCamaraActiva(false);
               
             } catch (e: any) {
-              mostrarNotificacion(e.message || 'Error procesando el código.', 'error');
+              mostrarNotificacion(e.message || 'Error procesando código.', 'error');
               setProcesandoQr(false);
               isProcessingLocally = false;
-              // Si falla, reanudar cámara para intentarlo de nuevo
-              if (html5QrCode.getState() === 3) { // 3 = paused
-                html5QrCode.resume();
-              }
+              if (html5QrCode.getState() === 3) html5QrCode.resume();
             }
           };
 
-          await html5QrCode.start(
-            { facingMode: "environment" }, 
-            { fps: 10, qrbox: { width: 250, height: 250 } }, 
-            onScanSuccess, 
-            () => {} // Ignorar fallos de lectura de frames vacíos
-          );
-
-        } catch (err) {
+          await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
+        } catch {
           if (isMounted) {
-            mostrarNotificacion('No se pudo abrir el sensor óptico.', 'error');
+            mostrarNotificacion('Error conectando con la cámara.', 'error');
             setCamaraActiva(false);
           }
         }
@@ -214,7 +203,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
     return () => {
       isMounted = false;
-      // Apagado silencioso al salir de la pantalla
       if (qrScannerRef.current && qrScannerRef.current.getState() !== 1) {
         qrScannerRef.current.stop().catch(() => {});
         qrScannerRef.current.clear();
@@ -243,7 +231,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   };
 
   const exportarHistorialAlumno = () => {
-    if (historial.length === 0) return mostrarNotificacion('No hay datos para exportar.', 'info');
+    if (historial.length === 0) return mostrarNotificacion('No hay datos.', 'info');
     const filas = historial.map(reg => ({
       Fecha: new Date(reg.fecha).toLocaleDateString(),
       Asignatura: reg.asignatura_nombre,
@@ -253,7 +241,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
     }));
     const hoja = XLSX.utils.json_to_sheet(filas);
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, 'Asistencia');
+    XLSX.utils.book_append_sheet(libro, hoja, 'Mi_Asistencia');
     XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
   };
 
@@ -287,15 +275,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
         {camaraActiva && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-6 mb-8 flex flex-col items-center animate-[fade-in_0.3s_ease-out]">
             <div className="w-full max-w-sm overflow-hidden rounded-[2.5rem] bg-black relative min-h-[350px] flex items-center justify-center shadow-inner">
-              
-              {/* Pantalla de carga superpuesta al escanear */}
               {procesandoQr && (
                 <div className="absolute inset-0 bg-[#002b5c]/80 backdrop-blur-md flex flex-col items-center justify-center z-10 transition-all">
                   <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4 shadow-lg"></div>
                   <p className="text-white font-bold tracking-tight text-sm">Registrando...</p>
                 </div>
               )}
-              
               <div id="qr-reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full rounded-[2.5rem]"></div>
             </div>
             <button 

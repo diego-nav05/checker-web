@@ -31,7 +31,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
 
-  // Sistema de Notificaciones iOS 27
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
@@ -143,9 +142,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
   };
 
-  const abrirDetallesAsignatura = async (asig: any) => {
+  const abrirDetallesAsignatura = (asig: any) => {
     setAsignaturaSeleccionada(asig);
-    setFechaInicio(''); setFechaFin('');
+    setFechaInicio('');
+    setFechaFin('');
   };
 
   const generarMatrizReporte = async () => {
@@ -180,19 +180,23 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
 
     const sesionIds = sesionesData.map(s => s.id);
-    const { data: asistData } = await supabase.from('asistencias').select('*, perfiles(nombre_completo)').in('sesion_id', sesionIds);
+    const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
 
     if (!asistData || asistData.length === 0) {
       mostrarNotificacion("Ningún alumno ha asistido aún.", 'info');
       return null;
     }
 
+    const aluIds = [...new Set(asistData.map(a => a.alumno_id))];
+    const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+
     const reporteAlumnos: Record<string, any> = {};
     
     asistData.forEach((asist: any) => {
       const aluId = asist.alumno_id;
       if (!reporteAlumnos[aluId]) {
-        reporteAlumnos[aluId] = { Alumno: asist.perfiles?.nombre_completo || 'Desconocido' };
+        const perf = perfiles?.find(p => p.id === aluId);
+        reporteAlumnos[aluId] = { Alumno: perf ? perf.nombre_completo : 'Desconocido' };
         sesionesData.forEach(ses => {
           const fechaCol = new Date(ses.created_at).toLocaleDateString();
           reporteAlumnos[aluId][fechaCol] = 'AUSENTE';
@@ -223,7 +227,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       XLSX.utils.book_append_sheet(libro, hoja, 'Asistencias Periodo');
       XLSX.writeFile(libro, `Reporte_${asignaturaSeleccionada.nombre.replace(/ /g, '_')}_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
       mostrarNotificacion('Archivo Excel generado.', 'exito');
-    } catch (error) {
+    } catch {
       mostrarNotificacion('Error generando Excel.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
@@ -246,10 +250,70 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       window.open('https://sheets.new', '_blank');
 
       mostrarNotificacion('Datos copiados. Pega en celda A1 (Ctrl+V).', 'exito');
-    } catch (err) {
+    } catch {
       mostrarNotificacion('Error copiando al portapapeles.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
+    }
+  };
+
+  const exportarTodoGlobal = async () => {
+    setCargando(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: asigs } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id);
+      if (!asigs || asigs.length === 0) return mostrarNotificacion('No tienes asignaturas.', 'error');
+
+      const asigIds = asigs.map(a => a.id);
+      const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds).order('created_at', { ascending: true });
+      if (!sesiones || sesiones.length === 0) return mostrarNotificacion('No hay sesiones registradas en total.', 'error');
+
+      const sesionIds = sesiones.map(s => s.id);
+      const { data: asistencias } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
+      
+      const aluIds = [...new Set(asistencias?.map(a => a.alumno_id) || [])];
+      const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+
+      const libro = XLSX.utils.book_new();
+
+      asigs.forEach(asig => {
+        const sesAsig = sesiones.filter(s => s.asignatura_id === asig.id);
+        if (sesAsig.length === 0) return;
+
+        const reporte: any = {};
+        const asistsAsig = asistencias?.filter(a => sesAsig.some(s => s.id === a.sesion_id)) || [];
+
+        asistsAsig.forEach(a => {
+          if (!reporte[a.alumno_id]) {
+             const perf = perfiles?.find(p => p.id === a.alumno_id);
+             reporte[a.alumno_id] = { Alumno: perf ? perf.nombre_completo : 'Desconocido' };
+             sesAsig.forEach(s => {
+               reporte[a.alumno_id][new Date(s.created_at).toLocaleDateString()] = 'AUSENTE';
+             });
+          }
+          const sesionAsociada = sesAsig.find(s => s.id === a.sesion_id);
+          if (sesionAsociada) {
+             reporte[a.alumno_id][new Date(sesionAsociada.created_at).toLocaleDateString()] = a.estado.replace(/_/g, ' ');
+          }
+        });
+
+        if (Object.keys(reporte).length > 0) {
+          const filas = Object.values(reporte).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
+          const hoja = XLSX.utils.json_to_sheet(filas);
+          XLSX.utils.book_append_sheet(libro, hoja, asig.nombre.substring(0, 31));
+        }
+      });
+
+      if (libro.SheetNames.length === 0) return mostrarNotificacion('Las clases están vacías.', 'error');
+      
+      XLSX.writeFile(libro, `Reporte_Global_UNEATLANTICO_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+      mostrarNotificacion('Exportación global completada.', 'exito');
+    } catch {
+      mostrarNotificacion('Error en la exportación global.', 'error');
+    } finally {
+      setCargando(false);
     }
   };
 
@@ -281,7 +345,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   return (
     <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
       
-      {/* Notificaciones */}
       {notificacion && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
           notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
@@ -292,7 +355,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center justify-between bg-white/70 backdrop-blur-3xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
@@ -305,13 +367,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col gap-6 animate-[fade-in_0.4s_ease-out]">
         
-        {/* Selector Pestañas (Estilo iOS) */}
         <div className="flex bg-white/70 backdrop-blur-3xl p-1.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 max-w-xs mx-auto w-full">
           <button onClick={() => setTabActual('ALUMNOS')} className={`flex-1 py-3 text-xs font-bold rounded-full transition-all cursor-pointer ${tabActual === 'ALUMNOS' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>Alumnado</button>
           <button onClick={() => setTabActual('ASIGNATURAS')} className={`flex-1 py-3 text-xs font-bold rounded-full transition-all cursor-pointer ${tabActual === 'ASIGNATURAS' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>Asignaturas</button>
         </div>
 
-        {/* PESTAÑA: ALUMNOS */}
         {tabActual === 'ALUMNOS' && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
             <div className="flex items-center justify-between mb-8 px-2">
@@ -343,12 +403,18 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           </div>
         )}
 
-        {/* PESTAÑA: ASIGNATURAS */}
         {tabActual === 'ASIGNATURAS' && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
-            <div className="flex items-center justify-between mb-8 px-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
               <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Materias</h2>
-              <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">Nueva +</button>
+              <div className="flex gap-3">
+                <button onClick={exportarTodoGlobal} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
+                  Exportador Global ↓
+                </button>
+                <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
+                  Nueva +
+                </button>
+              </div>
             </div>
 
             {cargando ? (
@@ -397,7 +463,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         )}
       </div>
 
-      {/* Modal Nueva Asignatura */}
       {modalAsignatura && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
@@ -416,7 +481,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Modal Eliminar Asignatura */}
       {modalEliminarAsig && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
@@ -431,7 +495,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         </div>
       )}
 
-      {/* Modal Exportar Matriz */}
       {asignaturaSeleccionada && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">

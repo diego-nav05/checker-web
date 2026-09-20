@@ -52,17 +52,18 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const iniciarClase = async (idAsignatura: string) => {
     const nuevoSecret = Math.random().toString(36).substring(2, 10);
     setSecretTotp(nuevoSecret);
+    const ahora = new Date().toISOString();
 
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
-      .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura })
+      .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura, created_at: ahora })
       .select().single();
 
     if (sesionError || !sesionData) return mostrarNotificacion('Error iniciando el aula.', 'error');
 
     setSesionId(sesionData.id);
 
-    // Inserción inicial directa (sin upsert, para evitar fallos de base de datos)
+    // Precargar alumnos anteriores para marcarles falta si no vienen
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
     if (pastSesiones && pastSesiones.length > 0) {
       const sesionIds = pastSesiones.map(s => s.id);
@@ -84,27 +85,44 @@ export default function PantallaProfesor({ onVolver }: Props) {
     mostrarNotificacion('Aula iniciada correctamente.', 'exito');
   };
 
+  // --- CONSULTA NATIVA SUPABASE (100% FIABLE) ---
   const cargarAsistencias = async (id: string) => {
-    const { data } = await supabase.from('asistencias').select('*, perfiles(nombre_completo, email)').eq('sesion_id', id);
+  const { data } = await supabase
+      .from('asistencias')
+      .select(`*, perfiles(nombre_completo, email)`)
+      .eq('sesion_id', id);
+
     if (data) setAsistencias(data as Asistencia[]);
   };
 
-  // --- MOTOR DE SINCRONIZACIÓN HÍBRIDO (Realtime + Polling cada 3 seg) ---
+  // --- ARQUITECTURA TRIPLE DE TIEMPO REAL ---
   useEffect(() => {
     if (!sesionId) return;
-    
-    // 1. WebSocket Inmediato
-    const channel = supabase.channel('cambios-asistencia')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => cargarAsistencias(sesionId))
+
+    cargarAsistencias(sesionId);
+
+    // 1. Escuchar el Ping Instantáneo (Broadcast)
+    const instantChannel = supabase.channel('aula-realtime')
+      .on('broadcast', { event: 'update-lista' }, () => {
+        cargarAsistencias(sesionId);
+      })
       .subscribe();
-      
-    // 2. Respaldo por Polling (Si la red universitaria bloquea los sockets, recarga manual)
+
+    // 2. Escuchar la Base de Datos Nativa
+    const dbChannel = supabase.channel('aula-db')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => {
+        cargarAsistencias(sesionId);
+      })
+      .subscribe();
+
+    // 3. Polling de Respaldo Férreo (Cada 2 segundos)
     const intervaloRespaldo = setInterval(() => {
       cargarAsistencias(sesionId);
-    }, 3000);
+    }, 2000);
 
     return () => { 
-      supabase.removeChannel(channel); 
+      supabase.removeChannel(instantChannel);
+      supabase.removeChannel(dbChannel);
       clearInterval(intervaloRespaldo);
     };
   }, [sesionId]);
@@ -178,14 +196,14 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const cambiarEstadoManual = async (asistenciaId: string, nuevoEstado: EstadoAsistencia) => {
     await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
-    cargarAsistencias(sesionId!); // Recargar directo para evitar cuelgues
+    cargarAsistencias(sesionId!); 
   };
 
   const expulsarAlumno = async (asistenciaId: string, nombre: string) => {
     const confirmar = window.confirm(`¿Expulsar a ${nombre}?`);
     if (!confirmar) return;
     await supabase.from('asistencias').update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true }).eq('id', asistenciaId);
-    if (sesionId) cargarAsistencias(sesionId);
+    cargarAsistencias(sesionId!);
     mostrarNotificacion('Alumno expulsado.', 'info');
   };
 
@@ -211,12 +229,13 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoHistorial(false);
   };
 
+  // Corrige el fallo de reportes vacíos usando el Join Nativo
   const descargarExcelPasado = async (sesionPasadaId: string, asigNombre: string, fecha: string) => {
     const { data } = await supabase.from('asistencias').select('*, perfiles(nombre_completo)').eq('sesion_id', sesionPasadaId);
-    if (!data) return mostrarNotificacion('No hay datos en esta clase.', 'error');
+    if (!data || data.length === 0) return mostrarNotificacion('No hay registros en esta clase.', 'error');
     
     const filas = data.map((a: any) => ({
-      Alumno: a.perfiles?.nombre_completo || 'Sin nombre',
+      Alumno: a.perfiles?.nombre_completo || 'Desconocido',
       Estado: a.estado.replace(/_/g, ' '),
       Entrada: a.hora_entrada ? new Date(a.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '-',
       Salida: a.hora_salida ? new Date(a.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '-',
@@ -320,7 +339,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                 </div>
                 <div className="mt-8 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Sincronizado
+                  Sincronizado en tiempo real
                 </div>
               </>
             ) : (
@@ -341,7 +360,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                 asistencias.map((item) => (
                   <div key={item.id} className="p-4 bg-slate-50/50 hover:bg-white rounded-[1.5rem] flex items-center justify-between gap-4 transition-colors border border-transparent hover:border-slate-100">
                     <div>
-                      <p className="font-bold text-[#002b5c] text-sm">{item.perfiles?.nombre_completo || 'Alumno'}</p>
+                      <p className="font-bold text-[#002b5c] text-sm">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
                       <div className="flex gap-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
                         <span>In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
                         <span>Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
