@@ -22,14 +22,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [passConfirm, setPassConfirm] = useState('');
   const [cargandoPass, setCargandoPass] = useState(false);
 
-  // Estados Historial y Calendario Docente
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState<any | null>(null);
   const [cargandoHistorialAsig, setCargandoHistorialAsig] = useState(false);
   
   const [fechaInicio, setFechaInicio] = useState<string>('');
   const [fechaFin, setFechaFin] = useState<string>('');
 
-  // Estados para edición en tiempo real del aula
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
 
@@ -50,7 +48,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     if (!asistencias || asistencias.length === 0) { setAlumnos([]); setCargando(false); return; }
     
     const uniqueAlumnosIds = Array.from(new Set(asistencias.map(a => a.alumno_id)));
-    const { data: perfiles } = await supabase.from('perfiles').select('*').in('id', uniqueAlumnosIds).order('nombre_completo', { ascending: true });
+    if (uniqueAlumnosIds.length === 0) { setAlumnos([]); setCargando(false); return; }
+
+    const { data: perfiles } = await supabase
+      .from('perfiles')
+      .select('*')
+      .in('id', uniqueAlumnosIds)
+      .eq('rol', 'alumno')
+      .order('nombre_completo', { ascending: true });
     
     if (perfiles) setAlumnos(perfiles);
     setCargando(false);
@@ -120,18 +125,34 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setFechaInicio(''); setFechaFin('');
   };
 
-  // Generador de matriz tabular en formato pivot (Filas = Alumnos, Columnas = Fechas)
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
-    let querySesiones = supabase.from('sesiones').select('id, created_at').eq('asignatura_id', asignaturaSeleccionada.id).eq('fase', 'CERRADA').order('created_at', { ascending: true });
-    if (fechaInicio) querySesiones = querySesiones.gte('created_at', `${fechaInicio}T00:00:00Z`);
-    if (fechaFin) querySesiones = querySesiones.lte('created_at', `${fechaFin}T23:59:59Z`);
-
-    const { data: sesionesData } = await querySesiones;
+    const { data: sesionesDataRaw } = await supabase
+      .from('sesiones')
+      .select('id, created_at')
+      .eq('asignatura_id', asignaturaSeleccionada.id)
+      .order('created_at', { ascending: true });
     
-    if (!sesionesData || sesionesData.length === 0) {
-      alert("No hay clases finalizadas en el periodo seleccionado.");
+    if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
+      alert("No hay ninguna clase registrada en esta materia.");
+      return null;
+    }
+
+    const sesionesData = sesionesDataRaw.filter(ses => {
+      if (!fechaInicio && !fechaFin) return true;
+      try {
+        const fechaReg = new Date(ses.created_at).toISOString().split('T')[0];
+        if (fechaInicio && fechaReg < fechaInicio) return false;
+        if (fechaFin && fechaReg > fechaFin) return false;
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    if (sesionesData.length === 0) {
+      alert("No hay clases en el periodo de fechas seleccionado.");
       return null;
     }
 
@@ -139,7 +160,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const { data: asistData } = await supabase.from('asistencias').select('*, perfiles(nombre_completo)').in('sesion_id', sesionIds);
 
     if (!asistData || asistData.length === 0) {
-      alert("No hay datos de alumnos en el periodo seleccionado.");
+      alert("La clase fue creada, pero ningún alumno llegó a escanear el código QR.");
       return null;
     }
 

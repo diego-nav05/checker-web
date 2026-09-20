@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 import CryptoJS from 'crypto-js';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
@@ -17,6 +17,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   
   const [tabActual, setTabActual] = useState<TabAlumno>('HORARIO');
   const [camaraActiva, setCamaraActiva] = useState(false);
+  const [iniciandoCamara, setIniciandoCamara] = useState(false);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -28,15 +29,14 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [passConfirm, setPassConfirm] = useState('');
   const [cargandoPass, setCargandoPass] = useState(false);
 
-  // Estados para el historial y filtro por fechas
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [fechaInicio, setFechaInicio] = useState<string>('');
   const [fechaFin, setFechaFin] = useState<string>('');
 
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const qrCodeInstanceRef = useRef<Html5Qrcode | null>(null);
+  const isScanningRef = useRef<boolean>(false);
 
-  // Consulta puntual sin canal Realtime abierto (Ahorro de cuota de sockets)
   useEffect(() => {
     const cargarAsignaturas = async () => {
       setCargandoClases(true);
@@ -75,87 +75,210 @@ export default function PantallaAlumno({ onVolver }: Props) {
       if (!alumnoId || tabActual !== 'CALENDARIO') return;
       setCargandoHistorial(true);
       
-      const { data: asistData } = await supabase
-        .from('asistencias')
-        .select('id, estado, hora_entrada, hora_salida, manual, sesiones(created_at, asignatura_id)')
-        .eq('alumno_id', alumnoId)
-        .not('hora_entrada', 'is', null)
-        .order('hora_entrada', { ascending: false });
-        
-      const { data: asigData } = await supabase.from('asignaturas').select('id, nombre');
+      try {
+        const { data: asistData, error: errorAsist } = await supabase
+          .from('asistencias')
+          .select('id, estado, hora_entrada, hora_salida, manual, sesiones(created_at, asignatura_id, fase)')
+          .eq('alumno_id', alumnoId);
+          
+        if (errorAsist) throw errorAsist;
 
-      if (asistData && asigData) {
-        const historialMapeado = asistData.map((registro: any) => {
-          const asigId = registro.sesiones?.asignatura_id;
-          const asignatura = asigData.find((a) => a.id === asigId);
-          return {
-            ...registro,
-            asignatura_nombre: asignatura ? asignatura.nombre : 'Clase eliminada',
-            fecha: registro.hora_entrada
-          };
-        });
-        setHistorial(historialMapeado);
+        const { data: asigData, error: errorAsig } = await supabase.from('asignaturas').select('id, nombre');
+        if (errorAsig) throw errorAsig;
+
+        if (asistData && asigData) {
+          const historialMapeado = asistData
+            .filter((registro: any) => registro.sesiones?.fase === 'CERRADA')
+            .map((registro: any) => {
+              const asigId = registro.sesiones?.asignatura_id;
+              const asignatura = asigData.find((a) => a.id === asigId);
+              const fechaBase = registro.hora_entrada || registro.sesiones?.created_at;
+              
+              return {
+                ...registro,
+                asignatura_nombre: asignatura ? asignatura.nombre : 'Clase eliminada',
+                fecha: fechaBase
+              };
+            })
+            .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+          setHistorial(historialMapeado);
+        }
+      } catch (err) {
+        console.error("Error cargando el calendario de asistencias:", err);
+      } finally {
+        setCargandoHistorial(false);
       }
-      setCargandoHistorial(false);
     };
     
     cargarHistorial();
   }, [tabActual, alumnoId]);
 
   useEffect(() => {
-    if (!camaraActiva) {
-      if (scannerRef.current) { 
-        scannerRef.current.clear().catch(() => {}); 
-        scannerRef.current = null; 
+    let isMounted = true;
+
+    const stopScanner = async () => {
+      if (qrCodeInstanceRef.current && isScanningRef.current) {
+        try {
+          await qrCodeInstanceRef.current.stop();
+          qrCodeInstanceRef.current.clear();
+        } catch {
+          // Limpieza silenciosa al desmontar
+        } finally {
+          isScanningRef.current = false;
+          qrCodeInstanceRef.current = null;
+        }
       }
+    };
+
+    if (!camaraActiva) {
+      stopScanner();
       return;
     }
 
-    const scanner = new Html5QrcodeScanner('qr-reader', { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-    scannerRef.current = scanner;
-    
-    scanner.render(
-      async (decodedText) => {
-        try {
-          const payload = JSON.parse(decodedText);
-          const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload as { s: string; f: FaseSesion; t: number; token: string; };
+    const iniciarCamaraTrasera = async () => {
+      setIniciandoCamara(true);
+      setErrorMsg(null);
 
-          const { data: sesion } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
-          if (!sesion || sesion.fase === 'CERRADA') return setErrorMsg('La sesión no existe o está cerrada.');
-          if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) return setErrorMsg('Código QR caducado. Vuelve a enfocar.');
-
-          const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
-          if (token !== tokenEsperado) return setErrorMsg('Código QR no auténtico.');
-
-          const ahora = new Date().toISOString();
-          if (fase === 'ENTRADA') {
-            const { error } = await supabase.from('asistencias').upsert({ 
-              sesion_id: sesionId, 
-              alumno_id: alumnoId, 
-              estado: 'PRESENTE' as EstadoAsistencia, 
-              hora_entrada: ahora 
-            }, { onConflict: 'sesion_id,alumno_id' });
-            
-            if (error) throw error;
-            setMensajeExito('¡Entrada confirmada correctamente!');
-            cargarAsistenciasActivas(); 
-          } else if (fase === 'SALIDA') {
-            const { error } = await supabase.from('asistencias').update({ hora_salida: ahora }).match({ sesion_id: sesionId, alumno_id: alumnoId });
-            if (error) throw error;
-            setMensajeExito('¡Salida registrada! Asistencia completada.');
-            cargarAsistenciasActivas();
-          }
-          
-          scanner.clear().catch(() => {});
-          setCamaraActiva(false);
-        } catch { 
-          setErrorMsg('Error al verificar el código QR.'); 
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Tu navegador no soporta el acceso a la cámara.');
         }
-      }, 
-      () => {}
-    );
-    
-    return () => { scanner.clear().catch(() => {}); };
+
+        // Pop-up nativo de permisos inmediato
+        const streamInicial = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }
+        });
+        streamInicial.getTracks().forEach((track) => track.stop());
+      } catch (err: any) {
+        if (!isMounted) return;
+        setIniciandoCamara(false);
+        if (err?.name === 'NotAllowedError' || String(err).includes('Permission')) {
+          setErrorMsg('Permiso de cámara denegado. Concede permisos en los ajustes del navegador.');
+        } else {
+          setErrorMsg('No se pudo inicializar la cámara trasera.');
+        }
+        return;
+      }
+
+      if (!isMounted) return;
+
+      await new Promise((res) => setTimeout(res, 50));
+      const element = document.getElementById('qr-reader');
+      if (!element || !isMounted) {
+        setIniciandoCamara(false);
+        return;
+      }
+
+      try {
+        const html5QrCode = new Html5Qrcode('qr-reader');
+        qrCodeInstanceRef.current = html5QrCode;
+
+        const camaras = await Html5Qrcode.getCameras();
+        if (!camaras || camaras.length === 0) {
+          throw new Error('No se detectó ninguna cámara disponible.');
+        }
+
+        // Búsqueda inteligente del sensor trasero principal
+        const camaraTrasera = camaras.find((c) => {
+          const label = c.label.toLowerCase();
+          return (
+            label.includes('back') ||
+            label.includes('trasera') ||
+            label.includes('posterior') ||
+            label.includes('rear') ||
+            label.includes('environment')
+          );
+        });
+
+        const camaraConfig = camaraTrasera
+          ? camaraTrasera.id
+          : { facingMode: { exact: 'environment' } };
+
+        const config = {
+          fps: 15,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+        };
+
+        const onScanSuccess = async (decodedText: string) => {
+          try {
+            const payload = JSON.parse(decodedText);
+            const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload as {
+              s: string;
+              f: FaseSesion;
+              t: number;
+              token: string;
+            };
+
+            const { data: sesion } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
+            if (!sesion || sesion.fase === 'CERRADA') {
+              setErrorMsg('La sesión no existe o está cerrada.');
+              return;
+            }
+
+            if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) {
+              setErrorMsg('Código QR caducado. Vuelve a enfocar.');
+              return;
+            }
+
+            const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
+            if (token !== tokenEsperado) {
+              setErrorMsg('Código QR no auténtico.');
+              return;
+            }
+
+            const ahora = new Date().toISOString();
+            if (fase === 'ENTRADA') {
+              const { error } = await supabase.from('asistencias').upsert({
+                sesion_id: sesionId,
+                alumno_id: alumnoId,
+                estado: 'PRESENTE' as EstadoAsistencia,
+                hora_entrada: ahora,
+              }, { onConflict: 'sesion_id,alumno_id' });
+
+              if (error) throw error;
+              setMensajeExito('¡Entrada confirmada correctamente!');
+              cargarAsistenciasActivas();
+            } else if (fase === 'SALIDA') {
+              const { error } = await supabase.from('asistencias').update({ hora_salida: ahora }).match({ sesion_id: sesionId, alumno_id: alumnoId });
+              if (error) throw error;
+              setMensajeExito('¡Salida registrada! Asistencia completada.');
+              cargarAsistenciasActivas();
+            }
+
+            await stopScanner();
+            if (isMounted) setCamaraActiva(false);
+          } catch {
+            setErrorMsg('Error al verificar el código QR.');
+          }
+        };
+
+        try {
+          await html5QrCode.start(camaraConfig, config, onScanSuccess, () => {});
+        } catch {
+          // Fallback para modelos de iPhone donde exact: environment da error
+          await html5QrCode.start({ facingMode: 'environment' }, config, onScanSuccess, () => {});
+        }
+
+        if (isMounted) {
+          isScanningRef.current = true;
+          setIniciandoCamara(false);
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        setIniciandoCamara(false);
+        isScanningRef.current = false;
+        setErrorMsg(err.message || 'Error al iniciar la cámara.');
+      }
+    };
+
+    iniciarCamaraTrasera();
+
+    return () => {
+      isMounted = false;
+      stopScanner();
+    };
   }, [camaraActiva, alumnoId]);
 
   const confirmarSalidaSegura = async () => {
@@ -179,10 +302,16 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
   const historialFiltrado = historial.filter((registro) => {
     if (!fechaInicio && !fechaFin) return true;
-    const fechaReg = new Date(registro.fecha).toISOString().split('T')[0];
-    if (fechaInicio && fechaReg < fechaInicio) return false;
-    if (fechaFin && fechaReg > fechaFin) return false;
-    return true;
+    if (!registro.fecha) return false;
+    
+    try {
+      const fechaReg = new Date(registro.fecha).toISOString().split('T')[0];
+      if (fechaInicio && fechaReg < fechaInicio) return false;
+      if (fechaFin && fechaReg > fechaFin) return false;
+      return true;
+    } catch {
+      return false;
+    }
   });
 
   const exportarHistorialAlumno = () => {
@@ -230,9 +359,17 @@ export default function PantallaAlumno({ onVolver }: Props) {
               <h3 className="text-lg font-bold text-slate-900 tracking-tight">Escaneando QR del Aula</h3>
               <button onClick={() => setCamaraActiva(false)} className="text-xs font-semibold px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition cursor-pointer">Cerrar Cámara</button>
             </div>
-            <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border-4 border-slate-100 shadow-inner bg-slate-50">
-              <div id="qr-reader" className="w-full [&>div]:border-none [&>video]:rounded-none"></div>
+            
+            <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border-4 border-slate-100 shadow-inner bg-slate-900 relative min-h-[300px] flex items-center justify-center">
+              {iniciandoCamara && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-2 bg-slate-900/80 z-10">
+                  <div className="w-8 h-8 border-3 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs font-medium">Iniciando cámara trasera...</span>
+                </div>
+              )}
+              <div id="qr-reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full"></div>
             </div>
+
             {errorMsg && <div className="mt-4 p-3 bg-rose-50 border border-rose-100 rounded-xl text-rose-700 text-xs font-semibold text-center w-full max-w-sm">{errorMsg}</div>}
           </div>
         )}

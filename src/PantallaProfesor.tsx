@@ -55,7 +55,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
     setSesionId(sesionData.id);
 
-    const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura);
+    const { data: pastSesiones } = await supabase
+      .from('sesiones')
+      .select('id')
+      .eq('asignatura_id', idAsignatura)
+      .neq('id', sesionData.id);
     
     if (pastSesiones && pastSesiones.length > 0) {
       const sesionIds = pastSesiones.map(s => s.id);
@@ -68,6 +72,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           sesion_id: sesionData.id,
           alumno_id: aluId,
           estado: 'FALTA_INJUSTIFICADA' as EstadoAsistencia,
+          manual: false
         }));
         
         await supabase.from('asistencias').upsert(asistenciasIniciales, { onConflict: 'sesion_id,alumno_id' });
@@ -179,7 +184,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     const { data: asigData } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id);
     if (asigData && asigData.length > 0) {
       const asigIds = asigData.map(a => a.id);
-      const { data: sesionesData } = await supabase.from('sesiones').select('*').eq('fase', 'CERRADA').in('asignatura_id', asigIds).order('created_at', { ascending: false });
+      const { data: sesionesData } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds).order('created_at', { ascending: false });
 
       if (sesionesData) {
         const mapeado = sesionesData.map(sesion => {
