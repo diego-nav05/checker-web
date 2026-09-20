@@ -25,7 +25,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const [clasesHoy, setClasesHoy] = useState<any[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
 
-  // Diccionario local para no depender del JOIN relacional de Postgres
+  // Diccionario local en memoria
   const [diccionarioAlumnos, setDiccionarioAlumnos] = useState<Record<string, any>>({});
 
   const [mostrarModalHistorial, setMostrarModalHistorial] = useState<boolean>(false);
@@ -43,7 +43,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
     const arrancarDatos = async () => {
       setCargandoClases(true);
       
-      // 1. Descargamos todos los perfiles a la memoria local
       const { data: perfilesData } = await supabase.from('perfiles').select('id, nombre_completo, email');
       if (perfilesData) {
         const dict: Record<string, any> = {};
@@ -51,7 +50,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
         setDiccionarioAlumnos(dict);
       }
 
-      // 2. Cargamos las asignaturas del profesor
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('horario', { ascending: true });
@@ -97,14 +95,34 @@ export default function PantallaProfesor({ onVolver }: Props) {
     mostrarNotificacion('Aula iniciada correctamente.', 'exito');
   };
 
-  // SISTEMA A PRUEBA DE FALLOS: Petición plana y mapeo en React
+  // SISTEMA A PRUEBA DE FALLOS CON AUTO-RECUPERACIÓN DE PERFILES NUEVOS
   const cargarAsistencias = async (idSesion: string, dict = diccionarioAlumnos) => {
     const { data } = await supabase.from('asistencias').select('*').eq('sesion_id', idSesion);
     
     if (data) {
+      const idsFaltantes = data
+        .map(item => item.alumno_id)
+        .filter(id => id && !dict[id]);
+
+      let dictActualizado = { ...dict };
+
+      if (idsFaltantes.length > 0) {
+        const { data: perfilesNuevos } = await supabase
+          .from('perfiles')
+          .select('id, nombre_completo, email')
+          .in('id', idsFaltantes);
+
+        if (perfilesNuevos) {
+          perfilesNuevos.forEach(p => {
+            dictActualizado[p.id] = p;
+          });
+          setDiccionarioAlumnos(dictActualizado);
+        }
+      }
+
       const datosCompletos = data.map(item => ({
         ...item,
-        perfiles: dict[item.alumno_id] || { nombre_completo: 'Alumno Registrado' }
+        perfiles: dictActualizado[item.alumno_id] || { nombre_completo: 'Alumno Registrado' }
       }));
       setAsistencias(datosCompletos as Asistencia[]);
     }
@@ -240,7 +258,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoHistorial(false);
   };
 
-  const descargarExcelPasado = async (sesionPasadaId: string, asigNombre: string, fecha: string) => {
+  const descargarExcelPasado = async (sesionPasadaId: string, asigNombre: string) => {
     const { data } = await supabase.from('asistencias').select('*').eq('sesion_id', sesionPasadaId);
     if (!data || data.length === 0) return mostrarNotificacion('No hay registros en esta clase.', 'error');
     
@@ -254,7 +272,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
     const libro = XLSX.utils.book_new();
     const hoja = XLSX.utils.json_to_sheet(filas);
     XLSX.utils.book_append_sheet(libro, hoja, 'Asistencia');
-    XLSX.writeFile(libro, `Asistencia_${asigNombre}_${new Date(fecha).toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+    
+    const nombreLimpio = asigNombre.replace(/[/\\?%*:|"<>]/g, '-');
+    XLSX.writeFile(libro, `${nombreLimpio}.xlsx`);
   };
 
   return (
@@ -441,7 +461,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                       <h4 className="font-bold text-[#002b5c] text-sm">{sesion.asignatura_nombre}</h4>
                       <p className="text-[11px] font-semibold text-slate-400 mt-1">{new Date(sesion.created_at).toLocaleDateString()} · {new Date(sesion.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</p>
                     </div>
-                    <button onClick={() => descargarExcelPasado(sesion.id, sesion.asignatura_nombre, sesion.created_at)} className="px-4 py-2 bg-white text-[#0090d0] text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm border border-slate-100 active:scale-95 cursor-pointer">
+                    <button onClick={() => descargarExcelPasado(sesion.id, sesion.asignatura_nombre)} className="px-4 py-2 bg-white text-[#0090d0] text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm border border-slate-100 active:scale-95 cursor-pointer">
                       Excel
                     </button>
                   </div>
