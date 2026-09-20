@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import CryptoJS from 'crypto-js';
 import * as XLSX from 'xlsx';
@@ -17,6 +17,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   
   const [tabActual, setTabActual] = useState<TabAlumno>('HORARIO');
   const [camaraActiva, setCamaraActiva] = useState(false);
+  const [procesandoQr, setProcesandoQr] = useState(false); // Nuevo estado para la congelación
   
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
@@ -29,6 +30,9 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
+
+  // Referencia para limpiar el escáner al desmontar
+  const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
     setNotificacion({ texto, tipo });
@@ -98,90 +102,122 @@ export default function PantallaAlumno({ onVolver }: Props) {
     cargarHistorial();
   }, [tabActual, alumnoId]);
 
-  // --- MOTOR DE ESCÁNER ANTI-CRASHEOS ---
+  // --- NUEVO SISTEMA DE ESCÁNER (Pausar -> Procesar DB -> Cerrar) ---
   useEffect(() => {
     let isMounted = true;
-    let html5QrCode: Html5Qrcode | null = null;
-    let scannerActivo = false;
+    let isProcessingLocally = false;
 
-    const arrancar = async () => {
+    const inicializarCamara = async () => {
       if (!camaraActiva) return;
-
+      setProcesandoQr(false);
+      
       try {
+        // Pedir permiso al sistema nativo primero
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         stream.getTracks().forEach(track => track.stop());
       } catch (err) {
-        if (!isMounted) return;
-        mostrarNotificacion('Permite la cámara en tu navegador.', 'error');
-        setCamaraActiva(false);
+        if (isMounted) {
+          mostrarNotificacion('Permite el acceso a la cámara en los ajustes.', 'error');
+          setCamaraActiva(false);
+        }
         return;
       }
 
       setTimeout(async () => {
         if (!isMounted || !camaraActiva) return;
-        html5QrCode = new Html5Qrcode('qr-reader');
         
-        const onScanSuccess = async (decodedText: string) => {
-          if (!scannerActivo) return; // Evita doble lectura y crasheo
-          scannerActivo = false;
-          
-          // Ocultar cámara de inmediato (el useEffect limpiará la instancia nativa)
-          setCamaraActiva(false);
-
-          try {
-            const payload = JSON.parse(decodedText);
-            const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload;
-
-            const { data: sesion } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
-            if (!sesion || sesion.fase === 'CERRADA') return mostrarNotificacion('Código caducado.', 'error');
-            
-            if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) return mostrarNotificacion('QR caducado.', 'error');
-            
-            const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
-            if (token !== tokenEsperado) return mostrarNotificacion('QR inválido.', 'error');
-
-            const ahora = new Date().toISOString();
-            
-            // Inserción Blindada (2 Pasos)
-            if (fase === 'ENTRADA') {
-               const { data: existe } = await supabase.from('asistencias').select('id').match({ sesion_id: sesionId, alumno_id: alumnoId }).maybeSingle();
-               if (existe) {
-                 await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
-               } else {
-                 await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
-               }
-               mostrarNotificacion('Entrada registrada.', 'exito');
-            } else {
-               await supabase.from('asistencias').update({ hora_salida: ahora }).match({ sesion_id: sesionId, alumno_id: alumnoId });
-               mostrarNotificacion('Salida completada.', 'exito');
-            }
-
-            cargarAsistenciasActivas();
-            cargarAsignaturas();
-          } catch (e) {
-            mostrarNotificacion('Error procesando QR.', 'error');
-          }
-        };
-
         try {
-          await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
-          scannerActivo = true;
+          const html5QrCode = new Html5Qrcode('qr-reader');
+          qrScannerRef.current = html5QrCode;
+          
+          const onScanSuccess = async (decodedText: string) => {
+            // Evitar múltiples lecturas por segundo
+            if (isProcessingLocally) return;
+            isProcessingLocally = true;
+            
+            // 1. CONGELAR CÁMARA (No apagar, solo pausar el análisis visual)
+            if (html5QrCode.getState() === 2) { // 2 = scanning
+              html5QrCode.pause();
+            }
+            setProcesandoQr(true); // Pantalla de carga superpuesta
+
+            try {
+              const payload = JSON.parse(decodedText);
+              const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload;
+
+              // Validaciones
+              const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
+              if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El código de la clase ya no es válido.');
+              
+              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. El profesor debe mostrar uno nuevo.');
+              
+              const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
+              if (token !== tokenEsperado) throw new Error('El QR ha sido manipulado.');
+
+              const ahora = new Date().toISOString();
+              
+              // 2. INYECCIÓN BLINDADA A BASE DE DATOS
+              if (fase === 'ENTRADA') {
+                 const { data: existe } = await supabase.from('asistencias').select('id').eq('sesion_id', sesionId).eq('alumno_id', alumnoId).maybeSingle();
+                 if (existe) {
+                   const { error } = await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
+                   if (error) throw new Error('Error al actualizar registro.');
+                 } else {
+                   const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
+                   if (error) throw new Error('Error al crear registro.');
+                 }
+                 mostrarNotificacion('¡Entrada registrada con éxito!', 'exito');
+              } else {
+                 const { error } = await supabase.from('asistencias').update({ hora_salida: ahora }).eq('sesion_id', sesionId).eq('alumno_id', alumnoId);
+                 if (error) throw new Error('Error registrando salida.');
+                 mostrarNotificacion('¡Salida completada!', 'exito');
+              }
+
+              cargarAsistenciasActivas();
+              cargarAsignaturas();
+              
+              // 3. APAGADO SEGURO
+              if (html5QrCode.getState() !== 1) { // 1 = not started
+                await html5QrCode.stop();
+              }
+              html5QrCode.clear();
+              setCamaraActiva(false); // Volver al menú
+              
+            } catch (e: any) {
+              mostrarNotificacion(e.message || 'Error procesando el código.', 'error');
+              setProcesandoQr(false);
+              isProcessingLocally = false;
+              // Si falla, reanudar cámara para intentarlo de nuevo
+              if (html5QrCode.getState() === 3) { // 3 = paused
+                html5QrCode.resume();
+              }
+            }
+          };
+
+          await html5QrCode.start(
+            { facingMode: "environment" }, 
+            { fps: 10, qrbox: { width: 250, height: 250 } }, 
+            onScanSuccess, 
+            () => {} // Ignorar fallos de lectura de frames vacíos
+          );
+
         } catch (err) {
           if (isMounted) {
-            mostrarNotificacion('Fallo al cargar lente.', 'error');
+            mostrarNotificacion('No se pudo abrir el sensor óptico.', 'error');
             setCamaraActiva(false);
           }
         }
-      }, 50);
+      }, 100);
     };
 
-    if (camaraActiva) arrancar();
+    inicializarCamara();
 
     return () => {
       isMounted = false;
-      if (html5QrCode && scannerActivo) {
-        // Limpieza segura silenciosa
-        html5QrCode.stop().catch(() => {});
+      // Apagado silencioso al salir de la pantalla
+      if (qrScannerRef.current && qrScannerRef.current.getState() !== 1) {
+        qrScannerRef.current.stop().catch(() => {});
+        qrScannerRef.current.clear();
       }
     };
   }, [camaraActiva, alumnoId]);
@@ -250,10 +286,28 @@ export default function PantallaAlumno({ onVolver }: Props) {
       <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col">
         {camaraActiva && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-6 mb-8 flex flex-col items-center animate-[fade-in_0.3s_ease-out]">
-            <div className="w-full max-w-sm overflow-hidden rounded-[2rem] bg-black relative min-h-[350px] flex items-center justify-center shadow-inner">
-              <div id="qr-reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full rounded-[2rem]"></div>
+            <div className="w-full max-w-sm overflow-hidden rounded-[2.5rem] bg-black relative min-h-[350px] flex items-center justify-center shadow-inner">
+              
+              {/* Pantalla de carga superpuesta al escanear */}
+              {procesandoQr && (
+                <div className="absolute inset-0 bg-[#002b5c]/80 backdrop-blur-md flex flex-col items-center justify-center z-10 transition-all">
+                  <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin mb-4 shadow-lg"></div>
+                  <p className="text-white font-bold tracking-tight text-sm">Registrando...</p>
+                </div>
+              )}
+              
+              <div id="qr-reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full rounded-[2.5rem]"></div>
             </div>
-            <button onClick={() => setCamaraActiva(false)} className="mt-6 px-6 py-3 bg-rose-100 text-rose-600 text-sm font-bold rounded-full transition-colors active:scale-95">Cancelar Escaneo</button>
+            <button 
+              onClick={() => {
+                if (qrScannerRef.current) qrScannerRef.current.stop().catch(()=>{});
+                setCamaraActiva(false);
+              }} 
+              disabled={procesandoQr}
+              className="mt-6 px-6 py-3 bg-rose-100 text-rose-600 text-sm font-bold rounded-full transition-colors active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              Cancelar Escaneo
+            </button>
           </div>
         )}
 
@@ -350,8 +404,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
             <p className="text-xs text-slate-500 font-medium mb-6">Introduce tu contraseña para confirmar.</p>
             <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold"/>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setModalSalir(null); setPassConfirm(''); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95">Cancelar</button>
-              <button onClick={confirmarSalidaSegura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50">Confirmar</button>
+              <button onClick={() => { setModalSalir(null); setPassConfirm(''); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
+              <button onClick={confirmarSalidaSegura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Confirmar</button>
             </div>
           </div>
         </div>
