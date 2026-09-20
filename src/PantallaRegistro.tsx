@@ -1,70 +1,71 @@
 import { useState } from 'react';
 import { supabase } from './supabase';
-import { getDeviceId } from './device';
+import CryptoJS from 'crypto-js';
 
 interface Props {
   onVolver: () => void;
 }
 
-type Modo = 'LOGIN' | 'REGISTRO' | 'RECUPERAR';
-
 export default function PantallaRegistro({ onVolver }: Props) {
-  const [modo, setModo] = useState<Modo>('LOGIN');
-  const [rol, setRol] = useState<'alumno' | 'profesor'>('alumno');
-  
-  const [nombre, setNombre] = useState('');
+  const [esRegistro, setEsRegistro] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  
+  const [nombre, setNombre] = useState('');
   const [cargando, setCargando] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [exitoMsg, setExitoMsg] = useState<string | null>(null);
 
-  const procesarFormulario = async (e: React.FormEvent) => {
+  // Sistema de Notificaciones iOS 27
+  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
+
+  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'error') => {
+    setNotificacion({ texto, tipo });
+    setTimeout(() => setNotificacion(null), 4000);
+  };
+
+  // Huella digital del dispositivo para evitar suplantaciones
+  const generarHashDispositivo = () => {
+    const datos = navigator.userAgent + window.screen.width + window.screen.height + navigator.language;
+    return CryptoJS.SHA256(datos).toString();
+  };
+
+  const autenticar = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-    setExitoMsg(null);
     setCargando(true);
+    setNotificacion(null);
 
     try {
-      if (modo === 'REGISTRO') {
-        // 1. Crear usuario en Supabase Auth
+      if (esRegistro) {
+        // --- CREAR CUENTA ---
+        if (!nombre.trim()) throw new Error('El nombre es obligatorio.');
+        
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
         });
 
         if (authError) throw authError;
-        if (!authData.user) throw new Error('Error al crear el usuario.');
+        if (!authData.user) throw new Error('Error interno al crear la cuenta.');
 
-        // 2. Guardar el perfil público con el device_hash
-        const deviceHash = getDeviceId();
-        const { error: dbError } = await supabase.from('perfiles').insert({
-          id: authData.user.id, // Vinculamos el ID de Auth con nuestra tabla
+        const hash = generarHashDispositivo();
+
+        const { error: profileError } = await supabase.from('perfiles').insert([{
+          id: authData.user.id,
           nombre_completo: nombre,
           email: email,
-          rol: rol,
-          dispositivo_hash: rol === 'alumno' ? deviceHash : null, // Solo atamos a los alumnos
-        });
+          rol: 'alumno',
+          dispositivo_hash: hash
+        }]);
 
-        if (dbError) throw dbError;
+        if (profileError) throw profileError;
 
-        // Guardado local estricto
+        localStorage.setItem('checker_alumno_id', authData.user.id);
         localStorage.setItem('checker_nombre', nombre);
-        localStorage.setItem('checker_rol', rol);
-        
-        if (rol === 'alumno') {
-          localStorage.setItem('checker_alumno_id', authData.user.id);
-        } else {
-          localStorage.removeItem('checker_alumno_id');
-        }
-        
-        setExitoMsg('Cuenta creada con éxito. Ya puedes volver al inicio y acceder.');
-        setModo('LOGIN');
-      } 
-      
-      else if (modo === 'LOGIN') {
-        // 1. Iniciar sesión real
+        localStorage.setItem('checker_rol', 'alumno');
+
+        mostrarNotificacion('Cuenta creada con éxito.', 'exito');
+        setTimeout(onVolver, 1500);
+
+      } else {
+        // --- INICIAR SESIÓN ---
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -72,149 +73,138 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
         if (authError) throw authError;
 
-        // 2. Comprobación estricta de seguridad (Anti-Trampas)
-        const { data: perfil, error: perfilError } = await supabase
+        const { data: perfil, error: profileError } = await supabase
           .from('perfiles')
           .select('*')
           .eq('id', authData.user.id)
           .single();
 
-        if (perfilError || !perfil) throw new Error('No se encontró el perfil de usuario.');
-
-        if (perfil.rol === 'alumno') {
-          const hashActual = getDeviceId();
-          if (perfil.dispositivo_hash !== hashActual) {
-            await supabase.auth.signOut();
-            throw new Error('⛔ Dispositivo no reconocido. Este móvil no es el tuyo. Pide a un profesor que desvincule tu cuenta.');
-          }
+        if (profileError || !perfil) throw new Error('No se encontró el perfil de usuario.');
+        if (perfil.rol !== 'alumno') {
+          await supabase.auth.signOut();
+          throw new Error('Esta cuenta pertenece al profesorado.');
         }
 
-        // Guardado local estricto
+        const hashActual = generarHashDispositivo();
+
+        if (!perfil.dispositivo_hash) {
+          // Si el profesor reseteó el dispositivo, se vincula el nuevo
+          await supabase.from('perfiles').update({ dispositivo_hash: hashActual }).eq('id', perfil.id);
+        } else if (perfil.dispositivo_hash !== hashActual) {
+          await supabase.auth.signOut();
+          throw new Error('Cuenta vinculada a otro móvil. Pide a tu profesor que la libere.');
+        }
+
+        localStorage.setItem('checker_alumno_id', perfil.id);
         localStorage.setItem('checker_nombre', perfil.nombre_completo);
-        localStorage.setItem('checker_rol', perfil.rol);
+        localStorage.setItem('checker_rol', 'alumno');
 
-        if (perfil.rol === 'alumno') {
-          localStorage.setItem('checker_alumno_id', perfil.id);
-        } else {
-          // Si entra un profesor, eliminamos cualquier ID de alumno que hubiera quedado
-          localStorage.removeItem('checker_alumno_id'); 
-        }
-
-        setExitoMsg('¡Sesión iniciada! Vuelve al inicio para entrar a tu panel.');
-      } 
-      
-      else if (modo === 'RECUPERAR') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email);
-        if (error) throw error;
-        setExitoMsg('Te hemos enviado un enlace de recuperación a tu correo.');
-        setModo('LOGIN');
+        mostrarNotificacion('Acceso autorizado.', 'exito');
+        setTimeout(onVolver, 1000);
       }
-
     } catch (error: any) {
-      setErrorMsg(error.message);
+      // Simplificamos los mensajes de error de Supabase al español
+      let mensaje = error.message;
+      if (mensaje.includes('Invalid login credentials')) mensaje = 'Correo o contraseña incorrectos.';
+      if (mensaje.includes('already registered')) mensaje = 'Este correo ya tiene una cuenta.';
+      if (mensaje.includes('Password should be at least')) mensaje = 'La contraseña debe tener al menos 6 caracteres.';
+      
+      mostrarNotificacion(mensaje, 'error');
     } finally {
       setCargando(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white">
+    <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col items-center justify-center font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       
-      {/* Isla Superior */}
-      <div className="flex items-center justify-between bg-white/80 backdrop-blur-xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-black/[0.03] mb-8 max-w-lg mx-auto w-full">
-        <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">
+      {/* Fondo sutil difuminado */}
+      <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
+
+      {/* Pop-up de Notificación iOS 27 */}
+      {notificacion && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
+          notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
+          notificacion.tipo === 'exito' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 
+          'bg-[#002b5c]/90 border-[#0090d0]/50 text-white'
+        }`}>
+          <span className="text-sm font-semibold tracking-tight">{notificacion.texto}</span>
+        </div>
+      )}
+
+      {/* Contenedor Principal (Glassmorphism) */}
+      <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 animate-[fade-in_0.4s_ease-out,zoom-in_0.4s_ease-out]">
+        
+        <button
+          onClick={onVolver}
+          className="w-10 h-10 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors active:scale-95 mb-8 cursor-pointer"
+        >
           ←
         </button>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Acceso al Sistema</h1>
-        <div className="w-10"></div> {/* Espaciador para centrar */}
-      </div>
 
-      {/* Tarjeta Principal */}
-      <div className="max-w-lg w-full mx-auto flex-1 flex flex-col">
-        <div className="bg-white rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-black/[0.02] p-8 sm:p-12 my-auto">
+        <h2 className="text-3xl font-black text-[#002b5c] tracking-tight leading-none mb-2">
+          {esRegistro ? 'Nueva Cuenta' : 'Bienvenido'}
+        </h2>
+        <p className="text-xs text-slate-500 font-medium mb-8">
+          {esRegistro ? 'Regístrate para vincular tu dispositivo móvil.' : 'Inicia sesión para registrar tu asistencia.'}
+        </p>
+
+        <form onSubmit={autenticar} className="flex flex-col gap-4">
           
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              {modo === 'LOGIN' ? 'Iniciar Sesión' : modo === 'REGISTRO' ? 'Crear Cuenta' : 'Recuperar Acceso'}
-            </h2>
-            <p className="text-slate-500 font-medium mt-2">
-              {modo === 'LOGIN' ? 'Introduce tus credenciales para continuar.' : 
-               modo === 'REGISTRO' ? 'Tu dispositivo quedará vinculado por seguridad.' : 
-               'Recibirás un correo con las instrucciones.'}
-            </p>
-          </div>
-
-          <form onSubmit={procesarFormulario} className="flex flex-col gap-5">
-            {modo === 'REGISTRO' && (
-              <>
-                <div className="flex bg-[#F5F5F7] p-1.5 rounded-[1.5rem] mb-2">
-                  <button type="button" onClick={() => setRol('alumno')} className={`flex-1 py-3 text-sm font-bold rounded-[1.25rem] transition-all ${rol === 'alumno' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                    Soy Alumno
-                  </button>
-                  <button type="button" onClick={() => setRol('profesor')} className={`flex-1 py-3 text-sm font-bold rounded-[1.25rem] transition-all ${rol === 'profesor' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                    Soy Profesor
-                  </button>
-                </div>
-                
-                <input
-                  type="text"
-                  placeholder="Nombre y Apellidos"
-                  value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
-                  className="w-full p-5 bg-[#F5F5F7] border border-transparent rounded-[1.5rem] text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0090d0] focus:ring-4 focus:ring-sky-500/10 transition-all"
-                  required
-                />
-              </>
-            )}
-
+          {esRegistro && (
             <input
-              type="email"
-              placeholder="Correo electrónico institucional"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-5 bg-[#F5F5F7] border border-transparent rounded-[1.5rem] text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0090d0] focus:ring-4 focus:ring-sky-500/10 transition-all"
+              type="text"
+              placeholder="Nombre y Apellidos"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className="w-full p-4 bg-slate-50/50 backdrop-blur-sm rounded-2xl border border-slate-200/50 focus:border-[#0090d0] focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-semibold transition-all"
               required
             />
+          )}
 
-            {modo !== 'RECUPERAR' && (
-              <input
-                type="password"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-5 bg-[#F5F5F7] border border-transparent rounded-[1.5rem] text-base font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#0090d0] focus:ring-4 focus:ring-sky-500/10 transition-all"
-                required
-              />
-            )}
+          <input
+            type="email"
+            placeholder="Correo UNEATLANTICO"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-4 bg-slate-50/50 backdrop-blur-sm rounded-2xl border border-slate-200/50 focus:border-[#0090d0] focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-semibold transition-all"
+            required
+          />
 
-            <button
-              type="submit"
-              disabled={cargando}
-              className="w-full mt-2 py-5 bg-[#0090d0] hover:bg-[#007fb8] text-white text-lg font-bold rounded-[1.5rem] transition-all shadow-[0_8px_20px_-6px_rgba(0,144,208,0.4)] cursor-pointer active:scale-[0.98] disabled:opacity-50"
-            >
-              {cargando ? 'Procesando...' : modo === 'LOGIN' ? 'Entrar' : modo === 'REGISTRO' ? 'Registrarme' : 'Enviar Enlace'}
-            </button>
-          </form>
+          <input
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-4 bg-slate-50/50 backdrop-blur-sm rounded-2xl border border-slate-200/50 focus:border-[#0090d0] focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-semibold transition-all"
+            required
+          />
 
-          {/* Alertas */}
-          {errorMsg && <div className="mt-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-rose-700 text-sm font-semibold text-center">{errorMsg}</div>}
-          {exitoMsg && <div className="mt-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-700 text-sm font-semibold text-center">{exitoMsg}</div>}
+          <button
+            type="submit"
+            disabled={cargando}
+            className="w-full mt-2 py-4 bg-[#002b5c] hover:bg-[#0090d0] text-white font-bold rounded-2xl transition-all shadow-[0_8px_20px_rgb(0,43,92,0.2)] hover:shadow-[0_8px_25px_rgb(0,144,208,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm"
+          >
+            {cargando ? 'Procesando...' : (esRegistro ? 'Crear Cuenta' : 'Entrar')}
+          </button>
+        </form>
 
-          {/* Enlaces inferiores */}
-          <div className="mt-8 flex flex-col items-center gap-3 text-sm font-medium">
-            {modo === 'LOGIN' ? (
-              <>
-                <button onClick={() => setModo('REGISTRO')} className="text-slate-500 hover:text-slate-800 transition-colors">¿No tienes cuenta? <span className="text-[#0090d0] font-bold">Regístrate</span></button>
-                <button onClick={() => setModo('RECUPERAR')} className="text-slate-400 hover:text-slate-600 transition-colors">He olvidado mi contraseña</button>
-              </>
-            ) : modo === 'REGISTRO' ? (
-              <button onClick={() => setModo('LOGIN')} className="text-slate-500 hover:text-slate-800 transition-colors">¿Ya tienes cuenta? <span className="text-[#0090d0] font-bold">Inicia Sesión</span></button>
-            ) : (
-              <button onClick={() => setModo('LOGIN')} className="text-slate-500 hover:text-slate-800 transition-colors">Volver a <span className="text-[#0090d0] font-bold">Iniciar Sesión</span></button>
-            )}
-          </div>
-
+        {/* Toggle Login/Registro */}
+        <div className="mt-8 text-center">
+          <button
+            onClick={() => {
+              setEsRegistro(!esRegistro);
+              setNotificacion(null);
+              setEmail('');
+              setPassword('');
+              setNombre('');
+            }}
+            className="text-xs font-bold text-slate-400 hover:text-[#0090d0] transition-colors cursor-pointer"
+          >
+            {esRegistro ? 'Ya tengo una cuenta. Iniciar sesión.' : 'No tengo cuenta. Registrarme.'}
+          </button>
         </div>
+
       </div>
     </div>
   );

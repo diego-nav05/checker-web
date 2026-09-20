@@ -31,6 +31,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
 
+  // Sistema de Notificaciones iOS 27
+  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
+
+  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
+    setNotificacion({ texto, tipo });
+    setTimeout(() => setNotificacion(null), 4000);
+  };
+
   const cargarAlumnos = async () => {
     setCargando(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -77,11 +85,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   }, [tabActual]);
 
   const desvincularDispositivo = async (id: string, nombre: string) => {
-    const confirmar = window.confirm(`¿Estás seguro de que quieres desvincular el dispositivo de ${nombre}?`);
+    const confirmar = window.confirm(`¿Desvincular dispositivo de ${nombre}?`);
     if (!confirmar) return;
     const { error } = await supabase.from('perfiles').update({ dispositivo_hash: null }).eq('id', id);
-    if (error) alert('Error: ' + error.message);
-    else cargarAlumnos();
+    if (error) mostrarNotificacion('Error al desvincular.', 'error');
+    else {
+      mostrarNotificacion('Dispositivo desvinculado.', 'exito');
+      cargarAlumnos();
+    }
   };
 
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
@@ -90,8 +101,13 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from('asignaturas').insert([{ nombre: formAsignatura.nombre, aula: formAsignatura.aula, horario: formAsignatura.horario, profesor_id: user?.id }]);
     setGuardandoAsig(false);
-    if (error) alert('Error al crear la asignatura: ' + error.message);
-    else { setFormAsignatura({ nombre: '', aula: '', horario: '' }); setModalAsignatura(false); cargarAsignaturas(); }
+    if (error) mostrarNotificacion('Error al crear asignatura.', 'error');
+    else { 
+      setFormAsignatura({ nombre: '', aula: '', horario: '' }); 
+      setModalAsignatura(false); 
+      mostrarNotificacion('Asignatura creada.', 'exito');
+      cargarAsignaturas(); 
+    }
   };
 
   const confirmarEliminarAsignatura = async () => {
@@ -99,7 +115,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setCargandoPass(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("No se encontró sesión activa.");
+      if (!user?.email) throw new Error("Sin sesión activa.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passConfirm });
       if (authError) throw new Error("Contraseña incorrecta.");
 
@@ -116,8 +132,15 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const { error: asigDeleteError } = await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
       if (asigDeleteError) throw asigDeleteError;
       
-      setModalEliminarAsig(null); setPassConfirm(''); cargarAsignaturas();
-    } catch (error: any) { alert(error.message); } finally { setCargandoPass(false); }
+      setModalEliminarAsig(null); 
+      setPassConfirm(''); 
+      mostrarNotificacion('Asignatura eliminada.', 'exito');
+      cargarAsignaturas();
+    } catch (error: any) { 
+      mostrarNotificacion(error.message, 'error'); 
+    } finally { 
+      setCargandoPass(false); 
+    }
   };
 
   const abrirDetallesAsignatura = async (asig: any) => {
@@ -135,7 +158,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       .order('created_at', { ascending: true });
     
     if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
-      alert("No hay ninguna clase registrada en esta materia.");
+      mostrarNotificacion("No hay clases registradas en esta materia.", 'info');
       return null;
     }
 
@@ -152,7 +175,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     });
 
     if (sesionesData.length === 0) {
-      alert("No hay clases en el periodo de fechas seleccionado.");
+      mostrarNotificacion("No hay clases en este periodo.", 'info');
       return null;
     }
 
@@ -160,7 +183,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const { data: asistData } = await supabase.from('asistencias').select('*, perfiles(nombre_completo)').in('sesion_id', sesionIds);
 
     if (!asistData || asistData.length === 0) {
-      alert("La clase fue creada, pero ningún alumno llegó a escanear el código QR.");
+      mostrarNotificacion("Ningún alumno ha asistido aún.", 'info');
       return null;
     }
 
@@ -199,9 +222,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const hoja = XLSX.utils.json_to_sheet(data.filas);
       XLSX.utils.book_append_sheet(libro, hoja, 'Asistencias Periodo');
       XLSX.writeFile(libro, `Reporte_${asignaturaSeleccionada.nombre.replace(/ /g, '_')}_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+      mostrarNotificacion('Archivo Excel generado.', 'exito');
     } catch (error) {
-      console.error(error);
-      alert("Ocurrió un error al generar el archivo Excel.");
+      mostrarNotificacion('Error generando Excel.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -220,18 +243,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       ].join('\n');
 
       await navigator.clipboard.writeText(lineasTSV);
-      const ventana = window.open('https://sheets.new', '_blank');
+      window.open('https://sheets.new', '_blank');
 
-      alert(
-        '📋 ¡Datos copiados al portapapeles!\n\nSe ha abierto una hoja nueva de Google Sheets. Pulsa "Ctrl + V" (o "Cmd + V") en la celda A1 para pegar toda la matriz de asistencia.'
-      );
-
-      if (!ventana) {
-        alert('Por favor, permite las ventanas emergentes en tu navegador para abrir Google Sheets de forma automática.');
-      }
+      mostrarNotificacion('Datos copiados. Pega en celda A1 (Ctrl+V).', 'exito');
     } catch (err) {
-      console.error(err);
-      alert('Hubo un problema al transferir los datos a Google Sheets.');
+      mostrarNotificacion('Error copiando al portapapeles.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -250,63 +266,76 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
     const { error } = await supabase.from('asignaturas').update({ aula: aulaTemp }).eq('id', id);
     if (error) {
-      alert("Error al actualizar el aula.");
+      mostrarNotificacion('Error actualizando aula.', 'error');
       cargarAsignaturas();
+    } else {
+      mostrarNotificacion('Aula actualizada.', 'exito');
     }
   };
 
   const handleKeyDownAula = (e: React.KeyboardEvent, id: string) => {
-    if (e.key === 'Enter') {
-      guardarEdicionAula(id);
-    } else if (e.key === 'Escape') {
-      setEditandoAulaId(null);
-    }
+    if (e.key === 'Enter') guardarEdicionAula(id);
+    else if (e.key === 'Escape') setEditandoAulaId(null);
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white">
+    <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
       
-      <div className="flex items-center justify-between bg-white/80 backdrop-blur-xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-black/[0.03] mb-8 max-w-5xl mx-auto w-full">
+      {/* Notificaciones */}
+      {notificacion && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
+          notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
+          notificacion.tipo === 'exito' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 
+          'bg-[#002b5c]/90 border-[#0090d0]/50 text-white'
+        }`}>
+          <span className="text-sm font-semibold tracking-tight">{notificacion.texto}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between bg-white/70 backdrop-blur-3xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight leading-tight">Administración</h1>
-            <p className="text-xs font-medium text-slate-500">Panel Global Docente</p>
+            <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Gestión Docente</h1>
+            <p className="text-xs font-semibold text-slate-400">Panel Global</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col gap-6">
+      <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col gap-6 animate-[fade-in_0.4s_ease-out]">
         
-        <div className="flex bg-white p-2 rounded-[2rem] shadow-sm border border-slate-100 max-w-sm mx-auto w-full">
-          <button onClick={() => setTabActual('ALUMNOS')} className={`flex-1 py-3 text-sm font-bold rounded-[1.5rem] transition-all cursor-pointer ${tabActual === 'ALUMNOS' ? 'bg-[#0090d0] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Alumnado</button>
-          <button onClick={() => setTabActual('ASIGNATURAS')} className={`flex-1 py-3 text-sm font-bold rounded-[1.5rem] transition-all cursor-pointer ${tabActual === 'ASIGNATURAS' ? 'bg-[#0090d0] text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>Asignaturas</button>
+        {/* Selector Pestañas (Estilo iOS) */}
+        <div className="flex bg-white/70 backdrop-blur-3xl p-1.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 max-w-xs mx-auto w-full">
+          <button onClick={() => setTabActual('ALUMNOS')} className={`flex-1 py-3 text-xs font-bold rounded-full transition-all cursor-pointer ${tabActual === 'ALUMNOS' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>Alumnado</button>
+          <button onClick={() => setTabActual('ASIGNATURAS')} className={`flex-1 py-3 text-xs font-bold rounded-full transition-all cursor-pointer ${tabActual === 'ASIGNATURAS' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>Asignaturas</button>
         </div>
 
+        {/* PESTAÑA: ALUMNOS */}
         {tabActual === 'ALUMNOS' && (
-          <div className="bg-white rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-black/[0.02] p-8 flex-1">
+          <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
             <div className="flex items-center justify-between mb-8 px-2">
-              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Control de Dispositivos</h2>
-              <span className="bg-sky-50 text-[#0090d0] px-4 py-2 rounded-full text-xs font-bold">{alumnos.length} Alumnos</span>
+              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Dispositivos</h2>
+              <span className="bg-[#0090d0]/10 text-[#0090d0] px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">{alumnos.length} Registros</span>
             </div>
 
             {cargando ? (
-              <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Cargando alumnos de tus clases...</div>
+              <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Sincronizando...</div>
             ) : alumnos.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 font-medium">No hay alumnos vinculados a tus clases todavía.</div>
+              <div className="text-center py-12 text-slate-400 text-sm font-medium">No hay alumnos vinculados a tus clases.</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {alumnos.map((alumno) => (
-                  <div key={alumno.id} className="p-5 bg-slate-50 hover:bg-slate-100/50 rounded-[1.5rem] border border-slate-100 flex items-center justify-between transition-colors">
+                  <div key={alumno.id} className="p-5 bg-white/80 hover:bg-white rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center justify-between transition-colors">
                     <div className="overflow-hidden pr-4">
-                      <h3 className="font-bold text-slate-800 text-sm truncate">{alumno.nombre_completo}</h3>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{alumno.email}</p>
+                      <h3 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h3>
+                      <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{alumno.email}</p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className={`w-2 h-2 rounded-full ${alumno.dispositivo_hash ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{alumno.dispositivo_hash ? 'Móvil Vinculado' : 'Sin Dispositivo'}</span>
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{alumno.dispositivo_hash ? 'Vinculado' : 'Sin Dispositivo'}</span>
                       </div>
                     </div>
-                    <button onClick={() => desvincularDispositivo(alumno.id, alumno.nombre_completo)} disabled={!alumno.dispositivo_hash} className="shrink-0 px-4 py-2.5 bg-white border border-slate-200 hover:border-rose-200 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">Desvincular</button>
+                    <button onClick={() => desvincularDispositivo(alumno.id, alumno.nombre_completo)} disabled={!alumno.dispositivo_hash} className="shrink-0 px-4 py-2.5 bg-slate-50 text-slate-600 hover:text-rose-600 hover:bg-rose-50 text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50">Resetear</button>
                   </div>
                 ))}
               </div>
@@ -314,28 +343,27 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           </div>
         )}
 
+        {/* PESTAÑA: ASIGNATURAS */}
         {tabActual === 'ASIGNATURAS' && (
-          <div className="bg-white rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-black/[0.02] p-8 flex-1">
+          <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
             <div className="flex items-center justify-between mb-8 px-2">
-              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Mis Asignaturas</h2>
-              <button onClick={() => setModalAsignatura(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-full text-sm font-bold shadow-sm transition-all cursor-pointer active:scale-95">+ Nueva Asignatura</button>
+              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Materias</h2>
+              <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">Nueva +</button>
             </div>
 
             {cargando ? (
-              <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Cargando materias...</div>
+              <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Cargando...</div>
             ) : asignaturas.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 font-medium">Aún no has creado ninguna asignatura.</div>
+              <div className="text-center py-12 text-slate-400 text-sm font-medium">Aún no has creado asignaturas.</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {asignaturas.map((asig) => (
-                  <div key={asig.id} className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow relative group">
-                    <button onClick={() => setModalEliminarAsig(asig.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-white text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-full shadow-sm transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer" title="Eliminar Asignatura">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                  <div key={asig.id} className="p-6 bg-white/80 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:shadow-[0_20px_40px_rgba(0,144,208,0.1)] transition-all relative group">
+                    <button onClick={() => setModalEliminarAsig(asig.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-400 hover:text-white hover:bg-rose-500 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer" title="Eliminar">✕</button>
                     <div>
-                      <h3 className="font-bold text-slate-900 text-lg pr-8">{asig.nombre}</h3>
-                      <div className="flex items-center justify-between text-sm font-medium text-slate-500 mt-3">
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#0090d0]"></span>{asig.horario}</span>
+                      <h3 className="font-bold text-[#002b5c] text-lg pr-8">{asig.nombre}</h3>
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mt-3">
+                        <span>{asig.horario}</span>
                         
                         {editandoAulaId === asig.id ? (
                           <input 
@@ -345,14 +373,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                             onChange={(e) => setAulaTemp(e.target.value)}
                             onBlur={() => guardarEdicionAula(asig.id)}
                             onKeyDown={(e) => handleKeyDownAula(e, asig.id)}
-                            className="bg-white w-20 px-3 py-1 rounded-full shadow-inner border border-[#0090d0] text-slate-900 text-center text-xs font-bold outline-none"
-                            title="Presiona Enter para guardar"
+                            className="bg-slate-50 w-20 px-3 py-1.5 rounded-full border-none focus:ring-2 focus:ring-[#0090d0]/20 text-[#002b5c] text-center font-bold outline-none"
                           />
                         ) : (
                           <span 
                             onClick={() => iniciarEdicionAula(asig.id, asig.aula)}
-                            className="bg-white px-3 py-1 rounded-full shadow-sm border border-slate-200/60 text-slate-600 cursor-pointer hover:border-[#0090d0] hover:text-[#0090d0] transition-colors"
-                            title="Click para editar aula"
+                            className="bg-[#0090d0]/10 text-[#0090d0] px-3 py-1.5 rounded-full uppercase tracking-wider text-[10px] font-bold cursor-pointer hover:bg-[#0090d0]/20 transition-colors"
                           >
                             {asig.aula}
                           </span>
@@ -360,8 +386,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         
                       </div>
                     </div>
-                    <button onClick={() => abrirDetallesAsignatura(asig)} className="mt-5 w-full py-2.5 bg-white border border-slate-200 text-[#0090d0] hover:bg-sky-50 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm active:scale-95">
-                      Exportar Reportes
+                    <button onClick={() => abrirDetallesAsignatura(asig)} className="mt-6 w-full py-3 bg-slate-50 hover:bg-[#0090d0] text-[#002b5c] hover:text-white text-xs font-bold rounded-[1rem] transition-all cursor-pointer active:scale-95">
+                      Exportar Matriz
                     </button>
                   </div>
                 ))}
@@ -371,98 +397,79 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         )}
       </div>
 
+      {/* Modal Nueva Asignatura */}
       {modalAsignatura && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-black/[0.05]">
-            <h3 className="text-xl font-bold text-slate-900 tracking-tight mb-2">Nueva Asignatura</h3>
-            <p className="text-sm text-slate-500 mb-6 font-medium">Configura los detalles de la nueva materia.</p>
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Crear Asignatura</h3>
+            <p className="text-xs text-slate-500 font-medium mb-6">Completa los datos base.</p>
             <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
-              <input type="text" placeholder="Nombre (ej. Ingeniería)" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-[#F5F5F7] border border-transparent rounded-[1.25rem] focus:outline-none focus:border-[#0090d0] font-medium" required/>
-              <input type="text" placeholder="Aula (ej. Aula 2.4)" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({...formAsignatura, aula: e.target.value})} className="w-full p-4 bg-[#F5F5F7] border border-transparent rounded-[1.25rem] focus:outline-none focus:border-[#0090d0] font-medium" required/>
-              <input type="text" placeholder="Horario (ej. 09:00 - 11:00)" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-[#F5F5F7] border border-transparent rounded-[1.25rem] focus:outline-none focus:border-[#0090d0] font-medium" required/>
+              <input type="text" placeholder="Materia (ej. Física)" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
+              <input type="text" placeholder="Aula (ej. Lab 1)" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({...formAsignatura, aula: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
+              <input type="text" placeholder="Horario (ej. L - 09:00)" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
               <div className="grid grid-cols-2 gap-3 mt-4">
-                <button type="button" onClick={() => setModalAsignatura(false)} className="py-3 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors cursor-pointer">Cancelar</button>
-                <button type="submit" disabled={guardandoAsig} className="py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold transition-colors disabled:opacity-50 cursor-pointer">{guardandoAsig ? 'Guardando...' : 'Crear'}</button>
+                <button type="button" onClick={() => setModalAsignatura(false)} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
+                <button type="submit" disabled={guardandoAsig} className="py-3.5 rounded-2xl bg-[#002b5c] text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Guardar</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
+      {/* Modal Eliminar Asignatura */}
       {modalEliminarAsig && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-black/[0.05] text-center">
-            <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </div>
-            <h3 className="text-xl font-bold text-slate-900 tracking-tight">Eliminar Asignatura</h3>
-            <p className="text-sm text-slate-500 mt-2 mb-6 font-medium">Esta acción es irreversible. Introduce tu contraseña de docente para confirmar.</p>
-            <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-[#F5F5F7] border border-transparent rounded-[1.25rem] mb-6 focus:outline-none focus:border-rose-500 text-center font-medium"/>
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Eliminar Materia</h3>
+            <p className="text-xs text-slate-500 font-medium mb-6">Perderás todos los historiales. Confirma tu identidad.</p>
+            <input type="password" placeholder="Contraseña docente" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-center text-sm font-semibold"/>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setModalEliminarAsig(null); setPassConfirm(''); }} className="py-3 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors cursor-pointer">Cancelar</button>
-              <button onClick={confirmarEliminarAsignatura} disabled={cargandoPass || !passConfirm} className="py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-semibold transition-colors disabled:opacity-50 cursor-pointer">{cargandoPass ? 'Borrando...' : 'Eliminar'}</button>
+              <button onClick={() => { setModalEliminarAsig(null); setPassConfirm(''); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
+              <button onClick={confirmarEliminarAsignatura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Destruir</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Modal Exportar Matriz */}
       {asignaturaSeleccionada && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-lg w-full shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-black/[0.05] flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight">{asignaturaSeleccionada.nombre}</h3>
-                <p className="text-sm text-slate-500 font-medium mt-1">Exportador Integral de Asistencias</p>
+                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">{asignaturaSeleccionada.nombre}</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Exportación Pivot</p>
               </div>
               <button onClick={() => setAsignaturaSeleccionada(null)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
             
-            <div className="bg-slate-50 rounded-[1.5rem] p-6 border border-slate-100">
-              <h4 className="font-bold text-slate-800 text-sm mb-4">Filtrar por Periodo (Opcional)</h4>
+            <div className="bg-slate-50/80 rounded-[2rem] p-6">
+              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar Fechas (Opcional)</h4>
               
-              <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="grid grid-cols-2 gap-4 mb-8">
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Desde</label>
-                  <input 
-                    type="date" 
-                    value={fechaInicio} 
-                    onChange={(e) => setFechaInicio(e.target.value)}
-                    className="w-full bg-white px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 border border-transparent focus:outline-none focus:border-[#0090d0] shadow-sm transition-all cursor-pointer"
-                  />
+                  <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Hasta</label>
-                  <input 
-                    type="date" 
-                    value={fechaFin} 
-                    onChange={(e) => setFechaFin(e.target.value)}
-                    className="w-full bg-white px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 border border-transparent focus:outline-none focus:border-[#0090d0] shadow-sm transition-all cursor-pointer"
-                  />
+                  <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
               </div>
-
-              <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed">
-                El reporte organiza a los alumnos en filas y las fechas de las sesiones impartidas en columnas (Tabla Pivot).
-              </p>
 
               <div className="space-y-3">
                 <button 
                   onClick={exportarAGoogleSheets}
                   disabled={cargandoHistorialAsig}
-                  className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-[0_8px_20px_-6px_rgba(0,144,208,0.4)] active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                  </svg>
-                  {cargandoHistorialAsig ? 'Procesando...' : 'Abrir en Google Sheets'}
+                  Abrir en Google Sheets
                 </button>
 
                 <button 
                   onClick={exportarAExcel}
                   disabled={cargandoHistorialAsig}
-                  className="w-full py-3.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 bg-white text-[#002b5c] border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  Descargar archivo .xlsx (Excel)
+                  Descargar Excel (.xlsx)
                 </button>
               </div>
             </div>
