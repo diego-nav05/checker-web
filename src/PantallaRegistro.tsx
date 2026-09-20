@@ -8,6 +8,8 @@ interface Props {
 
 export default function PantallaRegistro({ onVolver }: Props) {
   const [esRegistro, setEsRegistro] = useState(false);
+  const [rolRegistro, setRolRegistro] = useState<'alumno' | 'profesor'>('alumno');
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nombre, setNombre] = useState('');
@@ -21,7 +23,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
     setTimeout(() => setNotificacion(null), 4000);
   };
 
-  // Huella digital del dispositivo para evitar suplantaciones
+  // Huella digital del dispositivo para evitar suplantaciones en alumnos
   const generarHashDispositivo = () => {
     const datos = navigator.userAgent + window.screen.width + window.screen.height + navigator.language;
     return CryptoJS.SHA256(datos).toString();
@@ -45,23 +47,30 @@ export default function PantallaRegistro({ onVolver }: Props) {
         if (authError) throw authError;
         if (!authData.user) throw new Error('Error interno al crear la cuenta.');
 
-        const hash = generarHashDispositivo();
+        // Solo guardamos la huella del dispositivo si es alumno (anti-fraude)
+        const hash = rolRegistro === 'alumno' ? generarHashDispositivo() : null;
 
         const { error: profileError } = await supabase.from('perfiles').insert([{
           id: authData.user.id,
           nombre_completo: nombre,
           email: email,
-          rol: 'alumno',
+          rol: rolRegistro,
           dispositivo_hash: hash
         }]);
 
         if (profileError) throw profileError;
 
-        localStorage.setItem('checker_alumno_id', authData.user.id);
+        // Guardar sesión local
         localStorage.setItem('checker_nombre', nombre);
-        localStorage.setItem('checker_rol', 'alumno');
+        localStorage.setItem('checker_rol', rolRegistro);
+        
+        if (rolRegistro === 'alumno') {
+          localStorage.setItem('checker_alumno_id', authData.user.id);
+        } else {
+          localStorage.removeItem('checker_alumno_id'); // Limpieza por si acaso
+        }
 
-        mostrarNotificacion('Cuenta creada con éxito.', 'exito');
+        mostrarNotificacion(`Cuenta de ${rolRegistro} creada con éxito.`, 'exito');
         setTimeout(onVolver, 1500);
 
       } else {
@@ -80,15 +89,22 @@ export default function PantallaRegistro({ onVolver }: Props) {
           .single();
 
         if (profileError || !perfil) throw new Error('No se encontró el perfil de usuario.');
-        if (perfil.rol !== 'alumno') {
-          await supabase.auth.signOut();
-          throw new Error('Esta cuenta pertenece al profesorado.');
+
+        if (perfil.rol === 'profesor') {
+          // Login directo de profesor sin chequeo de dispositivo
+          localStorage.setItem('checker_rol', 'profesor');
+          localStorage.setItem('checker_nombre', perfil.nombre_completo);
+          localStorage.removeItem('checker_alumno_id');
+          mostrarNotificacion('Acceso autorizado como Docente.', 'exito');
+          setTimeout(onVolver, 1000);
+          return;
         }
 
+        // Si es alumno, verificamos su dispositivo
         const hashActual = generarHashDispositivo();
 
         if (!perfil.dispositivo_hash) {
-          // Si el profesor reseteó el dispositivo, se vincula el nuevo
+          // Si el profesor reseteó el dispositivo, se vincula el nuevo automáticamente
           await supabase.from('perfiles').update({ dispositivo_hash: hashActual }).eq('id', perfil.id);
         } else if (perfil.dispositivo_hash !== hashActual) {
           await supabase.auth.signOut();
@@ -103,7 +119,6 @@ export default function PantallaRegistro({ onVolver }: Props) {
         setTimeout(onVolver, 1000);
       }
     } catch (error: any) {
-      // Simplificamos los mensajes de error de Supabase al español
       let mensaje = error.message;
       if (mensaje.includes('Invalid login credentials')) mensaje = 'Correo o contraseña incorrectos.';
       if (mensaje.includes('already registered')) mensaje = 'Este correo ya tiene una cuenta.';
@@ -146,20 +161,40 @@ export default function PantallaRegistro({ onVolver }: Props) {
           {esRegistro ? 'Nueva Cuenta' : 'Bienvenido'}
         </h2>
         <p className="text-xs text-slate-500 font-medium mb-8">
-          {esRegistro ? 'Regístrate para vincular tu dispositivo móvil.' : 'Inicia sesión para registrar tu asistencia.'}
+          {esRegistro ? 'Regístrate para vincular tu dispositivo o acceder como docente.' : 'Inicia sesión para registrar tu asistencia o proyectar.'}
         </p>
 
         <form onSubmit={autenticar} className="flex flex-col gap-4">
           
           {esRegistro && (
-            <input
-              type="text"
-              placeholder="Nombre y Apellidos"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="w-full p-4 bg-slate-50/50 backdrop-blur-sm rounded-2xl border border-slate-200/50 focus:border-[#0090d0] focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-semibold transition-all"
-              required
-            />
+            <>
+              {/* Selector de Rol (Estilo Píldora iOS) */}
+              <div className="flex bg-slate-50/80 backdrop-blur-sm p-1.5 rounded-2xl border border-slate-200/50 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setRolRegistro('alumno')}
+                  className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${rolRegistro === 'alumno' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}
+                >
+                  Soy Alumno
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRolRegistro('profesor')}
+                  className={`flex-1 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${rolRegistro === 'profesor' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}
+                >
+                  Soy Profesor
+                </button>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Nombre y Apellidos"
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                className="w-full p-4 bg-slate-50/50 backdrop-blur-sm rounded-2xl border border-slate-200/50 focus:border-[#0090d0] focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-semibold transition-all"
+                required
+              />
+            </>
           )}
 
           <input
