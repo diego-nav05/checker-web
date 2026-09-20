@@ -52,11 +52,15 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const iniciarClase = async (idAsignatura: string) => {
     const nuevoSecret = Math.random().toString(36).substring(2, 10);
     setSecretTotp(nuevoSecret);
-    const ahora = new Date().toISOString();
 
+    // SISTEMA BLINDADO: Dejamos que Supabase gestione las fechas automáticamente
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
-      .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura, created_at: ahora })
+      .insert({ 
+        fase: 'ENTRADA', 
+        secret_totp: nuevoSecret, 
+        asignatura_id: idAsignatura 
+      })
       .select()
       .single();
 
@@ -66,6 +70,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
     setSesionId(sesionData.id);
 
+    // Precargar alumnos anteriores (sin forzar fechas)
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
     if (pastSesiones && pastSesiones.length > 0) {
       const sesionIds = pastSesiones.map(s => s.id);
@@ -101,6 +106,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
     cargarAsistencias(sesionId);
 
+    // Motor de Sincronización Absoluta (Triple Capa)
     const instantChannel = supabase.channel('aula-realtime')
       .on('broadcast', { event: 'update-lista' }, () => {
         cargarAsistencias(sesionId);
