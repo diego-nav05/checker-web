@@ -31,6 +31,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
 
+  // Estados para el nuevo panel de Gestión de Alumno
+  const [alumnoGestion, setAlumnoGestion] = useState<any | null>(null);
+  const [asignaturasAlumno, setAsignaturasAlumno] = useState<any[]>([]);
+  const [cargandoAlumno, setCargandoAlumno] = useState(false);
+
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
@@ -40,32 +45,35 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
   const cargarAlumnos = async () => {
     setCargando(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user.id);
-    if (!asigs || asigs.length === 0) { setAlumnos([]); setCargando(false); return; }
-    
-    const asigIds = asigs.map(a => a.id);
-    const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
-    if (!sesiones || sesiones.length === 0) { setAlumnos([]); setCargando(false); return; }
-    
-    const sesionIds = sesiones.map(s => s.id);
-    const { data: asistencias } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', sesionIds);
-    if (!asistencias || asistencias.length === 0) { setAlumnos([]); setCargando(false); return; }
-    
-    const uniqueAlumnosIds = Array.from(new Set(asistencias.map(a => a.alumno_id)));
-    if (uniqueAlumnosIds.length === 0) { setAlumnos([]); setCargando(false); return; }
+      // Solo traemos alumnos que estén en materias de ESTE profesor
+      const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user.id);
+      if (!asigs || asigs.length === 0) return setAlumnos([]);
+      
+      const asigIds = asigs.map(a => a.id);
+      const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
+      if (!sesiones || sesiones.length === 0) return setAlumnos([]);
+      
+      const sesionIds = sesiones.map(s => s.id);
+      const { data: asistencias } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', sesionIds);
+      if (!asistencias || asistencias.length === 0) return setAlumnos([]);
 
-    const { data: perfiles } = await supabase
-      .from('perfiles')
-      .select('*')
-      .in('id', uniqueAlumnosIds)
-      .eq('rol', 'alumno')
-      .order('nombre_completo', { ascending: true });
-    
-    if (perfiles) setAlumnos(perfiles);
-    setCargando(false);
+      const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
+
+      const { data: perfiles } = await supabase
+        .from('perfiles')
+        .select('*')
+        .in('id', aluIds)
+        .eq('rol', 'alumno')
+        .order('nombre_completo', { ascending: true });
+      
+      if (perfiles) setAlumnos(perfiles);
+    } finally {
+      setCargando(false);
+    }
   };
 
   const cargarAsignaturas = async () => {
@@ -83,16 +91,87 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     if (tabActual === 'ASIGNATURAS') cargarAsignaturas();
   }, [tabActual]);
 
-  const desvincularDispositivo = async (id: string, nombre: string) => {
-    const confirmar = window.confirm(`¿Desvincular dispositivo de ${nombre}?`);
+  // --- NUEVO SISTEMA DE GESTIÓN DE ALUMNOS ---
+  const abrirGestionAlumno = async (alumno: any) => {
+    setAlumnoGestion(alumno);
+    setCargandoAlumno(true);
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: asigs } = await supabase.from('asignaturas').select('*').eq('profesor_id', user?.id);
+
+    if (asigs && asigs.length > 0) {
+      const asigIds = asigs.map((a:any) => a.id);
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
+
+      if (sesiones && sesiones.length > 0) {
+         const sesionIds = sesiones.map((s:any) => s.id);
+         const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesionIds);
+
+         if (asists && asists.length > 0) {
+            const attendedSesionIds = asists.map((a:any) => a.sesion_id);
+            const attendedAsigIds = [...new Set(sesiones.filter((s:any) => attendedSesionIds.includes(s.id)).map((s:any) => s.asignatura_id))];
+            const asigsActivas = asigs.filter((a:any) => attendedAsigIds.includes(a.id));
+            setAsignaturasAlumno(asigsActivas);
+         } else {
+            setAsignaturasAlumno([]);
+         }
+      } else {
+         setAsignaturasAlumno([]);
+      }
+    }
+    setCargandoAlumno(false);
+  };
+
+  const desvincularDispositivo = async (id: string) => {
+    const confirmar = window.confirm(`¿Seguro que quieres desvincular el móvil de este alumno?`);
     if (!confirmar) return;
     const { error } = await supabase.from('perfiles').update({ dispositivo_hash: null }).eq('id', id);
     if (error) mostrarNotificacion('Error al desvincular.', 'error');
     else {
-      mostrarNotificacion('Dispositivo desvinculado.', 'exito');
+      mostrarNotificacion('Dispositivo liberado.', 'exito');
       cargarAlumnos();
+      if (alumnoGestion) setAlumnoGestion({ ...alumnoGestion, dispositivo_hash: null });
     }
   };
+
+  const expulsarDeAsignatura = async (alumnoId: string, asigId: string) => {
+    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se borrará su historial de asistencia solo en esta clase.');
+    if (!confirmar) return;
+
+    const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
+    if (sesiones && sesiones.length > 0) {
+      const sIds = sesiones.map((s: any) => s.id);
+      await supabase.from('asistencias').delete().eq('alumno_id', alumnoId).in('sesion_id', sIds);
+    }
+
+    mostrarNotificacion('Expulsado de la materia.', 'exito');
+    setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
+    if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); // Si ya no le quedan clases, cerramos modal
+    cargarAlumnos();
+  };
+
+  const expulsarDeTodas = async (alumnoId: string) => {
+    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS de forma permanente? El alumno no podrá volver a entrar a tus clases.');
+    if (!confirmar) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
+
+    if (asigs && asigs.length > 0) {
+      const asigIds = asigs.map((a: any) => a.id);
+      const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
+
+      if (sesiones && sesiones.length > 0) {
+        const sIds = sesiones.map((s: any) => s.id);
+        await supabase.from('asistencias').delete().eq('alumno_id', alumnoId).in('sesion_id', sIds);
+      }
+    }
+
+    mostrarNotificacion('Alumno erradicado de tus clases.', 'exito');
+    setAlumnoGestion(null);
+    cargarAlumnos();
+  };
+  // ---------------------------------------------
 
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,18 +197,13 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passConfirm });
       if (authError) throw new Error("Contraseña incorrecta.");
 
-      const { data: sesiones, error: sesError } = await supabase.from('sesiones').select('id').eq('asignatura_id', modalEliminarAsig);
-      if (sesError) throw sesError;
-
+      const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', modalEliminarAsig);
       if (sesiones && sesiones.length > 0) {
         const sesionIds = sesiones.map((s) => s.id);
-        const { error: asistError } = await supabase.from('asistencias').delete().in('sesion_id', sesionIds);
-        if (asistError) throw asistError;
-        const { error: sesDeleteError } = await supabase.from('sesiones').delete().eq('asignatura_id', modalEliminarAsig);
-        if (sesDeleteError) throw sesDeleteError;
+        await supabase.from('asistencias').delete().in('sesion_id', sesionIds);
+        await supabase.from('sesiones').delete().eq('asignatura_id', modalEliminarAsig);
       }
-      const { error: asigDeleteError } = await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
-      if (asigDeleteError) throw asigDeleteError;
+      await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
       
       setModalEliminarAsig(null); 
       setPassConfirm(''); 
@@ -151,69 +225,65 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
-    const { data: sesionesDataRaw } = await supabase
-      .from('sesiones')
-      .select('id, created_at')
-      .eq('asignatura_id', asignaturaSeleccionada.id)
-      .order('created_at', { ascending: true });
-    
+    const { data: sesionesDataRaw } = await supabase.from('sesiones').select('*').eq('asignatura_id', asignaturaSeleccionada.id);
     if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
       mostrarNotificacion("No hay clases registradas en esta materia.", 'info');
       return null;
     }
 
-    const sesionesData = sesionesDataRaw.filter(ses => {
-      if (!fechaInicio && !fechaFin) return true;
-      try {
-        const fechaReg = new Date(ses.created_at).toISOString().split('T')[0];
-        if (fechaInicio && fechaReg < fechaInicio) return false;
-        if (fechaFin && fechaReg > fechaFin) return false;
-        return true;
-      } catch {
-        return false;
-      }
-    });
+    const sesionIds = sesionesDataRaw.map(s => s.id);
 
-    if (sesionesData.length === 0) {
-      mostrarNotificacion("No hay clases en este periodo.", 'info');
-      return null;
-    }
-
-    const sesionIds = sesionesData.map(s => s.id);
     const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-
     if (!asistData || asistData.length === 0) {
-      mostrarNotificacion("Ningún alumno ha asistido aún.", 'info');
+      mostrarNotificacion("Ningún alumno ha registrado asistencia en esta materia.", 'info');
       return null;
     }
 
     const aluIds = [...new Set(asistData.map(a => a.alumno_id))];
     const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+    const mapPerfiles: Record<string, string> = {};
+    perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
-    const reporteAlumnos: Record<string, any> = {};
-    
-    asistData.forEach((asist: any) => {
-      const aluId = asist.alumno_id;
-      if (!reporteAlumnos[aluId]) {
-        const perf = perfiles?.find(p => p.id === aluId);
-        reporteAlumnos[aluId] = { Alumno: perf ? perf.nombre_completo : 'Desconocido' };
-        sesionesData.forEach(ses => {
-          const fechaCol = new Date(ses.created_at).toLocaleDateString();
-          reporteAlumnos[aluId][fechaCol] = 'AUSENTE';
-        });
+    const sesionesConFecha = sesionesDataRaw.map(ses => {
+      let fechaIso = ses.created_at;
+      if (!fechaIso) {
+        const primeraAsist = asistData.find(a => a.sesion_id === ses.id && a.hora_entrada);
+        fechaIso = primeraAsist ? primeraAsist.hora_entrada : new Date().toISOString();
       }
+      return {
+        ...ses,
+        fechaStr: new Date(fechaIso).toLocaleDateString(),
+        fechaYMD: new Date(fechaIso).toISOString().split('T')[0]
+      };
     });
 
-    asistData.forEach((asist: any) => {
-      const sesion = sesionesData.find(s => s.id === asist.sesion_id);
-      if (sesion) {
-        const fechaCol = new Date(sesion.created_at).toLocaleDateString();
-        reporteAlumnos[asist.alumno_id][fechaCol] = asist.estado.replace(/_/g, ' ');
+    const sesionesFiltradas = sesionesConFecha.filter(ses => {
+      if (fechaInicio && ses.fechaYMD < fechaInicio) return false;
+      if (fechaFin && ses.fechaYMD > fechaFin) return false;
+      return true;
+    });
+
+    if (sesionesFiltradas.length === 0) {
+      mostrarNotificacion("No hay clases dentro del rango de fechas seleccionado.", 'info');
+      return null;
+    }
+
+    const reporteAlumnos: Record<string, any> = {};
+
+    aluIds.forEach(aluId => {
+      reporteAlumnos[aluId] = { Alumno: mapPerfiles[aluId] || 'Estudiante' };
+      sesionesFiltradas.forEach(ses => { reporteAlumnos[aluId][ses.fechaStr] = 'AUSENTE'; });
+    });
+
+    asistData.forEach(asist => {
+      const sesion = sesionesFiltradas.find(s => s.id === asist.sesion_id);
+      if (sesion && reporteAlumnos[asist.alumno_id]) {
+        reporteAlumnos[asist.alumno_id][sesion.fechaStr] = asist.estado.replace(/_/g, ' ');
       }
     });
 
     const filas = Object.values(reporteAlumnos).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
-    return { filas, sesionesData };
+    return { filas };
   };
 
   const exportarAExcel = async () => {
@@ -224,11 +294,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       const libro = XLSX.utils.book_new();
       const hoja = XLSX.utils.json_to_sheet(data.filas);
-      XLSX.utils.book_append_sheet(libro, hoja, 'Asistencias Periodo');
+      XLSX.utils.book_append_sheet(libro, hoja, 'Asistencias');
       XLSX.writeFile(libro, `Reporte_${asignaturaSeleccionada.nombre.replace(/ /g, '_')}_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
-      mostrarNotificacion('Archivo Excel generado.', 'exito');
+      mostrarNotificacion('Archivo Excel generado con éxito.', 'exito');
     } catch {
-      mostrarNotificacion('Error generando Excel.', 'error');
+      mostrarNotificacion('Error al procesar el archivo Excel.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -248,8 +318,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       await navigator.clipboard.writeText(lineasTSV);
       window.open('https://sheets.new', '_blank');
-
-      mostrarNotificacion('Datos copiados. Pega en celda A1 (Ctrl+V).', 'exito');
+      mostrarNotificacion('Datos copiados. Pega con Cmd+V o Ctrl+V en la celda A1.', 'exito');
     } catch {
       mostrarNotificacion('Error copiando al portapapeles.', 'error');
     } finally {
@@ -264,17 +333,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       if (!user) return;
 
       const { data: asigs } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id);
-      if (!asigs || asigs.length === 0) return mostrarNotificacion('No tienes asignaturas.', 'error');
+      if (!asigs || asigs.length === 0) return mostrarNotificacion('No tienes asignaturas registradas.', 'error');
 
       const asigIds = asigs.map(a => a.id);
-      const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds).order('created_at', { ascending: true });
-      if (!sesiones || sesiones.length === 0) return mostrarNotificacion('No hay sesiones registradas en total.', 'error');
+      const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds);
+      if (!sesiones || sesiones.length === 0) return mostrarNotificacion('No hay clases registradas aún.', 'info');
 
       const sesionIds = sesiones.map(s => s.id);
       const { data: asistencias } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-      
-      const aluIds = [...new Set(asistencias?.map(a => a.alumno_id) || [])];
+      if (!asistencias || asistencias.length === 0) return mostrarNotificacion('No hay asistencias registradas en ninguna materia.', 'info');
+
+      const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
       const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+      const mapPerfiles: Record<string, string> = {};
+      perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
       const libro = XLSX.utils.book_new();
 
@@ -282,36 +354,46 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         const sesAsig = sesiones.filter(s => s.asignatura_id === asig.id);
         if (sesAsig.length === 0) return;
 
-        const reporte: any = {};
-        const asistsAsig = asistencias?.filter(a => sesAsig.some(s => s.id === a.sesion_id)) || [];
-
-        asistsAsig.forEach(a => {
-          if (!reporte[a.alumno_id]) {
-             const perf = perfiles?.find(p => p.id === a.alumno_id);
-             reporte[a.alumno_id] = { Alumno: perf ? perf.nombre_completo : 'Desconocido' };
-             sesAsig.forEach(s => {
-               reporte[a.alumno_id][new Date(s.created_at).toLocaleDateString()] = 'AUSENTE';
-             });
+        const sesConFechas = sesAsig.map(ses => {
+          let f = ses.created_at;
+          if (!f) {
+            const asistRef = asistencias.find(a => a.sesion_id === ses.id && a.hora_entrada);
+            f = asistRef ? asistRef.hora_entrada : new Date().toISOString();
           }
-          const sesionAsociada = sesAsig.find(s => s.id === a.sesion_id);
-          if (sesionAsociada) {
-             reporte[a.alumno_id][new Date(sesionAsociada.created_at).toLocaleDateString()] = a.estado.replace(/_/g, ' ');
+          return { ...ses, fechaStr: new Date(f).toLocaleDateString() };
+        });
+
+        const asistsDeEstaAsig = asistencias.filter(a => sesAsig.some(s => s.id === a.sesion_id));
+        if (asistsDeEstaAsig.length === 0) return;
+
+        const reporte: Record<string, any> = {};
+        const alumnosEnEstaAsig = [...new Set(asistsDeEstaAsig.map(a => a.alumno_id))];
+
+        alumnosEnEstaAsig.forEach(idAlu => {
+          reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante' };
+          sesConFechas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
+        });
+
+        asistsDeEstaAsig.forEach(a => {
+          const sesion = sesConFechas.find(s => s.id === a.sesion_id);
+          if (sesion && reporte[a.alumno_id]) {
+            reporte[a.alumno_id][sesion.fechaStr] = a.estado.replace(/_/g, ' ');
           }
         });
 
-        if (Object.keys(reporte).length > 0) {
-          const filas = Object.values(reporte).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
+        const filas = Object.values(reporte).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
+        if (filas.length > 0) {
           const hoja = XLSX.utils.json_to_sheet(filas);
           XLSX.utils.book_append_sheet(libro, hoja, asig.nombre.substring(0, 31));
         }
       });
 
-      if (libro.SheetNames.length === 0) return mostrarNotificacion('Las clases están vacías.', 'error');
+      if (libro.SheetNames.length === 0) return mostrarNotificacion('No hay asistencias registradas para exportar.', 'info');
       
-      XLSX.writeFile(libro, `Reporte_Global_UNEATLANTICO_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
-      mostrarNotificacion('Exportación global completada.', 'exito');
+      XLSX.writeFile(libro, `Reporte_Global_Clases_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+      mostrarNotificacion('Exportación global completada con éxito.', 'exito');
     } catch {
-      mostrarNotificacion('Error en la exportación global.', 'error');
+      mostrarNotificacion('Error durante la exportación global.', 'error');
     } finally {
       setCargando(false);
     }
@@ -375,7 +457,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         {tabActual === 'ALUMNOS' && (
           <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
             <div className="flex items-center justify-between mb-8 px-2">
-              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Dispositivos</h2>
+              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Estudiantes Inscritos</h2>
               <span className="bg-[#0090d0]/10 text-[#0090d0] px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">{alumnos.length} Registros</span>
             </div>
 
@@ -395,7 +477,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{alumno.dispositivo_hash ? 'Vinculado' : 'Sin Dispositivo'}</span>
                       </div>
                     </div>
-                    <button onClick={() => desvincularDispositivo(alumno.id, alumno.nombre_completo)} disabled={!alumno.dispositivo_hash} className="shrink-0 px-4 py-2.5 bg-slate-50 text-slate-600 hover:text-rose-600 hover:bg-rose-50 text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50">Resetear</button>
+                    <button onClick={() => abrirGestionAlumno(alumno)} className="shrink-0 px-4 py-2.5 bg-slate-50 text-[#002b5c] hover:text-white hover:bg-[#0090d0] text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm">
+                      Gestionar
+                    </button>
                   </div>
                 ))}
               </div>
@@ -463,6 +547,73 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         )}
       </div>
 
+      {/* --- MODAL: GESTIÓN DE ALUMNO --- */}
+      {alumnoGestion && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h3 className="text-xl font-black text-[#002b5c] tracking-tight truncate pr-4">{alumnoGestion.nombre_completo}</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-1">{alumnoGestion.email}</p>
+              </div>
+              <button onClick={() => setAlumnoGestion(null)} className="w-8 h-8 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+            </div>
+
+            <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2">
+              
+              {/* Sección Dispositivo */}
+              <div className="bg-slate-50/80 rounded-[2rem] p-5">
+                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Dispositivo de Fichaje</h4>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${alumnoGestion.dispositivo_hash ? 'bg-emerald-400' : 'bg-slate-300'}`}></span>
+                    <span className="text-xs font-bold text-slate-600">{alumnoGestion.dispositivo_hash ? 'Móvil Vinculado' : 'Sin Vincular'}</span>
+                  </div>
+                  <button 
+                    onClick={() => desvincularDispositivo(alumnoGestion.id)} 
+                    disabled={!alumnoGestion.dispositivo_hash}
+                    className="px-4 py-2 bg-white text-rose-500 hover:bg-rose-50 text-xs font-bold rounded-xl border border-slate-200 shadow-sm transition-all disabled:opacity-50"
+                  >
+                    Desvincular
+                  </button>
+                </div>
+              </div>
+
+              {/* Sección Asignaturas */}
+              <div className="bg-slate-50/80 rounded-[2rem] p-5">
+                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Matriculado en tus materias</h4>
+                {cargandoAlumno ? (
+                  <div className="text-xs text-slate-400 animate-pulse">Buscando materias...</div>
+                ) : asignaturasAlumno.length === 0 ? (
+                  <div className="text-xs text-slate-400">No hay registros del alumno en tus clases.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {asignaturasAlumno.map(asig => (
+                      <div key={asig.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100">
+                        <span className="text-xs font-bold text-[#002b5c] truncate pr-2">{asig.nombre}</span>
+                        <button onClick={() => expulsarDeAsignatura(alumnoGestion.id, asig.id)} className="shrink-0 px-3 py-1.5 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors">
+                          Expulsar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Peligro: Expulsión total */}
+              <button 
+                onClick={() => expulsarDeTodas(alumnoGestion.id)}
+                className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95"
+              >
+                Expulsar de TODAS mis materias
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- OTROS MODALES (Crear, Eliminar, Exportar) --- */}
       {modalAsignatura && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
@@ -524,7 +675,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   disabled={cargandoHistorialAsig}
                   className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  Abrir en Google Sheets
+                  {cargandoHistorialAsig ? 'Generando...' : 'Abrir en Google Sheets'}
                 </button>
 
                 <button 
@@ -532,7 +683,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   disabled={cargandoHistorialAsig}
                   className="w-full py-3.5 bg-white text-[#002b5c] border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                 >
-                  Descargar Excel (.xlsx)
+                  {cargandoHistorialAsig ? 'Generando...' : 'Descargar Excel (.xlsx)'}
                 </button>
               </div>
             </div>
