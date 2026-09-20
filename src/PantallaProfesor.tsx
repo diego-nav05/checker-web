@@ -33,7 +33,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
     setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 4000);
+    setTimeout(() => setNotificacion(null), 5000);
   };
 
   useEffect(() => {
@@ -57,13 +57,15 @@ export default function PantallaProfesor({ onVolver }: Props) {
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
       .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura, created_at: ahora })
-      .select().single();
+      .select()
+      .single();
 
-    if (sesionError || !sesionData) return mostrarNotificacion('Error iniciando el aula.', 'error');
+    if (sesionError || !sesionData) {
+      return mostrarNotificacion(`Error BD: ${sesionError?.message || 'No se pudo crear la sesión'}`, 'error');
+    }
 
     setSesionId(sesionData.id);
 
-    // Precargar alumnos anteriores para marcarles falta si no vienen
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
     if (pastSesiones && pastSesiones.length > 0) {
       const sesionIds = pastSesiones.map(s => s.id);
@@ -85,37 +87,32 @@ export default function PantallaProfesor({ onVolver }: Props) {
     mostrarNotificacion('Aula iniciada correctamente.', 'exito');
   };
 
-  // --- CONSULTA NATIVA SUPABASE (100% FIABLE) ---
   const cargarAsistencias = async (id: string) => {
-  const { data } = await supabase
+    const { data } = await supabase
       .from('asistencias')
-      .select(`*, perfiles(nombre_completo, email)`)
+      .select('*, perfiles(nombre_completo, email)')
       .eq('sesion_id', id);
 
     if (data) setAsistencias(data as Asistencia[]);
   };
 
-  // --- ARQUITECTURA TRIPLE DE TIEMPO REAL ---
   useEffect(() => {
     if (!sesionId) return;
 
     cargarAsistencias(sesionId);
 
-    // 1. Escuchar el Ping Instantáneo (Broadcast)
     const instantChannel = supabase.channel('aula-realtime')
       .on('broadcast', { event: 'update-lista' }, () => {
         cargarAsistencias(sesionId);
       })
       .subscribe();
 
-    // 2. Escuchar la Base de Datos Nativa
     const dbChannel = supabase.channel('aula-db')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => {
         cargarAsistencias(sesionId);
       })
       .subscribe();
 
-    // 3. Polling de Respaldo Férreo (Cada 2 segundos)
     const intervaloRespaldo = setInterval(() => {
       cargarAsistencias(sesionId);
     }, 2000);
@@ -229,7 +226,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoHistorial(false);
   };
 
-  // Corrige el fallo de reportes vacíos usando el Join Nativo
   const descargarExcelPasado = async (sesionPasadaId: string, asigNombre: string, fecha: string) => {
     const { data } = await supabase.from('asistencias').select('*, perfiles(nombre_completo)').eq('sesion_id', sesionPasadaId);
     if (!data || data.length === 0) return mostrarNotificacion('No hay registros en esta clase.', 'error');
