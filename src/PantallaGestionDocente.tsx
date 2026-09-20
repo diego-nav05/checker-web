@@ -132,23 +132,28 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
   };
 
+  // CORREGIDO: En vez de borrar, actualizamos a FALTA_INJUSTIFICADA para preservar el histórico de celdas
   const expulsarDeAsignatura = async (alumnoId: string, asigId: string) => {
-    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se borrará su historial solo de esta clase.');
+    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se marcará su asistencia como falta.');
     if (!confirmar) return;
 
     const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
     if (sesiones && sesiones.length > 0) {
       const sIds = sesiones.map((s: any) => s.id);
-      await supabase.from('asistencias').delete().eq('alumno_id', alumnoId).in('sesion_id', sIds);
+      await supabase.from('asistencias')
+        .update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true })
+        .eq('alumno_id', alumnoId)
+        .in('sesion_id', sIds);
     }
-    mostrarNotificacion('Expulsado de la materia.', 'exito');
+    mostrarNotificacion('Alumno marcado con falta en la materia.', 'exito');
     setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
     if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
     cargarAlumnos();
   };
 
+  // CORREGIDO: En vez de borrar, actualizamos a FALTA_INJUSTIFICADA en todas sus materias
   const expulsarDeTodas = async (alumnoId: string) => {
-    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS de forma permanente?');
+    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS? Se marcará su asistencia como falta.');
     if (!confirmar) return;
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -160,10 +165,13 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       if (sesiones && sesiones.length > 0) {
         const sIds = sesiones.map((s: any) => s.id);
-        await supabase.from('asistencias').delete().eq('alumno_id', alumnoId).in('sesion_id', sIds);
+        await supabase.from('asistencias')
+          .update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true })
+          .eq('alumno_id', alumnoId)
+          .in('sesion_id', sIds);
       }
     }
-    mostrarNotificacion('Alumno erradicado de tus clases.', 'exito');
+    mostrarNotificacion('Alumno marcado con falta en todas tus materias.', 'exito');
     setAlumnoGestion(null);
     cargarAlumnos();
   };
