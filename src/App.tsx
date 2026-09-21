@@ -7,6 +7,27 @@ import { supabase } from './supabase';
 
 type Vista = 'INICIO' | 'ALUMNADO' | 'PROFESORADO' | 'REGISTRO' | 'GESTION';
 
+const GlobalAnimStyles = () => (
+  <style>{`
+    @keyframes suave {
+      0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .anim-suave {
+      animation: suave 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity;
+    }
+    @keyframes drop-in {
+      0% { opacity: 0; transform: translate(-50%, -15px) scale(0.95); }
+      100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+    .anim-drop {
+      animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity;
+    }
+  `}</style>
+);
+
 export default function App() {
   const [vista, setVista] = useState<Vista>('INICIO');
   const [sesionProfesor, setSesionProfesor] = useState<boolean>(false);
@@ -18,14 +39,12 @@ export default function App() {
 
   const alumnoVinculado = !!localStorage.getItem('checker_alumno_id');
 
-  // Lanzar notificación enfocada solo al alumno despistado con 8 segundos de duración
   useEffect(() => {
     const rol = localStorage.getItem('checker_rol');
     const idAlumno = localStorage.getItem('checker_alumno_id');
     
     if (!idAlumno && rol !== 'profesor') {
       setNotificacion({ texto: '👋 Si eres un nuevo alumno, regístrate en "Vincular Móvil".', tipo: 'info' });
-      // Ampliado a 8 segundos
       const timer = setTimeout(() => setNotificacion(null), 8000);
       return () => clearTimeout(timer);
     }
@@ -110,24 +129,31 @@ export default function App() {
     }
   };
 
-  const cerrarSesionDocente = async () => {
+  const cerrarSesionDocente = () => {
+    // 1. Cambio síncrono visual INMEDIATO para evitar saltos
+    setVista('INICIO');
+    // Reemplazamos el historial para que no puedan darle a "Atrás" en el navegador
+    window.history.replaceState({ panel: 'INICIO' }, '');
+
+    // 2. Limpieza de estados
     setSesionProfesor(false);
     setEmailProfesor('');
     setPassProfesor('');
     setNotificacion(null);
 
+    // 3. Limpieza de memoria
     localStorage.removeItem('checker_rol');
     localStorage.removeItem('checker_alumno_id');
     localStorage.removeItem('checker_nombre');
 
-    await supabase.auth.signOut();
-    volverInicio();
+    // 4. Cerramos sesión en servidor por detrás (sin el await para no congelar la app)
+    supabase.auth.signOut().catch(() => {});
   };
 
   const ToastNotificacion = () => {
     if (!notificacion) return null;
     return (
-      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
+      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 anim-drop w-fit min-w-[280px] max-w-sm border ${
         notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
         notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
         'bg-[#002b5c]/95 border-white/10 text-white'
@@ -144,17 +170,27 @@ export default function App() {
     if (!sesionProfesor) {
       return (
         <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col items-center justify-center font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
+          <GlobalAnimStyles />
           <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
+          
           <ToastNotificacion />
           
-          <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 animate-[fade-in_0.4s_ease-out,zoom-in_0.4s_ease-out] relative">
+          <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 anim-suave relative">
             <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
             
-            <button onClick={() => { volverInicio(); setEmailProfesor(''); setPassProfesor(''); }} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8">
+            <button 
+              onClick={() => { 
+                setVista('INICIO'); 
+                volverInicio(); 
+                setEmailProfesor(''); 
+                setPassProfesor(''); 
+              }} 
+              className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
 
-            <h2 className="text-3xl font-black text-[#002b5c] tracking-tight leading-none mb-8">
+            <h2 className="text-3xl font-black text-[#002b5c] tracking-tight leading-none mb-8 relative z-10">
               {vista === 'GESTION' ? 'Gestión' : 'Aula'}
             </h2>
 
@@ -172,13 +208,14 @@ export default function App() {
     return vista === 'PROFESORADO' ? <PantallaProfesor onVolver={cerrarSesionDocente} /> : <PantallaGestionDocente onVolver={cerrarSesionDocente} />;
   }
 
-  // --- HOME BENTO UI ---
   return (
     <div className="min-h-[100dvh] bg-[#F0F4F8] flex items-center justify-center py-8 px-4 font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      <ToastNotificacion />
+      <GlobalAnimStyles />
       <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
       
-      <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 animate-[fade-in_0.5s_ease-out]">
+      <ToastNotificacion />
+
+      <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
         <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] bg-white/60 backdrop-blur-3xl rounded-[2.5rem] sm:rounded-[3rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 flex flex-col items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.15)] hover:-translate-y-1 active:scale-[0.97] group overflow-hidden cursor-pointer mt-4 sm:mt-0">
           <div className="absolute inset-0 rounded-[2.5rem] sm:rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
@@ -191,7 +228,6 @@ export default function App() {
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          {/* BOTÓN GESTIÓN (Parpadeo solucionado) */}
           <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-[4/3] bg-gradient-to-br from-[#002b5c] to-[#001a38] backdrop-blur-2xl rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_15px_35px_rgba(0,43,92,0.2)] border border-[#002b5c]/50 flex items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.35)] hover:-translate-y-1 active:scale-[0.96] group cursor-pointer overflow-hidden">
             <div className="absolute inset-0 rounded-[2rem] sm:rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] pointer-events-none"></div>
             <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300">Gestión</span>

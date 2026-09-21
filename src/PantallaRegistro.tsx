@@ -6,8 +6,28 @@ interface Props {
   onVolver: () => void;
 }
 
+const GlobalAnimStyles = () => (
+  <style>{`
+    @keyframes suave {
+      0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .anim-suave {
+      animation: suave 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity;
+    }
+    @keyframes drop-in {
+      0% { opacity: 0; transform: translate(-50%, -15px) scale(0.95); }
+      100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+    .anim-drop {
+      animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity;
+    }
+  `}</style>
+);
+
 export default function PantallaRegistro({ onVolver }: Props) {
-  // POR DEFECTO AHORA ES TRUE (Prioridad a Crear Cuenta)
   const [esRegistro, setEsRegistro] = useState(true);
   const [rolRegistro, setRolRegistro] = useState<'alumno' | 'profesor'>('alumno');
   
@@ -111,11 +131,11 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
   return (
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col items-center justify-center font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      
+      <GlobalAnimStyles />
       <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
 
       {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
+        <div className={`fixed top-6 left-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 anim-drop w-fit min-w-[280px] max-w-sm border ${
           notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
           notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
           'bg-[#002b5c]/95 border-white/10 text-white'
@@ -124,7 +144,8 @@ export default function PantallaRegistro({ onVolver }: Props) {
         </div>
       )}
 
-      <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 animate-[fade-in_0.4s_ease-out,zoom-in_0.4s_ease-out] relative">
+      {/* APLICAMOS anim-suave AQUÍ */}
+      <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 anim-suave relative">
         <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
         
         <button onClick={onVolver} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10">
