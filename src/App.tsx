@@ -18,11 +18,11 @@ const GlobalAnimStyles = () => (
       will-change: transform, opacity;
     }
     @keyframes drop-in {
-      0% { opacity: 0; transform: translate(-50%, -15px) scale(0.95); }
-      100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      0% { opacity: 0; transform: translateY(-16px) scale(0.96); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
     }
     .anim-drop {
-      animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation: drop-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       will-change: transform, opacity;
     }
   `}</style>
@@ -130,35 +130,33 @@ export default function App() {
   };
 
   const cerrarSesionDocente = () => {
-    // 1. Cambio síncrono visual INMEDIATO para evitar saltos
     setVista('INICIO');
-    // Reemplazamos el historial para que no puedan darle a "Atrás" en el navegador
     window.history.replaceState({ panel: 'INICIO' }, '');
 
-    // 2. Limpieza de estados
     setSesionProfesor(false);
     setEmailProfesor('');
     setPassProfesor('');
     setNotificacion(null);
 
-    // 3. Limpieza de memoria
     localStorage.removeItem('checker_rol');
     localStorage.removeItem('checker_alumno_id');
     localStorage.removeItem('checker_nombre');
 
-    // 4. Cerramos sesión en servidor por detrás (sin el await para no congelar la app)
     supabase.auth.signOut().catch(() => {});
   };
 
+  // NOTIFICACIÓN CENTRADA CON FLEXBOX (Sin conflictos de transform horizontal)
   const ToastNotificacion = () => {
     if (!notificacion) return null;
     return (
-      <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 anim-drop w-fit min-w-[280px] max-w-sm border ${
-        notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-        notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-        'bg-[#002b5c]/95 border-white/10 text-white'
-      }`}>
-        <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
+      <div className="fixed top-6 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
+        <div className={`pointer-events-auto px-6 py-3.5 rounded-2xl sm:rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] backdrop-blur-2xl flex items-center gap-3 anim-drop max-w-lg border text-center ${
+          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
+          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
+          'bg-[#002b5c]/95 border-white/10 text-white'
+        }`}>
+          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
+        </div>
       </div>
     );
   };
