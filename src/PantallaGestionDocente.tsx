@@ -26,6 +26,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [cargandoHistorialAsig, setCargandoHistorialAsig] = useState(false);
   const [modalExportadorGlobal, setModalExportadorGlobal] = useState(false);
 
+  const [fechaInicioGlobal, setFechaInicioGlobal] = useState<string>('');
+  const [fechaFinGlobal, setFechaFinGlobal] = useState<string>('');
   const [fechaInicio, setFechaInicio] = useState<string>('');
   const [fechaFin, setFechaFin] = useState<string>('');
 
@@ -132,7 +134,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
   };
 
-  // CORREGIDO: En vez de borrar, actualizamos a FALTA_INJUSTIFICADA para preservar el histórico de celdas
   const expulsarDeAsignatura = async (alumnoId: string, asigId: string) => {
     const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se marcará su asistencia como falta.');
     if (!confirmar) return;
@@ -151,7 +152,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     cargarAlumnos();
   };
 
-  // CORREGIDO: En vez de borrar, actualizamos a FALTA_INJUSTIFICADA en todas sus materias
   const expulsarDeTodas = async (alumnoId: string) => {
     const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS? Se marcará su asistencia como falta.');
     if (!confirmar) return;
@@ -225,7 +225,36 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setFechaFin('');
   };
 
-  // --- MOTOR PIVOT ROBUSTO ---
+  // --- MOTOR PIVOT (Orden Cronológico y Horas Incluidas) ---
+  const procesarFechasSesiones = (sesionesDataRaw: any[], asistData: any[]) => {
+    return sesionesDataRaw.map(ses => {
+      let f = ses.created_at || ses.hora_cierre;
+      if (!f) {
+        const asistRef = asistData.find(a => a.sesion_id === ses.id && a.hora_entrada);
+        f = asistRef ? asistRef.hora_entrada : null;
+      }
+
+      let localYMD = '';
+      let fechaStr = `Clase sin fecha (${ses.id.substring(0,4)})`;
+
+      if (f) {
+        const d = new Date(f);
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        localYMD = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        fechaStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`;
+      }
+
+      return {
+        ...ses,
+        fechaIso: f || new Date(0).toISOString(),
+        fechaYMD: localYMD,
+        fechaStr
+      };
+    });
+  };
+
+  const formatTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '--:--';
+
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
@@ -247,23 +276,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const mapPerfiles: Record<string, string> = {};
     perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
-    const sesionesConFecha = sesionesDataRaw.map(ses => {
-      let fechaIso = ses.created_at;
-      if (!fechaIso) {
-        const asistRef = asistData.find(a => a.sesion_id === ses.id && a.hora_entrada);
-        fechaIso = asistRef ? asistRef.hora_entrada : new Date().toISOString();
-      }
-      const d = new Date(fechaIso);
-      return {
-        ...ses,
-        fechaYMD: d.toISOString().split('T')[0],
-        fechaStr: `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`
-      };
-    });
+    const sesionesConFecha = procesarFechasSesiones(sesionesDataRaw, asistData);
 
     const sesionesFiltradas = sesionesConFecha.filter(ses => {
-      if (fechaInicio && ses.fechaYMD < fechaInicio) return false;
-      if (fechaFin && ses.fechaYMD > fechaFin) return false;
+      if (fechaInicio && (!ses.fechaYMD || ses.fechaYMD < fechaInicio)) return false;
+      if (fechaFin && (!ses.fechaYMD || ses.fechaYMD > fechaFin)) return false;
       return true;
     });
 
@@ -271,6 +288,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       mostrarNotificacion("No hay clases en ese rango de fechas.", 'info');
       return null;
     }
+
+    // ORDENAR CRONOLÓGICAMENTE: De más antigua a más nueva
+    sesionesFiltradas.sort((a, b) => new Date(a.fechaIso).getTime() - new Date(b.fechaIso).getTime());
 
     const reporteAlumnos: Record<string, any> = {};
 
@@ -282,7 +302,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     asistData.forEach(asist => {
       const sesion = sesionesFiltradas.find(s => s.id === asist.sesion_id);
       if (sesion && reporteAlumnos[asist.alumno_id]) {
-        reporteAlumnos[asist.alumno_id][sesion.fechaStr] = asist.estado.replace(/_/g, ' ');
+        const inTime = formatTime(asist.hora_entrada);
+        const outTime = formatTime(asist.hora_salida);
+        const estadoLimpio = asist.estado.replace(/_/g, ' ');
+        // Formato inyectado con entrada y salida
+        reporteAlumnos[asist.alumno_id][sesion.fechaStr] = `${estadoLimpio} (In: ${inTime} | Out: ${outTime})`;
       }
     });
 
@@ -339,18 +363,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       let exito = false;
       try {
         exito = document.execCommand('copy');
-      } catch (err) {
-        console.error("Fallo execCommand fallback:", err);
-      }
+      } catch (err) {}
       document.body.removeChild(textArea);
 
       if (!exito && navigator.clipboard) {
         try {
           await navigator.clipboard.writeText(lineasTSV);
           exito = true;
-        } catch (e) {
-          console.error("Fallo writeText:", e);
-        }
+        } catch (e) {}
       }
 
       if (exito) {
@@ -369,7 +389,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
   };
 
-  // --- REPORTES GLOBALES ---
   const generarDatosGlobales = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
@@ -405,17 +424,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const sesAsig = sesiones.filter(s => s.asignatura_id === asig.id);
       if (sesAsig.length === 0) return;
 
-      const sesConFechas = sesAsig.map(ses => {
-        let f = ses.created_at;
-        if (!f) {
-          const asistRef = asistencias.find(a => a.sesion_id === ses.id && a.hora_entrada);
-          f = asistRef ? asistRef.hora_entrada : new Date().toISOString();
-        }
-        const d = new Date(f);
-        return { ...ses, fechaStr: `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}` };
+      const sesionesConFecha = procesarFechasSesiones(sesAsig, asistencias);
+
+      const sesionesFiltradas = sesionesConFecha.filter(ses => {
+        if (fechaInicioGlobal && (!ses.fechaYMD || ses.fechaYMD < fechaInicioGlobal)) return false;
+        if (fechaFinGlobal && (!ses.fechaYMD || ses.fechaYMD > fechaFinGlobal)) return false;
+        return true;
       });
 
-      const asistsDeEstaAsig = asistencias.filter(a => sesAsig.some(s => s.id === a.sesion_id));
+      if (sesionesFiltradas.length === 0) return;
+
+      // ORDENAR CRONOLÓGICAMENTE: De más antigua a más nueva
+      sesionesFiltradas.sort((a, b) => new Date(a.fechaIso).getTime() - new Date(b.fechaIso).getTime());
+
+      const asistsDeEstaAsig = asistencias.filter(a => sesionesFiltradas.some(s => s.id === a.sesion_id));
       if (asistsDeEstaAsig.length === 0) return;
 
       const reporte: Record<string, any> = {};
@@ -423,13 +445,16 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       alumnosEnEstaAsig.forEach(idAlu => {
         reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante Desconocido' };
-        sesConFechas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
+        sesionesFiltradas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
       });
 
       asistsDeEstaAsig.forEach(a => {
-        const sesion = sesConFechas.find(s => s.id === a.sesion_id);
+        const sesion = sesionesFiltradas.find(s => s.id === a.sesion_id);
         if (sesion && reporte[a.alumno_id]) {
-          reporte[a.alumno_id][sesion.fechaStr] = a.estado.replace(/_/g, ' ');
+          const inTime = formatTime(a.hora_entrada);
+          const outTime = formatTime(a.hora_salida);
+          const estadoLimpio = a.estado.replace(/_/g, ' ');
+          reporte[a.alumno_id][sesion.fechaStr] = `${estadoLimpio} (In: ${inTime} | Out: ${outTime})`;
         }
       });
 
@@ -438,6 +463,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         resultadosGlobales.push({ nombre: asig.nombre, filas });
       }
     });
+
+    if (resultadosGlobales.length === 0) {
+      mostrarNotificacion('No hay clases en ese rango de fechas para ninguna materia.', 'info');
+      return null;
+    }
 
     return resultadosGlobales;
   };
@@ -611,7 +641,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
               <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Materias</h2>
               <div className="flex gap-3">
-                <button onClick={() => setModalExportadorGlobal(true)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
+                <button 
+                  onClick={() => {
+                    setModalExportadorGlobal(true);
+                    setFechaInicioGlobal('');
+                    setFechaFinGlobal('');
+                  }} 
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95"
+                >
                   Exportador Global ↓
                 </button>
                 <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
@@ -679,7 +716,16 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             </div>
             
             <div className="bg-slate-50/80 rounded-[2rem] p-6">
-              <p className="text-xs text-slate-500 font-medium mb-6 text-center">Selecciona el formato en el que deseas extraer los registros de tus alumnos.</p>
+              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar Fechas (Opcional)</h4>
+              
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div>
+                  <input type="date" value={fechaInicioGlobal} onChange={(e) => setFechaInicioGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                </div>
+                <div>
+                  <input type="date" value={fechaFinGlobal} onChange={(e) => setFechaFinGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                </div>
+              </div>
 
               <div className="space-y-3">
                 <button 

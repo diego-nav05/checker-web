@@ -21,11 +21,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
   
   const [asistencias, setAsistencias] = useState<Asistencia[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const popUpRef = useRef<Window | null>(null); // Referencia a la ventana flotante
 
   const [clasesHoy, setClasesHoy] = useState<any[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
 
-  // Diccionario local en memoria
   const [diccionarioAlumnos, setDiccionarioAlumnos] = useState<Record<string, any>>({});
 
   const [mostrarModalHistorial, setMostrarModalHistorial] = useState<boolean>(false);
@@ -42,14 +42,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
   useEffect(() => {
     const arrancarDatos = async () => {
       setCargandoClases(true);
-      
       const { data: perfilesData } = await supabase.from('perfiles').select('id, nombre_completo, email');
       if (perfilesData) {
         const dict: Record<string, any> = {};
         perfilesData.forEach(p => dict[p.id] = p);
         setDiccionarioAlumnos(dict);
       }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('horario', { ascending: true });
@@ -71,7 +69,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
       .single();
 
     if (sesionError || !sesionData) return mostrarNotificacion(`Error BD: ${sesionError?.message || 'Fallo al abrir'}`, 'error');
-
     setSesionId(sesionData.id);
 
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
@@ -95,27 +92,16 @@ export default function PantallaProfesor({ onVolver }: Props) {
     mostrarNotificacion('Aula iniciada correctamente.', 'exito');
   };
 
-  // SISTEMA A PRUEBA DE FALLOS CON AUTO-RECUPERACIÓN DE PERFILES NUEVOS
   const cargarAsistencias = async (idSesion: string, dict = diccionarioAlumnos) => {
     const { data } = await supabase.from('asistencias').select('*').eq('sesion_id', idSesion);
-    
     if (data) {
-      const idsFaltantes = data
-        .map(item => item.alumno_id)
-        .filter(id => id && !dict[id]);
-
+      const idsFaltantes = data.map(item => item.alumno_id).filter(id => id && !dict[id]);
       let dictActualizado = { ...dict };
 
       if (idsFaltantes.length > 0) {
-        const { data: perfilesNuevos } = await supabase
-          .from('perfiles')
-          .select('id, nombre_completo, email')
-          .in('id', idsFaltantes);
-
+        const { data: perfilesNuevos } = await supabase.from('perfiles').select('id, nombre_completo, email').in('id', idsFaltantes);
         if (perfilesNuevos) {
-          perfilesNuevos.forEach(p => {
-            dictActualizado[p.id] = p;
-          });
+          perfilesNuevos.forEach(p => { dictActualizado[p.id] = p; });
           setDiccionarioAlumnos(dictActualizado);
         }
       }
@@ -130,24 +116,17 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   useEffect(() => {
     if (!sesionId) return;
-
     cargarAsistencias(sesionId, diccionarioAlumnos);
 
     const instantChannel = supabase.channel('aula-realtime')
-      .on('broadcast', { event: 'update-lista' }, () => {
-        cargarAsistencias(sesionId, diccionarioAlumnos);
-      })
+      .on('broadcast', { event: 'update-lista' }, () => cargarAsistencias(sesionId, diccionarioAlumnos))
       .subscribe();
 
     const dbChannel = supabase.channel('aula-db')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => {
-        cargarAsistencias(sesionId, diccionarioAlumnos);
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => cargarAsistencias(sesionId, diccionarioAlumnos))
       .subscribe();
 
-    const intervaloRespaldo = setInterval(() => {
-      cargarAsistencias(sesionId, diccionarioAlumnos);
-    }, 2000);
+    const intervaloRespaldo = setInterval(() => cargarAsistencias(sesionId, diccionarioAlumnos), 2000);
 
     return () => { 
       supabase.removeChannel(instantChannel);
@@ -163,13 +142,67 @@ export default function PantallaProfesor({ onVolver }: Props) {
       const payload = `${sesionId}|${fase}|${bloqueTiempo}`;
       const token = CryptoJS.HmacSHA256(payload, secretTotp).toString();
       const qrPayload = JSON.stringify({ s: sesionId, f: fase, t: bloqueTiempo, token });
-      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 320, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
+      
+      // Renderizamos el QR a alta resolución (width 500) para máxima nitidez
+      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 500, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
       setQrSrc(dataUrl);
+
+      // Sincronizar con la ventana emergente si existe y no se ha cerrado
+      if (popUpRef.current && !popUpRef.current.closed) {
+        const doc = popUpRef.current.document;
+        const img = doc.getElementById('qr-img') as HTMLImageElement;
+        const faseLabel = doc.getElementById('qr-fase');
+        if (img) img.src = dataUrl;
+        if (faseLabel) {
+          faseLabel.innerText = fase === 'ENTRADA' ? '📍 ESCANEO ENTRADA' : '🚪 ESCANEO SALIDA';
+          faseLabel.style.color = fase === 'ENTRADA' ? '#fbbf24' : '#38bdf8';
+          faseLabel.style.backgroundColor = fase === 'ENTRADA' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(56, 189, 248, 0.1)';
+        }
+      }
     };
+    
     actualizarQR();
     timerRef.current = setInterval(actualizarQR, 4000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [sesionId, secretTotp, fase]);
+
+  // ABRIR VENTANA FLOTANTE POP-UP (Inmersiva y limpia)
+  const abrirPopUpQR = () => {
+    if (popUpRef.current && !popUpRef.current.closed) {
+      popUpRef.current.focus();
+      return;
+    }
+    const win = window.open('', 'QR_PopUp', 'width=500,height=600,top=100,left=100,resizable=yes,scrollbars=no,toolbar=no,menubar=no');
+    if (win) {
+      win.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>QR Asistencia</title>
+            <style>
+              body { margin: 0; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #0f172a; color: white; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; overflow: hidden; }
+              .container { background: white; padding: 24px; border-radius: 36px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); position: relative; }
+              .container::after { content: ''; position: absolute; inset: -20px; background: inherit; filter: blur(40px); z-index: -1; opacity: 0.2; }
+              img { width: 100%; max-width: 450px; height: auto; display: block; border-radius: 20px; }
+              .badge { margin-top: 32px; padding: 10px 28px; border-radius: 99px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; font-size: 14px; transition: all 0.3s ease; }
+              .info { margin-top: 16px; font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+              .dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; box-shadow: 0 0 10px #10b981; }
+            </style>
+          </head>
+          <body>
+            <div class="container"><img id="qr-img" src="${qrSrc}" alt="QR Asistencia" /></div>
+            <div class="badge" id="qr-fase" style="color: ${fase === 'ENTRADA' ? '#fbbf24' : '#38bdf8'}; background: ${fase === 'ENTRADA' ? 'rgba(251, 191, 36, 0.1)' : 'rgba(56, 189, 248, 0.1)'};">
+              ${fase === 'ENTRADA' ? '📍 ESCANEO ENTRADA' : '🚪 ESCANEO SALIDA'}
+            </div>
+            <div class="info"><div class="dot"></div> En vivo</div>
+          </body>
+        </html>
+      `);
+      popUpRef.current = win;
+    } else {
+      mostrarNotificacion('Tu navegador bloqueó la ventana emergente. Permite los pop-ups.', 'error');
+    }
+  };
 
   const pasarASalida = async () => {
     if (!sesionId) return;
@@ -215,6 +248,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setPassInput('');
       cargarAsistencias(sesionId, diccionarioAlumnos);
       mostrarNotificacion('Clase archivada.', 'exito');
+      
+      // Cerramos automáticamente el pop-up al acabar la clase
+      if (popUpRef.current && !popUpRef.current.closed) {
+        popUpRef.current.close();
+      }
 
     } catch (error: any) {
       mostrarNotificacion(error.message, 'error');
@@ -272,52 +310,54 @@ export default function PantallaProfesor({ onVolver }: Props) {
     const libro = XLSX.utils.book_new();
     const hoja = XLSX.utils.json_to_sheet(filas);
     XLSX.utils.book_append_sheet(libro, hoja, 'Asistencia');
-    
-    const nombreLimpio = asigNombre.replace(/[/\\?%*:|"<>]/g, '-');
-    XLSX.writeFile(libro, `${nombreLimpio}.xlsx`);
+    XLSX.writeFile(libro, `${asigNombre.replace(/[/\\?%*:|"<>]/g, '-')}.xlsx`);
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
+    <div className="min-h-screen bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
       
+      {/* NOTIFICACIONES PREMIUM */}
       {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 
-          'bg-[#002b5c]/90 border-[#0090d0]/50 text-white'
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
+          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
+          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
+          'bg-[#002b5c]/95 border-white/10 text-white'
         }`}>
-          <span className="text-sm font-semibold tracking-tight">{notificacion.texto}</span>
+          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
         </div>
       )}
 
-      <div className="flex items-center justify-between bg-white/70 backdrop-blur-3xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 mb-8 max-w-7xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
+      {/* CABECERA FLOTANTE (Glassmorphism auténtico) */}
+      <div className="flex items-center justify-between bg-white/60 backdrop-blur-2xl px-6 py-4 rounded-[2.5rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 mb-8 max-w-7xl mx-auto w-full transition-all">
         <div className="flex items-center gap-4">
-          <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
+          <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          </button>
           <div>
             <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Profesorado</h1>
-            <p className="text-xs font-semibold text-slate-400">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-0.5">
               {sesionId ? (
-                <>Fase: <span className={fase === 'ENTRADA' ? 'text-amber-500' : fase === 'SALIDA' ? 'text-[#0090d0]' : 'text-slate-400'}>{fase}</span></>
-              ) : 'Selecciona una asignatura'}
+                <span className="flex items-center gap-1.5">Fase: <span className={`font-bold ${fase === 'ENTRADA' ? 'text-amber-500' : fase === 'SALIDA' ? 'text-[#0090d0]' : 'text-slate-400'}`}>{fase}</span></span>
+              ) : 'Selección de Aula'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {!sesionId ? (
-            <button onClick={abrirHistorial} className="px-5 py-2.5 bg-white text-[#002b5c] text-xs font-bold rounded-full shadow-sm hover:shadow-md border border-slate-100 transition-all active:scale-95 cursor-pointer">
-              Historial
+            <button onClick={abrirHistorial} className="px-6 py-3 bg-white text-[#002b5c] text-xs font-bold rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] border border-slate-100 transition-all duration-300 active:scale-95 cursor-pointer">
+              Ver Historial
             </button>
           ) : (
             fase !== 'CERRADA' && (
               <>
                 {fase === 'ENTRADA' && (
-                  <button onClick={pasarASalida} className="px-5 py-2.5 bg-[#0090d0] text-white text-xs font-bold rounded-full shadow-md transition-all active:scale-95 cursor-pointer">
-                    Salida
+                  <button onClick={pasarASalida} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
+                    Activar Salida
                   </button>
                 )}
-                <button onClick={intentarCerrarAula} className="px-5 py-2.5 bg-rose-500 text-white text-xs font-bold rounded-full shadow-md transition-all active:scale-95 cursor-pointer">
-                  Cerrar
+                <button onClick={intentarCerrarAula} className="px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
+                  Cerrar Clase
                 </button>
               </>
             )
@@ -326,26 +366,28 @@ export default function PantallaProfesor({ onVolver }: Props) {
       </div>
 
       {!sesionId ? (
-        <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
+        // VISTA: SELECCIÓN DE CLASE (Bento UI)
+        <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full">
           {cargandoClases ? (
-            <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Cargando materias...</div>
+            <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando materias del servidor...</div>
           ) : clasesHoy.length === 0 ? (
-            <div className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] p-12 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 text-center">
-              <p className="text-[#002b5c] font-black text-lg">No tienes asignaturas asignadas.</p>
-              <p className="text-xs text-slate-400 font-medium mt-2">Usa "Gestión Docente" en el menú principal para darlas de alta.</p>
+            <div className="bg-white/50 backdrop-blur-xl rounded-[3rem] p-16 shadow-[0_8px_32px_rgba(0,43,92,0.03)] border border-white/60 text-center max-w-2xl mx-auto w-full mt-10">
+              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6"><span className="text-3xl">📚</span></div>
+              <p className="text-[#002b5c] font-black text-2xl tracking-tight">Cero asignaturas</p>
+              <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">No tienes asignaturas dadas de alta. Ve a "Gestión Docente" en el menú principal para configurarlas.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {clasesHoy.map((clase) => (
-                <div key={clase.id} className="bg-white/70 backdrop-blur-3xl rounded-[2.5rem] p-6 shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 flex flex-col justify-between hover:shadow-[0_20px_40px_rgba(0,144,208,0.1)] transition-all">
+                <div key={clase.id} className="bg-white/70 backdrop-blur-2xl rounded-[2.5rem] p-7 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border border-white/80 flex flex-col justify-between hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)] hover:-translate-y-1 transition-all duration-500 group">
                   <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="px-3 py-1.5 bg-[#0090d0]/10 text-[#0090d0] text-[10px] font-bold uppercase tracking-wider rounded-full">{clase.aula}</span>
-                      <span className="text-slate-400 text-xs font-semibold">{clase.horario}</span>
+                    <div className="flex items-center justify-between mb-5">
+                      <span className="px-4 py-1.5 bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold uppercase tracking-widest rounded-full group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>
+                      <span className="text-slate-400 text-[11px] font-bold tracking-wider uppercase">{clase.horario}</span>
                     </div>
-                    <h3 className="text-xl font-black text-[#002b5c] mb-6 leading-tight">{clase.nombre}</h3>
+                    <h3 className="text-2xl font-black text-[#002b5c] mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
                   </div>
-                  <button onClick={() => iniciarClase(clase.id)} className="w-full py-3.5 bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer">
+                  <button onClick={() => iniciarClase(clase.id)} className="w-full py-4 bg-slate-50 text-[#002b5c] hover:bg-[#002b5c] hover:text-white border border-slate-100 text-sm font-bold rounded-[1.5rem] transition-all duration-300 shadow-sm hover:shadow-[0_10px_20px_rgba(0,43,92,0.15)] active:scale-95 cursor-pointer">
                     Iniciar Aula
                   </button>
                 </div>
@@ -354,58 +396,85 @@ export default function PantallaProfesor({ onVolver }: Props) {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 max-w-7xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
+        // VISTA: AULA ACTIVA
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 max-w-7xl mx-auto w-full">
           
-          <div className="lg:col-span-5 bg-white/70 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 flex flex-col items-center justify-center text-center">
+          {/* PANEL IZQUIERDO: Escáner QR */}
+          <div className="xl:col-span-5 bg-white/60 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,43,92,0.08)] border border-white/60 flex flex-col items-center justify-center text-center relative overflow-hidden">
+            
+            {/* Orbe de luz de fondo */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.03] blur-[60px] pointer-events-none"></div>
+
             {fase !== 'CERRADA' ? (
-              <>
-                <div className="mb-8">
-                  <span className="text-[10px] uppercase tracking-widest font-bold text-[#0090d0] bg-[#0090d0]/10 px-4 py-2 rounded-full">
-                    {fase === 'ENTRADA' ? '📍 Escaneo Entrada' : '🚪 Escaneo Salida'}
+              <div className="relative z-10 w-full flex flex-col items-center">
+                <div className="mb-8 flex items-center justify-between w-full max-w-[320px]">
+                  <span className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/10'}`}>
+                    {fase === 'ENTRADA' ? '📍 Modo Entrada' : '🚪 Modo Salida'}
                   </span>
+                  
+                  {/* BOTÓN MÁGICO: POP-UP */}
+                  <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-[#0090d0] text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en ventana flotante">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </button>
                 </div>
-                <div className="p-4 bg-white rounded-[2rem] shadow-xl border border-slate-100">
-                  {qrSrc && <img src={qrSrc} alt="QR Dinámico" className="w-64 h-64 rounded-xl" />}
+
+                {/* Tarjeta del QR (Más grande: w-80 h-80 = 320px) */}
+                <div className="p-4 bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100 group relative">
+                  {/* Brillo dinámico en hover */}
+                  <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(0,144,208,0.1)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+                  {qrSrc && <img src={qrSrc} alt="QR Dinámico" className="w-72 h-72 sm:w-80 sm:h-80 rounded-[1.5rem] object-contain select-none pointer-events-none" draggable="false" />}
                 </div>
-                <div className="mt-8 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Sincronizado en tiempo real
+
+                <div className="mt-10 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
+                  <div className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </div>
+                  Sincronizado en vivo
                 </div>
-              </>
+              </div>
             ) : (
-              <div className="text-center py-12">
-                <div className="w-20 h-20 bg-emerald-100/50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4"><span className="text-3xl">✓</span></div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Clase Archivada</h3>
+              <div className="text-center py-20 relative z-10">
+                <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><span className="text-4xl">✓</span></div>
+                <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase Archivada</h3>
+                <p className="text-sm text-slate-400 font-medium">Los datos ya se han guardado de forma segura.</p>
               </div>
             )}
           </div>
 
-          <div className="lg:col-span-7 bg-white/70 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 flex flex-col">
-            <h2 className="text-xl font-black text-[#002b5c] tracking-tight mb-6">Alumnos ({asistencias.length})</h2>
+          {/* PANEL DERECHO: Lista de Alumnos */}
+          <div className="xl:col-span-7 bg-white/60 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,43,92,0.08)] border border-white/60 flex flex-col relative overflow-hidden">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Alumnado</h2>
+              <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Registros</span>
+            </div>
             
-            <div className="flex-1 overflow-y-auto max-h-[500px] pr-2 space-y-3">
+            <div className="flex-1 overflow-y-auto max-h-[550px] pr-3 space-y-3 scrollbar-hide relative z-10">
               {asistencias.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-400 text-sm font-medium">Esperando alumnos...</div>
+                <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 mt-12">
+                  <span className="text-4xl mb-4">🤳</span>
+                  <p className="text-sm font-medium tracking-wide">Esperando escaneos...</p>
+                </div>
               ) : (
                 asistencias.map((item) => (
-                  <div key={item.id} className="p-4 bg-slate-50/50 hover:bg-white rounded-[1.5rem] flex items-center justify-between gap-4 transition-colors border border-transparent hover:border-slate-100">
+                  <div key={item.id} className="p-4 bg-white/80 backdrop-blur-md rounded-[1.5rem] flex items-center justify-between gap-4 transition-all duration-300 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)] hover:-translate-y-0.5">
                     <div>
-                      <p className="font-bold text-[#002b5c] text-sm">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
-                      <div className="flex gap-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
-                        <span>In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        <span>Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                      <p className="font-bold text-[#002b5c] text-sm tracking-tight">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
+                      <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1.5">
+                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <select
                         value={item.estado}
                         onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                        className={`text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-full outline-none transition-all cursor-pointer ${
-                          item.estado === 'PRESENTE' ? 'bg-emerald-100/50 text-emerald-700' :
-                          item.estado === 'RETRASO' ? 'bg-amber-100/50 text-amber-700' :
-                          item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-100/50 text-purple-700' :
-                          item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0090d0]' : 'bg-rose-100/50 text-rose-700'
+                        className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2.5 rounded-xl outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border ${
+                          item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                          item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                          item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                          item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/20' : 'bg-rose-50 text-rose-600 border-rose-100'
                         }`}
                       >
                         <option value="PRESENTE">Presente</option>
@@ -415,8 +484,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         <option value="FALTA_INJUSTIFICADA">Ausente</option>
                       </select>
                       
-                      <button onClick={() => expulsarAlumno(item.id, item.perfiles?.nombre_completo || 'Alumno')} className="w-8 h-8 flex items-center justify-center rounded-full bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors cursor-pointer active:scale-95" title="Expulsar">
-                        ✕
+                      <button onClick={() => expulsarAlumno(item.id, item.perfiles?.nombre_completo || 'Alumno')} className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-rose-100 text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer active:scale-90 shadow-sm" title="Expulsar de clase">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                       </button>
                     </div>
                   </div>
@@ -427,41 +496,48 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
+      {/* --- MODALES --- */}
       {mostrarModalCierre && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white rounded-[3rem] p-10 max-w-sm w-full shadow-2xl text-center border border-white/20">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Confirma tu identidad docente.</p>
-            <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold"/>
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
-              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Cerrar</button>
+            <p className="text-xs text-slate-500 font-medium mb-8">Confirma tu identidad docente.</p>
+            <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
+              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-4 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold shadow-md shadow-rose-500/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar</button>
             </div>
           </div>
         </div>
       )}
 
       {mostrarModalHistorial && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-lg w-full shadow-2xl border border-white/60">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Historial Docente</h3>
-              <button onClick={() => setMostrarModalHistorial(false)} className="text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial Docente</h3>
+              <button onClick={() => setMostrarModalHistorial(false)} className="w-10 h-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer active:scale-90">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
             
             {cargandoHistorial ? (
-              <div className="py-12 text-center text-slate-400 font-medium animate-pulse">Buscando...</div>
+              <div className="py-16 text-center text-slate-400 font-semibold tracking-wide animate-pulse">Buscando en la bóveda...</div>
             ) : historialSesiones.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 font-medium">No hay historial disponible.</div>
+              <div className="py-16 text-center text-slate-400 font-medium">No hay clases archivadas todavía.</div>
             ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-[450px] overflow-y-auto pr-3 scrollbar-hide">
                 {historialSesiones.map((sesion, idx) => (
-                  <div key={idx} className="p-4 bg-slate-50/50 rounded-[1.5rem] flex items-center justify-between transition-colors border border-transparent hover:border-slate-100">
+                  <div key={idx} className="p-5 bg-white border border-slate-100 shadow-sm rounded-[2rem] flex items-center justify-between transition-all duration-300 hover:shadow-md hover:-translate-y-0.5">
                     <div>
-                      <h4 className="font-bold text-[#002b5c] text-sm">{sesion.asignatura_nombre}</h4>
-                      <p className="text-[11px] font-semibold text-slate-400 mt-1">{new Date(sesion.created_at).toLocaleDateString()} · {new Date(sesion.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</p>
+                      <h4 className="font-bold text-[#002b5c] text-sm tracking-tight">{sesion.asignatura_nombre}</h4>
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1.5 flex items-center gap-2">
+                        <span>{new Date(sesion.created_at).toLocaleDateString()}</span>
+                        <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                        <span>{new Date(sesion.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>
+                      </p>
                     </div>
-                    <button onClick={() => descargarExcelPasado(sesion.id, sesion.asignatura_nombre)} className="px-4 py-2 bg-white text-[#0090d0] text-[10px] font-bold uppercase tracking-wider rounded-full shadow-sm border border-slate-100 active:scale-95 cursor-pointer">
+                    <button onClick={() => descargarExcelPasado(sesion.id, sesion.asignatura_nombre)} className="px-5 py-2.5 bg-slate-50 hover:bg-[#0090d0] text-[#0090d0] hover:text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors duration-300 active:scale-90 cursor-pointer">
                       Excel
                     </button>
                   </div>
