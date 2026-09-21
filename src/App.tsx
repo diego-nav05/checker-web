@@ -18,6 +18,19 @@ export default function App() {
 
   const alumnoVinculado = !!localStorage.getItem('checker_alumno_id');
 
+  // Lanzar notificación enfocada solo al alumno despistado con 8 segundos de duración
+  useEffect(() => {
+    const rol = localStorage.getItem('checker_rol');
+    const idAlumno = localStorage.getItem('checker_alumno_id');
+    
+    if (!idAlumno && rol !== 'profesor') {
+      setNotificacion({ texto: '👋 Si eres un nuevo alumno, regístrate en "Vincular Móvil".', tipo: 'info' });
+      // Ampliado a 8 segundos
+      const timer = setTimeout(() => setNotificacion(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   useEffect(() => {
     if (!window.history.state || !window.history.state.panel) {
       window.history.replaceState({ panel: 'INICIO' }, '');
@@ -167,14 +180,7 @@ export default function App() {
       
       <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 animate-[fade-in_0.5s_ease-out]">
         
-        {!alumnoVinculado && (
-          <div className="bg-white/40 backdrop-blur-md rounded-2xl p-4 text-center border border-white/60 shadow-sm animate-[fade-in-down_0.6s_ease-out]">
-            <p className="text-xs font-bold text-[#002b5c] tracking-widest uppercase">👋 Bienvenido a Checker</p>
-            <p className="text-xs text-slate-500 font-medium mt-1">Crea tu cuenta para empezar a registrar asistencias.</p>
-          </div>
-        )}
-
-        <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] bg-white/60 backdrop-blur-3xl rounded-[2.5rem] sm:rounded-[3rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 flex flex-col items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.15)] hover:-translate-y-1 active:scale-[0.97] group overflow-hidden cursor-pointer">
+        <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] bg-white/60 backdrop-blur-3xl rounded-[2.5rem] sm:rounded-[3rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 flex flex-col items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.15)] hover:-translate-y-1 active:scale-[0.97] group overflow-hidden cursor-pointer mt-4 sm:mt-0">
           <div className="absolute inset-0 rounded-[2.5rem] sm:rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
           <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">ALUMNADO</span>
         </button>
@@ -185,9 +191,10 @@ export default function App() {
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
+          {/* BOTÓN GESTIÓN (Parpadeo solucionado) */}
           <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-[4/3] bg-gradient-to-br from-[#002b5c] to-[#001a38] backdrop-blur-2xl rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_15px_35px_rgba(0,43,92,0.2)] border border-[#002b5c]/50 flex items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.35)] hover:-translate-y-1 active:scale-[0.96] group cursor-pointer overflow-hidden">
             <div className="absolute inset-0 rounded-[2rem] sm:rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] pointer-events-none"></div>
-            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-[#b3e6ff] transition-all">Gestión</span>
+            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300">Gestión</span>
           </button>
 
           <button onClick={() => irAPanel('REGISTRO')} className={`relative w-full aspect-square sm:aspect-[4/3] backdrop-blur-3xl rounded-[2rem] sm:rounded-[2.5rem] border flex items-center justify-center transition-all duration-500 hover:-translate-y-1 active:scale-[0.96] group cursor-pointer overflow-hidden ${!alumnoVinculado ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] shadow-[0_15px_35px_rgba(0,144,208,0.25)] border-[#0090d0]/50' : 'bg-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border-white/50 hover:shadow-[0_15px_30px_rgba(0,0,0,0.08)] hover:bg-white'}`}>
