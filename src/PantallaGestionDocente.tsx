@@ -135,25 +135,25 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   };
 
   const expulsarDeAsignatura = async (alumnoId: string, asigId: string) => {
-    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se marcará su asistencia como falta.');
+    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se eliminarán sus registros de asistencia.');
     if (!confirmar) return;
 
     const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
     if (sesiones && sesiones.length > 0) {
       const sIds = sesiones.map((s: any) => s.id);
       await supabase.from('asistencias')
-        .update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true })
+        .delete()
         .eq('alumno_id', alumnoId)
         .in('sesion_id', sIds);
     }
-    mostrarNotificacion('Alumno marcado con falta en la materia.', 'exito');
+    mostrarNotificacion('Alumno eliminado de la materia.', 'exito');
     setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
     if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
     cargarAlumnos();
   };
 
   const expulsarDeTodas = async (alumnoId: string) => {
-    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS? Se marcará su asistencia como falta.');
+    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS? Se eliminarán sus registros de asistencia en tus materias.');
     if (!confirmar) return;
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -166,12 +166,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       if (sesiones && sesiones.length > 0) {
         const sIds = sesiones.map((s: any) => s.id);
         await supabase.from('asistencias')
-          .update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true })
+          .delete()
           .eq('alumno_id', alumnoId)
           .in('sesion_id', sIds);
       }
     }
-    mostrarNotificacion('Alumno marcado con falta en todas tus materias.', 'exito');
+    mostrarNotificacion('Alumno eliminado de todas tus materias.', 'exito');
     setAlumnoGestion(null);
     cargarAlumnos();
   };
@@ -850,7 +850,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
                 <h3 className="text-xl font-black text-[#002b5c] tracking-tight">{asignaturaSeleccionada.nombre}</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-1">Exportación Pivot</p>
               </div>
               <button onClick={() => setAsignaturaSeleccionada(null)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
