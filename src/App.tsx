@@ -195,21 +195,25 @@ export default function App() {
 
       <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
-        <button onClick={manejarClickAlumnado} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
-          <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">ALUMNADO</span>
+        <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0 overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,144,208,0.15)] bg-white/80 backdrop-blur-xl border border-white">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+          <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10">ALUMNADO</span>
         </button>
 
-        <button onClick={() => irAPanel('PROFESORADO')} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer">
-          <span className="text-[clamp(1.5rem,7vw,3.25rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">PROFESORADO</span>
+        <button onClick={() => irAPanel('PROFESORADO')} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,43,92,0.1)] bg-slate-50/70 backdrop-blur-xl border border-white/60">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+          <span className="text-[clamp(1.5rem,7vw,3.25rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10">PROFESORADO</span>
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          <button onClick={() => irAPanel('GESTION')} className="glass-button relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
-            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-[#002b5c] tracking-tight group-hover:text-[#0090d0] transition-colors duration-300">Gestión</span>
+          <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,43,92,0.3)] bg-gradient-to-br from-[#002b5c]/95 to-[#001530]/95 backdrop-blur-xl border border-white/10">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
+            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300 relative z-10">Gestión</span>
           </button>
 
-          <button onClick={() => irAPanel('REGISTRO')} className="glass-button relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
-            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">
+          <button onClick={() => irAPanel('REGISTRO')} className={`relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 ${!alumnoVinculado ? 'bg-gradient-to-br from-[#0090d0]/95 to-[#0070a0]/95 hover:shadow-[0_12px_40px_rgba(0,144,208,0.3)] border border-white/20' : 'bg-white/40 hover:bg-white/60 hover:shadow-[0_8px_30px_rgba(0,43,92,0.05)] border border-white/50'} backdrop-blur-xl`}>
+            {!alumnoVinculado && <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -ml-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>}
+            <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors duration-300 relative z-10 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
               {!alumnoVinculado ? 'Vincular Móvil' : 'Mi Cuenta'}
             </span>
           </button>
