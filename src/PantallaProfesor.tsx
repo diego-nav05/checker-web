@@ -469,21 +469,25 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card p-4 flex flex-col gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
-                        <p className="font-bold text-[#002b5c] text-sm tracking-tight">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
-                        <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                      <div key={item.id} className="bento-card p-3 flex items-center justify-between gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                        <div className="flex flex-col overflow-hidden min-w-0">
+                          <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
+                            {item.perfiles?.nombre_completo || 'Alumno Registrado'}
+                          </p>
+                          <div className="flex gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">
+                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                          </div>
                         </div>
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`mt-2 text-[10px] font-bold uppercase tracking-widest px-3 py-2.5 rounded-xl outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border ${
+                          className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-lg outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border flex-shrink-0 min-w-[90px] ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                             item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
@@ -509,21 +513,25 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card p-4 flex flex-col gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
-                        <p className="font-bold text-[#002b5c] text-sm tracking-tight">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
-                        <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                      <div key={item.id} className="bento-card p-3 flex items-center justify-between gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                        <div className="flex flex-col overflow-hidden min-w-0">
+                          <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
+                            {item.perfiles?.nombre_completo || 'Alumno Registrado'}
+                          </p>
+                          <div className="flex gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">
+                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                          </div>
                         </div>
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`mt-2 text-[10px] font-bold uppercase tracking-widest px-3 py-2.5 rounded-xl outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border ${
+                          className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-lg outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border flex-shrink-0 min-w-[90px] ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                             item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
