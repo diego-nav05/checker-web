@@ -6,38 +6,7 @@ interface Props {
   onVolver: () => void;
 }
 
-const GlobalAnimStyles = () => (
-  <style>{`
-    @keyframes suave {
-      0% { opacity: 0; transform: translateY(12px) scale(0.98); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    .anim-suave {
-      animation: suave 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
-    }
-    @keyframes drop-in {
-      0% { opacity: 0; transform: translate(-50%, -15px) scale(0.95); }
-      100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-    }
-    .anim-drop {
-      animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
-    }
-    .safari-border-fix {
-      -webkit-mask-image: -webkit-linear-gradient(white, white);
-      mask-image: linear-gradient(white, white);
-      -webkit-backface-visibility: hidden;
-      backface-visibility: hidden;
-      -webkit-transform: translate3d(0, 0, 0);
-      transform: translate3d(0, 0, 0);
-    }
-  `}</style>
-);
+
 
 export default function PantallaRegistro({ onVolver }: Props) {
   const [esRegistro, setEsRegistro] = useState(true);
@@ -143,7 +112,6 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
   return (
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col items-center justify-center font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      <GlobalAnimStyles />
       <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
 
       {notificacion && (
@@ -156,9 +124,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
         </div>
       )}
 
-      {/* APLICAMOS anim-suave AQUÍ */}
-      <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 anim-suave relative safari-border-fix">
-        <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
+      <div className="pantalla-transicion glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
         
         <button onClick={onVolver} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>

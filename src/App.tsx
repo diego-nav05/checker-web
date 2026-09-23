@@ -7,121 +7,8 @@ import { supabase } from './supabase';
 
 type Vista = 'INICIO' | 'ALUMNADO' | 'PROFESORADO' | 'REGISTRO' | 'GESTION';
 
-const GlobalAnimStyles = () => (
-  <style>{`
-    @keyframes suave {
-      0% { opacity: 0; transform: translateY(24px) scale(0.92); filter: blur(8px); }
-      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-    }
-    .anim-suave {
-      animation: suave 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity, filter;
-    }
-    @keyframes drop-in {
-      0% { opacity: 0; transform: translateY(-16px) scale(0.92); filter: blur(8px); }
-      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
-    }
-    .anim-drop {
-      animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity, filter;
-    }
-    
-    .glass-container {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
-      backdrop-filter: blur(32px);
-      -webkit-backdrop-filter: blur(32px);
-      box-shadow: 
-        0 24px 48px -12px rgba(0, 43, 92, 0.08),
-        0 0 0 1px rgba(255, 255, 255, 0.6) inset,
-        0 1px 1px rgba(255, 255, 255, 0.9) inset;
-      transform: translateZ(0);
-      -webkit-transform: translateZ(0);
-    }
-    
-    .glass-button {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      box-shadow: 
-        0 8px 24px -6px rgba(0, 43, 92, 0.06),
-        0 0 0 1px rgba(255, 255, 255, 0.6) inset,
-        0 1px 1px rgba(255, 255, 255, 0.9) inset;
-      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      transform: translateZ(0);
-      -webkit-transform: translateZ(0);
-    }
-    
-    .glass-button:hover {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 100%);
-      box-shadow: 
-        0 16px 32px -8px rgba(0, 144, 208, 0.15),
-        0 0 0 1px rgba(255, 255, 255, 0.8) inset,
-        0 1px 1px rgba(255, 255, 255, 1) inset;
-      transform: translateY(-4px) scale(1.01) translateZ(0);
-    }
-    
-    .glass-button:active {
-      transform: scale(0.97) translateZ(0);
-      transition: all 0.1s ease-out;
-    }
-    
-    .dark-glow-btn {
-      background: linear-gradient(135deg, #002b5c 0%, #001a38 100%);
-      box-shadow: 
-        0 8px 20px rgba(0, 43, 92, 0.25),
-        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
-      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      transform: translateZ(0);
-    }
-    
-    .dark-glow-btn:hover {
-      box-shadow: 
-        0 16px 32px rgba(0, 144, 208, 0.3),
-        0 0 0 1px rgba(255, 255, 255, 0.15) inset;
-      transform: translateY(-4px) scale(1.01) translateZ(0);
-    }
-    
-    .dark-glow-btn:active {
-      transform: scale(0.97) translateZ(0);
-      transition: all 0.1s ease-out;
-    }
-
-    .primary-glow-btn {
-      background: linear-gradient(135deg, #0090d0 0%, #007fb8 100%);
-      box-shadow: 
-        0 8px 20px rgba(0, 144, 208, 0.25),
-        0 0 0 1px rgba(255, 255, 255, 0.2) inset;
-      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      transform: translateZ(0);
-    }
-    
-    .primary-glow-btn:hover {
-      box-shadow: 
-        0 16px 32px rgba(0, 144, 208, 0.4),
-        0 0 0 1px rgba(255, 255, 255, 0.3) inset;
-      transform: translateY(-4px) scale(1.01) translateZ(0);
-    }
-    
-    .primary-glow-btn:active {
-      transform: scale(0.97) translateZ(0);
-      transition: all 0.1s ease-out;
-    }
-    
-    .glow-blob {
-      position: absolute;
-      width: 800px;
-      height: 800px;
-      background: radial-gradient(circle, rgba(0,144,208,0.12) 0%, rgba(0,144,208,0) 60%);
-      border-radius: 50%;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      z-index: 0;
-      filter: blur(40px);
-    }
-  `}</style>
-);
+// GlobalAnimStyles se han movido a index.css
+const GlobalAnimStyles = () => null;
 
 export default function App() {
   const [vista, setVista] = useState<Vista>('INICIO');
@@ -163,16 +50,32 @@ export default function App() {
   }, []);
 
   const irAPanel = (nuevaVista: Vista) => {
-    window.history.pushState({ panel: nuevaVista }, '');
-    setVista(nuevaVista);
-    setNotificacion(null);
+    const doTransition = () => {
+      window.history.pushState({ panel: nuevaVista }, '');
+      setVista(nuevaVista);
+      setNotificacion(null);
+    };
+
+    if (!(document as any).startViewTransition) {
+      doTransition();
+    } else {
+      (document as any).startViewTransition(doTransition);
+    }
   };
 
   const volverInicio = () => {
-    if (window.history.state?.panel !== 'INICIO') {
-      window.history.back();
+    const doTransition = () => {
+      if (window.history.state?.panel !== 'INICIO') {
+        window.history.back();
+      } else {
+        setVista('INICIO');
+      }
+    };
+
+    if (!(document as any).startViewTransition) {
+      doTransition();
     } else {
-      setVista('INICIO');
+      (document as any).startViewTransition(doTransition);
     }
   };
 
@@ -268,7 +171,7 @@ export default function App() {
           
           <ToastNotificacion />
           
-          <div className="glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
+          <div className="pantalla-transicion glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
             <button 
               onClick={() => { 
                 setVista('INICIO'); 
@@ -308,20 +211,20 @@ export default function App() {
 
       <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
-        <button onClick={manejarClickAlumnado} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
+        <button onClick={manejarClickAlumnado} className="pantalla-transicion glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
           <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">ALUMNADO</span>
         </button>
 
-        <button onClick={() => irAPanel('PROFESORADO')} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer">
+        <button onClick={() => irAPanel('PROFESORADO')} className="pantalla-transicion glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer">
           <span className="text-[clamp(1.5rem,7vw,3.25rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">PROFESORADO</span>
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          <button onClick={() => irAPanel('GESTION')} className="dark-glow-btn relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
+          <button onClick={() => irAPanel('GESTION')} className="pantalla-transicion dark-glow-btn relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
             <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300">Gestión</span>
           </button>
 
-          <button onClick={() => irAPanel('REGISTRO')} className={`${!alumnoVinculado ? 'primary-glow-btn' : 'glass-button'} relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer`}>
+          <button onClick={() => irAPanel('REGISTRO')} className={`pantalla-transicion ${!alumnoVinculado ? 'primary-glow-btn' : 'glass-button'} relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer`}>
             <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors duration-300 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
               {!alumnoVinculado ? 'Vincular Móvil' : 'Mi Cuenta'}
             </span>

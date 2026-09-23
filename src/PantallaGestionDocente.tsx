@@ -608,7 +608,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         </div>
       )}
 
-      <div className="flex items-center justify-between bg-white/70 backdrop-blur-3xl px-6 py-4 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
+      <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
           <div>
@@ -620,13 +620,13 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col gap-6 animate-[fade-in_0.4s_ease-out]">
         
-        <div className="flex bg-white/70 backdrop-blur-3xl p-1.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.03)] border border-white/60 max-w-xs mx-auto w-full">
+        <div className="flex glass-container p-1.5 rounded-full max-w-xs mx-auto w-full">
           <button onClick={() => setTabActual('ALUMNOS')} className={`flex-1 py-3 text-xs font-bold rounded-full transition-all cursor-pointer ${tabActual === 'ALUMNOS' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>Alumnado</button>
           <button onClick={() => setTabActual('ASIGNATURAS')} className={`flex-1 py-3 text-xs font-bold rounded-full transition-all cursor-pointer ${tabActual === 'ASIGNATURAS' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>Asignaturas</button>
         </div>
 
         {tabActual === 'ALUMNOS' && (
-          <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
+          <div className="glass-container rounded-[2.5rem] p-8 flex-1">
             <div className="flex items-center justify-between mb-8 px-2">
               <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Estudiantes Inscritos</h2>
               <span className="bg-[#0090d0]/10 text-[#0090d0] px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">{alumnos.length} Registros</span>
@@ -639,7 +639,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {alumnos.map((alumno) => (
-                  <div key={alumno.id} className="p-5 bg-white/80 hover:bg-white rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center justify-between transition-colors">
+                  <div key={alumno.id} className="p-5 glass-container hover:bg-white/40 rounded-[1.5rem] flex items-center justify-between transition-colors">
                     <div className="overflow-hidden pr-4">
                       <h3 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h3>
                       <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{alumno.email}</p>
@@ -659,7 +659,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         )}
 
         {tabActual === 'ASIGNATURAS' && (
-          <div className="bg-white/70 backdrop-blur-3xl rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,0,0,0.05)] border border-white/60 p-8 flex-1">
+          <div className="glass-container rounded-[2.5rem] p-8 flex-1">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
               <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Materias</h2>
               <div className="flex gap-3">
@@ -686,7 +686,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {asignaturas.map((asig) => (
-                  <div key={asig.id} className="p-6 bg-white/80 rounded-[2rem] border border-slate-100 flex flex-col justify-between hover:shadow-[0_20px_40px_rgba(0,144,208,0.1)] transition-all relative group">
+                  <div key={asig.id} className="p-6 glass-container rounded-[2rem] flex flex-col justify-between hover:shadow-[0_20px_40px_rgba(0,144,208,0.1)] transition-all relative group">
                     <button onClick={() => setModalEliminarAsig(asig.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-400 hover:text-white hover:bg-rose-500 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer" title="Eliminar">✕</button>
                     <div>
                       <h3 className="font-bold text-[#002b5c] text-lg pr-8">{asig.nombre}</h3>
@@ -728,7 +728,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       {/* --- MODAL: EXPORTADOR GLOBAL --- */}
       {modalExportadorGlobal && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
                 <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Exportación Global</h3>
@@ -783,7 +783,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       {/* --- MODAL: GESTIÓN DE ALUMNO --- */}
       {alumnoGestion && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-xl font-black text-[#002b5c] tracking-tight truncate pr-4">{alumnoGestion.nombre_completo}</h3>
@@ -845,7 +845,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       {/* --- OTROS MODALES (Crear, Eliminar, Exportar Individual) --- */}
       {modalAsignatura && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Crear Asignatura</h3>
             <p className="text-xs text-slate-500 font-medium mb-6">Completa los datos base.</p>
             <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
@@ -863,7 +863,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {modalEliminarAsig && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Eliminar Materia</h3>
             <p className="text-xs text-slate-500 font-medium mb-6">Perderás todos los historiales. Confirma tu identidad.</p>
             <input type="password" placeholder="Contraseña docente" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-center text-sm font-semibold"/>
@@ -877,7 +877,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {asignaturaSeleccionada && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/60 flex flex-col">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
                 <h3 className="text-xl font-black text-[#002b5c] tracking-tight">{asignaturaSeleccionada.nombre}</h3>
@@ -931,7 +931,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       {/* --- MODAL: CONFIRMAR EXPULSIÓN --- */}
       {modalExpulsion && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border border-rose-100">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border border-rose-100">
             <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </div>

@@ -328,7 +328,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       )}
 
       {/* CABECERA FLOTANTE (Glassmorphism auténtico) */}
-      <div className="flex items-center justify-between bg-white/60 backdrop-blur-2xl px-6 py-4 rounded-[2.5rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 mb-8 max-w-7xl mx-auto w-full transition-all">
+      <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-7xl mx-auto w-full transition-all">
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
@@ -371,7 +371,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           {cargandoClases ? (
             <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando materias del servidor...</div>
           ) : clasesHoy.length === 0 ? (
-            <div className="bg-white/50 backdrop-blur-xl rounded-[3rem] p-16 shadow-[0_8px_32px_rgba(0,43,92,0.03)] border border-white/60 text-center max-w-2xl mx-auto w-full mt-10">
+            <div className="glass-container rounded-[2.5rem] p-16 text-center max-w-2xl mx-auto w-full mt-10">
               <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6"><span className="text-3xl">📚</span></div>
               <p className="text-[#002b5c] font-black text-2xl tracking-tight">Cero asignaturas</p>
               <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">No tienes asignaturas dadas de alta. Ve a "Gestión Docente" en el menú principal para configurarlas.</p>
@@ -379,7 +379,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {clasesHoy.map((clase) => (
-                <div key={clase.id} className="bg-white/70 backdrop-blur-2xl rounded-[2.5rem] p-7 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border border-white/80 flex flex-col justify-between hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)] hover:-translate-y-1 transition-all duration-500 group safari-border-fix">
+                <div key={clase.id} className="glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)] hover:-translate-y-1 transition-all duration-500 group">
                   <div>
                     <div className="flex items-center justify-between mb-5">
                       <span className="px-4 py-1.5 bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold uppercase tracking-widest rounded-full group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>
@@ -400,7 +400,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 max-w-7xl mx-auto w-full">
           
           {/* PANEL IZQUIERDO: Escáner QR */}
-          <div className="xl:col-span-5 bg-white/60 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,43,92,0.08)] border border-white/60 flex flex-col items-center justify-center text-center relative overflow-hidden">
+          <div className="xl:col-span-5 glass-container rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
             
             {/* Orbe de luz de fondo */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.03] blur-[60px] pointer-events-none"></div>
@@ -443,7 +443,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           </div>
 
           {/* PANEL DERECHO: Lista de Alumnos */}
-          <div className="xl:col-span-7 bg-white/60 backdrop-blur-3xl p-8 rounded-[3rem] shadow-[0_15px_40px_-15px_rgba(0,43,92,0.08)] border border-white/60 flex flex-col relative overflow-hidden">
+          <div className="xl:col-span-7 glass-container rounded-[2.5rem] p-8 flex flex-col relative overflow-hidden">
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Alumnado</h2>
               <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Registros</span>
@@ -499,7 +499,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       {/* --- MODALES --- */}
       {mostrarModalCierre && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white rounded-[3rem] p-10 max-w-sm w-full shadow-2xl text-center border border-white/20">
+          <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
             <p className="text-xs text-slate-500 font-medium mb-8">Confirma tu identidad docente.</p>
             <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
@@ -513,7 +513,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
       {mostrarModalHistorial && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white/90 backdrop-blur-3xl rounded-[3rem] p-8 max-w-lg w-full shadow-2xl border border-white/60">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-lg w-full">
             <div className="flex items-center justify-between mb-8">
               <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial Docente</h3>
               <button onClick={() => setMostrarModalHistorial(false)} className="w-10 h-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer active:scale-90">

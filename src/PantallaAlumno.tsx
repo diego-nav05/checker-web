@@ -378,7 +378,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
       {/* CABECERA (Fuera de la cámara) */}
       {!camaraActiva && (
-        <div className="flex items-center justify-between bg-white/60 backdrop-blur-2xl px-6 py-4 rounded-[2.5rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 mb-8 max-w-4xl mx-auto w-full transition-all">
+        <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-4xl mx-auto w-full transition-all">
           <div className="flex items-center gap-4">
             <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
@@ -388,7 +388,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               <p className="text-xs font-semibold text-slate-400 tracking-wide mt-0.5 truncate max-w-[150px]">{nombre}</p>
             </div>
           </div>
-          <button onClick={() => setTabActual(tabActual === 'HORARIO' ? 'CALENDARIO' : 'HORARIO')} className={`px-6 py-3 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border ${tabActual === 'CALENDARIO' ? 'bg-[#002b5c] text-white shadow-md border-transparent' : 'bg-white text-[#002b5c] hover:bg-slate-50 border-slate-100 shadow-sm'}`}>
+          <button onClick={() => setTabActual(tabActual === 'HORARIO' ? 'CALENDARIO' : 'HORARIO')} className={`px-6 py-3 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border ${tabActual === 'CALENDARIO' ? 'bg-[#002b5c] text-white shadow-md border-transparent' : 'glass-button text-[#002b5c] hover:text-[#0090d0] hover:bg-white/40'}`}>
             {tabActual === 'HORARIO' ? 'Ver Historial' : 'Volver a Clases'}
           </button>
         </div>
@@ -400,7 +400,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-[fade-in_0.4s_ease-out]">
             
             {/* Botón Escáner Principal */}
-            <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto bg-gradient-to-br from-[#00a8f3] to-[#007fb8] rounded-[3rem] p-8 flex flex-col justify-between text-left cursor-pointer active:scale-[0.97] transition-all duration-500 shadow-[0_15px_40px_rgba(0,144,208,0.25)] hover:shadow-[0_20px_50px_rgba(0,144,208,0.35)] hover:-translate-y-1 relative overflow-hidden group safari-border-fix">
+            <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto bg-gradient-to-br from-[#00a8f3] to-[#007fb8] rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer active:scale-[0.97] transition-all duration-500 shadow-[0_15px_40px_rgba(0,144,208,0.25)] hover:shadow-[0_20px_50px_rgba(0,144,208,0.35)] hover:-translate-y-1 relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
               <div className="w-16 h-16 rounded-[1.5rem] bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8 border border-white/20 shadow-inner">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
@@ -409,7 +409,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             </button>
 
             {/* Panel de Asignaturas y Activas */}
-            <div className="md:col-span-2 bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 shadow-[0_15px_40px_-15px_rgba(0,43,92,0.08)] border border-white/60 flex flex-col">
+            <div className="md:col-span-2 glass-container rounded-[2.5rem] p-8 flex flex-col">
               
               {asistenciasActivas.length > 0 && (
                 <div className="mb-10">
@@ -442,7 +442,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               ) : (
                 <div className="space-y-3">
                   {clasesHoy.map((clase) => (
-                    <div key={clase.id} className="p-5 bg-white/80 hover:bg-white backdrop-blur-md rounded-[2rem] flex items-center justify-between border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-all hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)] group">
+                    <div key={clase.id} className="p-5 glass-container rounded-[2.5rem] flex items-center justify-between transition-all hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)] group">
                       <div>
                         <h4 className="font-bold text-[#002b5c] text-sm tracking-tight">{clase.nombre}</h4>
                         <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1.5">{clase.horario}</p>
@@ -458,7 +458,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
         {/* HISTORIAL */}
         {tabActual === 'CALENDARIO' && (
-          <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 shadow-[0_15px_40px_-15px_rgba(0,43,92,0.08)] border border-white/60 animate-[fade-in_0.4s_ease-out]">
+          <div className="glass-container rounded-[2.5rem] p-8 animate-[fade-in_0.4s_ease-out]">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
               <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial</h3>
               <button onClick={exportarHistorialAlumno} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
@@ -473,7 +473,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             ) : (
               <div className="space-y-3 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
                 {historial.map((registro, idx) => (
-                  <div key={idx} className="p-5 bg-white border border-slate-100 shadow-sm rounded-[2rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5">
+                  <div key={idx} className="p-5 glass-container rounded-[2.5rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5">
                     <div>
                       <h4 className="font-bold text-[#002b5c] text-sm tracking-tight mb-1.5">{registro.asignatura_nombre}</h4>
                       <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -499,7 +499,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
       {modalSalir && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-[200] animate-[fade-in_0.2s_ease-out]">
-          <div className="bg-white rounded-[3rem] p-10 max-w-sm w-full shadow-2xl text-center border border-white/20">
+          <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Anular Asistencia</h3>
             <p className="text-xs text-slate-500 font-medium mb-8">Introduce tu contraseña para confirmar.</p>
             <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
