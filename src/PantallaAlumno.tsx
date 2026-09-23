@@ -401,11 +401,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-[fade-in_0.4s_ease-out]">
             
             <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto primary-glow-btn rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer transition-all duration-500 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
-              <div className="w-16 h-16 rounded-[1.5rem] bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8 border border-white/30 shadow-[inset_0_2px_10px_rgba(255,255,255,0.4)]">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-white/30 rounded-full blur-3xl -mr-12 -mt-12 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/40"></div>
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#00a8f3]/50 rounded-full blur-2xl -ml-10 -mb-10 transition-transform duration-700 group-hover:scale-150"></div>
+              <div className="w-16 h-16 rounded-[1.5rem] bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8 border border-white/40 shadow-[inset_0_2px_15px_rgba(255,255,255,0.5)] z-10 transition-transform duration-300 group-hover:scale-110">
                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
               </div>
-              <h3 className="text-3xl font-black tracking-tight text-white leading-tight">Escanear<br/>Asistencia</h3>
+              <h3 className="text-3xl font-black tracking-tight text-white leading-tight z-10">Escanear<br/>Asistencia</h3>
             </button>
 
             {/* Panel de Asignaturas y Activas */}
@@ -440,14 +441,14 @@ export default function PantallaAlumno({ onVolver }: Props) {
                   <p className="text-sm font-medium text-slate-400">Escanea un QR por primera vez para enlazar materias.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {clasesHoy.map((clase) => (
-                    <div key={clase.id} className="p-5 bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] flex items-center justify-between transition-all hover:shadow-[0_12px_24px_rgba(0,43,92,0.06)] group shadow-[inset_0_2px_4px_rgba(255,255,255,0.7)] hover:-translate-y-0.5">
+                    <div key={clase.id} className="bento-card p-6 flex items-center justify-between group">
                       <div>
-                        <h4 className="font-bold text-[#002b5c] text-sm tracking-tight">{clase.nombre}</h4>
+                        <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight">{clase.nombre}</h4>
                         <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1.5">{clase.horario}</p>
                       </div>
-                      <span className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:bg-[#0090d0] group-hover:text-white transition-colors">{clase.aula}</span>
+                      <span className="bg-slate-50 border border-slate-100/80 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:bg-[#0090d0] group-hover:text-white transition-colors duration-300 shadow-sm">{clase.aula}</span>
                     </div>
                   ))}
                 </div>
@@ -471,18 +472,18 @@ export default function PantallaAlumno({ onVolver }: Props) {
             ) : historial.length === 0 ? (
               <div className="py-16 text-center text-slate-400 text-sm font-medium bg-slate-50/50 rounded-[2rem] border border-slate-100 border-dashed">No hay registros de asistencia previos.</div>
             ) : (
-              <div className="space-y-3 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
+              <div className="space-y-4 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
                 {historial.map((registro, idx) => (
-                  <div key={idx} className="p-5 bg-white/60 backdrop-blur-xl border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.7)] rounded-[2rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 hover:shadow-[0_12px_24px_rgba(0,43,92,0.06)] hover:-translate-y-0.5">
+                  <div key={idx} className="bento-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
                     <div>
-                      <h4 className="font-bold text-[#002b5c] text-sm tracking-tight mb-1.5">{registro.asignatura_nombre}</h4>
+                      <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight mb-2">{registro.asignatura_nombre}</h4>
                       <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString()}</span>
-                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">In: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">Out: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString()}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">In: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Out: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
                       </div>
                     </div>
-                    <span className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest text-center shadow-sm border
+                    <span className={`px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-center shadow-sm border transition-transform duration-300 group-hover:scale-105
                       ${registro.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                         registro.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
                         registro.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-rose-50 text-rose-600 border-rose-100'}

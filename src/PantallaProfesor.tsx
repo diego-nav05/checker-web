@@ -181,12 +181,16 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <title>QR Asistencia</title>
             <style>
               body { margin: 0; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #0f172a; color: white; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; overflow: hidden; }
-              .container { background: white; padding: 24px; border-radius: 36px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); position: relative; }
+              .container { background: white; padding: 24px; border-radius: 36px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); position: relative; display: inline-block; }
               .container::after { content: ''; position: absolute; inset: -20px; background: inherit; filter: blur(40px); z-index: -1; opacity: 0.2; }
-              img { width: 100%; max-width: 450px; height: auto; display: block; border-radius: 20px; }
+              img { width: 450px; max-width: 100vw; height: auto; display: block; border-radius: 20px; transition: width 0.1s ease-out; }
               .badge { margin-top: 32px; padding: 10px 28px; border-radius: 99px; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; font-size: 14px; transition: all 0.3s ease; }
               .info { margin-top: 16px; font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
               .dot { width: 8px; height: 8px; background-color: #10b981; border-radius: 50%; box-shadow: 0 0 10px #10b981; }
+              .zoom-controls { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.1); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 12px 24px; border-radius: 99px; display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity 0.3s; border: 1px solid rgba(255,255,255,0.2); }
+              body:hover .zoom-controls { opacity: 1; }
+              input[type=range] { -webkit-appearance: none; background: rgba(255,255,255,0.2); height: 6px; border-radius: 4px; outline: none; width: 150px; }
+              input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; background: white; border-radius: 50%; cursor: pointer; }
             </style>
           </head>
           <body>
@@ -195,6 +199,19 @@ export default function PantallaProfesor({ onVolver }: Props) {
               ${fase === 'ENTRADA' ? '📍 ESCANEO ENTRADA' : '🚪 ESCANEO SALIDA'}
             </div>
             <div class="info"><div class="dot"></div> En vivo</div>
+            
+            <div class="zoom-controls">
+              <span style="font-size:12px; font-weight:bold;">ZOOM</span>
+              <input type="range" id="zoom-slider" min="100" max="1500" value="450" />
+            </div>
+
+            <script>
+              const slider = document.getElementById('zoom-slider');
+              const img = document.getElementById('qr-img');
+              slider.addEventListener('input', (e) => {
+                img.style.width = e.target.value + 'px';
+              });
+            </script>
           </body>
         </html>
       `);
@@ -438,48 +455,92 @@ export default function PantallaProfesor({ onVolver }: Props) {
           {/* PANEL DERECHO: Lista de Alumnos */}
           <div className="xl:col-span-7 glass-container rounded-[2.5rem] p-8 flex flex-col relative overflow-hidden">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Alumnado</h2>
-              <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Registros</span>
+              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Gestión del Aula</h2>
+              <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Alumnos</span>
             </div>
             
-            <div className="flex-1 overflow-y-auto max-h-[550px] pr-3 space-y-3 scrollbar-hide relative z-10">
-              {asistencias.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 mt-12">
-                  <span className="text-4xl mb-4">🤳</span>
-                  <p className="text-sm font-medium tracking-wide">Esperando escaneos...</p>
-                </div>
-              ) : (
-                asistencias.map((item) => (
-                  <div key={item.id} className="p-4 bg-white/80 backdrop-blur-md rounded-[1.5rem] flex items-center justify-between gap-4 transition-all duration-300 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)] hover:-translate-y-0.5">
-                    <div>
-                      <p className="font-bold text-[#002b5c] text-sm tracking-tight">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
-                      <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1.5">
-                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        <span className="bg-slate-50 px-2 py-1 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-hidden relative z-10">
+              
+              {/* COLUMNA IZQUIERDA: COMPLETADOS */}
+              <div className="flex flex-col h-full">
+                <h3 className="text-sm font-bold text-emerald-600 mb-4 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
+                  {fase === 'ENTRADA' ? 'Presentes' : 'Han Salido'} ({
+                    asistencias.filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null).length
+                  })
+                </h3>
+                <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-hide">
+                  {asistencias
+                    .filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null)
+                    .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
+                    .map((item) => (
+                      <div key={item.id} className="bento-card p-4 flex flex-col gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                        <p className="font-bold text-[#002b5c] text-sm tracking-tight">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
+                        <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        </div>
+                        <select
+                          value={item.estado}
+                          onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
+                          className={`mt-2 text-[10px] font-bold uppercase tracking-widest px-3 py-2.5 rounded-xl outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border ${
+                            item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                            item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/20' : 'bg-rose-50 text-rose-600 border-rose-100'
+                          }`}
+                        >
+                          <option value="PRESENTE">Presente</option>
+                          <option value="RETRASO">Retraso</option>
+                          <option value="SE_FUE_A_MITAD">Abandono</option>
+                          <option value="FALTA_JUSTIFICADA">Justificado</option>
+                          <option value="FALTA_INJUSTIFICADA">Ausente</option>
+                        </select>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2.5">
-                      <select
-                        value={item.estado}
-                        onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                        className={`text-[10px] font-bold uppercase tracking-widest px-3 py-2.5 rounded-xl outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border ${
-                          item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                          item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                          item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                          item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/20' : 'bg-rose-50 text-rose-600 border-rose-100'
-                        }`}
-                      >
-                        <option value="PRESENTE">Presente</option>
-                        <option value="RETRASO">Retraso</option>
-                        <option value="SE_FUE_A_MITAD">Abandono</option>
-                        <option value="FALTA_JUSTIFICADA">Justificado</option>
-                        <option value="FALTA_INJUSTIFICADA">Ausente</option>
-                      </select>
-                    </div>
-                  </div>
-                ))
-              )}
+                    ))}
+                </div>
+              </div>
+
+              {/* COLUMNA DERECHA: PENDIENTES */}
+              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-6">
+                <h3 className="text-sm font-bold text-rose-500 mb-4 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 bg-rose-400 rounded-full shadow-[0_0_8px_rgba(251,113,133,0.6)]"></span>
+                  Pendientes ({
+                    asistencias.filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null).length
+                  })
+                </h3>
+                <div className="flex-1 overflow-y-auto pr-2 space-y-3 scrollbar-hide">
+                  {asistencias
+                    .filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null)
+                    .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
+                    .map((item) => (
+                      <div key={item.id} className="bento-card p-4 flex flex-col gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                        <p className="font-bold text-[#002b5c] text-sm tracking-tight">{item.perfiles?.nombre_completo || 'Alumno Registrado'}</p>
+                        <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                          <span className="bg-slate-50/80 px-2 py-1 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        </div>
+                        <select
+                          value={item.estado}
+                          onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
+                          className={`mt-2 text-[10px] font-bold uppercase tracking-widest px-3 py-2.5 rounded-xl outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border ${
+                            item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                            item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/20' : 'bg-rose-50 text-rose-600 border-rose-100'
+                          }`}
+                        >
+                          <option value="PRESENTE">Presente</option>
+                          <option value="RETRASO">Retraso</option>
+                          <option value="SE_FUE_A_MITAD">Abandono</option>
+                          <option value="FALTA_JUSTIFICADA">Justificado</option>
+                          <option value="FALTA_INJUSTIFICADA">Ausente</option>
+                        </select>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
