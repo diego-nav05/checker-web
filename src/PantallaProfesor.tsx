@@ -162,7 +162,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     };
     
     actualizarQR();
-    timerRef.current = setInterval(actualizarQR, 1000);
+    timerRef.current = setInterval(actualizarQR, 2000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [sesionId, secretTotp, fase]);
 
