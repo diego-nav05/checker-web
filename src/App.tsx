@@ -211,20 +211,20 @@ export default function App() {
 
       <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
-        <button onClick={manejarClickAlumnado} className="pantalla-transicion glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
+        <button onClick={manejarClickAlumnado} className="pantalla-transicion glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
           <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">ALUMNADO</span>
         </button>
 
-        <button onClick={() => irAPanel('PROFESORADO')} className="pantalla-transicion glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer">
+        <button onClick={() => irAPanel('PROFESORADO')} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer">
           <span className="text-[clamp(1.5rem,7vw,3.25rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">PROFESORADO</span>
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          <button onClick={() => irAPanel('GESTION')} className="pantalla-transicion dark-glow-btn relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
+          <button onClick={() => irAPanel('GESTION')} className="dark-glow-btn relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
             <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300">Gestión</span>
           </button>
 
-          <button onClick={() => irAPanel('REGISTRO')} className={`pantalla-transicion ${!alumnoVinculado ? 'primary-glow-btn' : 'glass-button'} relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer`}>
+          <button onClick={() => irAPanel('REGISTRO')} className={`${!alumnoVinculado ? 'primary-glow-btn' : 'glass-button'} relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer`}>
             <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors duration-300 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
               {!alumnoVinculado ? 'Vincular Móvil' : 'Mi Cuenta'}
             </span>

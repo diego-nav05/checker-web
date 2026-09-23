@@ -266,14 +266,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
     cargarAsistencias(sesionId!, diccionarioAlumnos); 
   };
 
-  const expulsarAlumno = async (asistenciaId: string, nombre: string) => {
-    const confirmar = window.confirm(`¿Expulsar a ${nombre}?`);
-    if (!confirmar) return;
-    await supabase.from('asistencias').update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null, hora_salida: null, manual: true }).eq('id', asistenciaId);
-    cargarAsistencias(sesionId!, diccionarioAlumnos);
-    mostrarNotificacion('Alumno expulsado.', 'info');
-  };
-
   const abrirHistorial = async () => {
     setMostrarModalHistorial(true);
     setCargandoHistorial(true);
@@ -483,10 +475,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         <option value="FALTA_JUSTIFICADA">Justificado</option>
                         <option value="FALTA_INJUSTIFICADA">Ausente</option>
                       </select>
-                      
-                      <button onClick={() => expulsarAlumno(item.id, item.perfiles?.nombre_completo || 'Alumno')} className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-rose-100 text-rose-400 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer active:scale-90 shadow-sm" title="Expulsar de clase">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
                     </div>
                   </div>
                 ))

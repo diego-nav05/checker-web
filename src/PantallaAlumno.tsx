@@ -306,7 +306,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
+    <div className="pantalla-transicion min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
+      <div className="glow-blob"></div>
       
       {/* NOTIFICACIONES */}
       {notificacion && (
@@ -399,11 +400,10 @@ export default function PantallaAlumno({ onVolver }: Props) {
         {tabActual === 'HORARIO' && !camaraActiva && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-[fade-in_0.4s_ease-out]">
             
-            {/* Botón Escáner Principal */}
-            <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto bg-gradient-to-br from-[#00a8f3] to-[#007fb8] rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer active:scale-[0.97] transition-all duration-500 shadow-[0_15px_40px_rgba(0,144,208,0.25)] hover:shadow-[0_20px_50px_rgba(0,144,208,0.35)] hover:-translate-y-1 relative overflow-hidden group">
+            <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto primary-glow-btn rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer transition-all duration-500 relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-40 h-40 bg-white/20 rounded-full blur-3xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
-              <div className="w-16 h-16 rounded-[1.5rem] bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8 border border-white/20 shadow-inner">
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+              <div className="w-16 h-16 rounded-[1.5rem] bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8 border border-white/30 shadow-[inset_0_2px_10px_rgba(255,255,255,0.4)]">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
               </div>
               <h3 className="text-3xl font-black tracking-tight text-white leading-tight">Escanear<br/>Asistencia</h3>
             </button>
@@ -442,12 +442,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
               ) : (
                 <div className="space-y-3">
                   {clasesHoy.map((clase) => (
-                    <div key={clase.id} className="p-5 glass-container rounded-[2.5rem] flex items-center justify-between transition-all hover:shadow-[0_8px_20px_rgba(0,0,0,0.06)] group">
+                    <div key={clase.id} className="p-5 bg-white/60 backdrop-blur-xl border border-white rounded-[2rem] flex items-center justify-between transition-all hover:shadow-[0_12px_24px_rgba(0,43,92,0.06)] group shadow-[inset_0_2px_4px_rgba(255,255,255,0.7)] hover:-translate-y-0.5">
                       <div>
                         <h4 className="font-bold text-[#002b5c] text-sm tracking-tight">{clase.nombre}</h4>
                         <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1.5">{clase.horario}</p>
                       </div>
-                      <span className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>
+                      <span className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-500 group-hover:bg-[#0090d0] group-hover:text-white transition-colors">{clase.aula}</span>
                     </div>
                   ))}
                 </div>
@@ -473,7 +473,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             ) : (
               <div className="space-y-3 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
                 {historial.map((registro, idx) => (
-                  <div key={idx} className="p-5 glass-container rounded-[2.5rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5">
+                  <div key={idx} className="p-5 bg-white/60 backdrop-blur-xl border border-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.7)] rounded-[2rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-300 hover:shadow-[0_12px_24px_rgba(0,43,92,0.06)] hover:-translate-y-0.5">
                     <div>
                       <h4 className="font-bold text-[#002b5c] text-sm tracking-tight mb-1.5">{registro.asignatura_nombre}</h4>
                       <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
