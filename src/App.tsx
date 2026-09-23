@@ -10,32 +10,115 @@ type Vista = 'INICIO' | 'ALUMNADO' | 'PROFESORADO' | 'REGISTRO' | 'GESTION';
 const GlobalAnimStyles = () => (
   <style>{`
     @keyframes suave {
-      0% { opacity: 0; transform: translateY(12px) scale(0.98); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
+      0% { opacity: 0; transform: translateY(24px) scale(0.92); filter: blur(8px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
     }
     .anim-suave {
-      animation: suave 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
+      animation: suave 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity, filter;
     }
     @keyframes drop-in {
-      0% { opacity: 0; transform: translateY(-16px) scale(0.96); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
+      0% { opacity: 0; transform: translateY(-16px) scale(0.92); filter: blur(8px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
     }
     .anim-drop {
-      animation: drop-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      will-change: transform, opacity;
+      animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      will-change: transform, opacity, filter;
+    }
+    
+    .glass-container {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
+      backdrop-filter: blur(32px);
+      -webkit-backdrop-filter: blur(32px);
+      box-shadow: 
+        0 24px 48px -12px rgba(0, 43, 92, 0.08),
+        0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+        0 1px 1px rgba(255, 255, 255, 0.9) inset;
+      transform: translateZ(0);
       -webkit-transform: translateZ(0);
+    }
+    
+    .glass-button {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.4) 100%);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow: 
+        0 8px 24px -6px rgba(0, 43, 92, 0.06),
+        0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+        0 1px 1px rgba(255, 255, 255, 0.9) inset;
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+    }
+    
+    .glass-button:hover {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.5) 100%);
+      box-shadow: 
+        0 16px 32px -8px rgba(0, 144, 208, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.8) inset,
+        0 1px 1px rgba(255, 255, 255, 1) inset;
+      transform: translateY(-4px) scale(1.01) translateZ(0);
+    }
+    
+    .glass-button:active {
+      transform: scale(0.97) translateZ(0);
+      transition: all 0.1s ease-out;
+    }
+    
+    .dark-glow-btn {
+      background: linear-gradient(135deg, #002b5c 0%, #001a38 100%);
+      box-shadow: 
+        0 8px 20px rgba(0, 43, 92, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
       transform: translateZ(0);
     }
-    .safari-border-fix {
-      -webkit-mask-image: -webkit-linear-gradient(white, white);
-      mask-image: linear-gradient(white, white);
-      -webkit-backface-visibility: hidden;
-      backface-visibility: hidden;
-      -webkit-transform: translate3d(0, 0, 0);
-      transform: translate3d(0, 0, 0);
+    
+    .dark-glow-btn:hover {
+      box-shadow: 
+        0 16px 32px rgba(0, 144, 208, 0.3),
+        0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+      transform: translateY(-4px) scale(1.01) translateZ(0);
+    }
+    
+    .dark-glow-btn:active {
+      transform: scale(0.97) translateZ(0);
+      transition: all 0.1s ease-out;
+    }
+
+    .primary-glow-btn {
+      background: linear-gradient(135deg, #0090d0 0%, #007fb8 100%);
+      box-shadow: 
+        0 8px 20px rgba(0, 144, 208, 0.25),
+        0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+      transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateZ(0);
+    }
+    
+    .primary-glow-btn:hover {
+      box-shadow: 
+        0 16px 32px rgba(0, 144, 208, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+      transform: translateY(-4px) scale(1.01) translateZ(0);
+    }
+    
+    .primary-glow-btn:active {
+      transform: scale(0.97) translateZ(0);
+      transition: all 0.1s ease-out;
+    }
+    
+    .glow-blob {
+      position: absolute;
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(0,144,208,0.12) 0%, rgba(0,144,208,0) 60%);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(40px);
     }
   `}</style>
 );
@@ -162,11 +245,11 @@ export default function App() {
     if (!notificacion) return null;
     return (
       <div className="fixed top-6 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-        <div className={`pointer-events-auto px-6 py-3.5 rounded-2xl sm:rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.25)] backdrop-blur-2xl flex items-center gap-3 anim-drop max-w-lg border text-center ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-          'bg-[#002b5c]/95 border-white/10 text-white'
-        }`}>
+        <div className={`pointer-events-auto px-6 py-3.5 rounded-2xl sm:rounded-full shadow-[0_16px_32px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 anim-drop max-w-lg border text-center ${
+          notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400/50 text-white' : 
+          notificacion.tipo === 'exito' ? 'bg-emerald-500/90 border-emerald-400/50 text-white' : 
+          'bg-[#002b5c]/90 border-white/20 text-white'
+        }`} style={{ boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.2), 0 10px 40px -10px rgba(0,0,0,0.25)' }}>
           <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
         </div>
       </div>
@@ -181,13 +264,11 @@ export default function App() {
       return (
         <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col items-center justify-center font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
           <GlobalAnimStyles />
-          <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
+          <div className="glow-blob"></div>
           
           <ToastNotificacion />
           
-          <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 anim-suave relative safari-border-fix">
-            <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
-            
+          <div className="glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
             <button 
               onClick={() => { 
                 setVista('INICIO'); 
@@ -195,7 +276,7 @@ export default function App() {
                 setEmailProfesor(''); 
                 setPassProfesor(''); 
               }} 
-              className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10"
+              className="w-11 h-11 flex items-center justify-center bg-white/80 hover:bg-white border border-slate-200/50 rounded-full text-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:scale-95 cursor-pointer mb-8 relative z-10 backdrop-blur-md"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
@@ -205,9 +286,9 @@ export default function App() {
             </h2>
 
             <form onSubmit={loginDocente} className="flex flex-col gap-4 relative z-10">
-              <input type="email" placeholder="Correo UNEATLANTICO" value={emailProfesor} onChange={(e) => setEmailProfesor(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
-              <input type="password" placeholder="Contraseña" value={passProfesor} onChange={(e) => setPassProfesor(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
-              <button type="submit" disabled={cargandoProfesor} className="w-full mt-4 py-4 bg-gradient-to-b from-[#002b5c] to-[#001a38] text-white font-bold rounded-[1.5rem] transition-all shadow-[0_8px_20px_rgb(0,43,92,0.3)] hover:shadow-[0_12px_25px_rgb(0,43,92,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide border border-[#002b5c]/50">
+              <input type="email" placeholder="Correo UNEATLANTICO" value={emailProfesor} onChange={(e) => setEmailProfesor(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-xl rounded-[1.25rem] border border-white focus:border-[#0090d0]/50 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]" required/>
+              <input type="password" placeholder="Contraseña" value={passProfesor} onChange={(e) => setPassProfesor(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-xl rounded-[1.25rem] border border-white focus:border-[#0090d0]/50 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]" required/>
+              <button type="submit" disabled={cargandoProfesor} className="w-full mt-4 py-4 dark-glow-btn text-white font-bold rounded-[1.25rem] transition-all active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide">
                 {cargandoProfesor ? 'Verificando...' : 'Acceder'}
               </button>
             </form>
@@ -221,31 +302,27 @@ export default function App() {
   return (
     <div className="min-h-[100dvh] bg-[#F0F4F8] flex items-center justify-center py-8 px-4 font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <GlobalAnimStyles />
-      <div className="absolute top-0 left-0 w-full h-[50vh] bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
+      <div className="glow-blob"></div>
       
       <ToastNotificacion />
 
       <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
-        <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] bg-white/60 backdrop-blur-3xl rounded-[3rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 flex flex-col items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.15)] hover:-translate-y-1 active:scale-[0.97] group overflow-hidden cursor-pointer mt-4 sm:mt-0 safari-border-fix">
-          <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
+        <button onClick={manejarClickAlumnado} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
           <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">ALUMNADO</span>
         </button>
 
-        <button onClick={() => irAPanel('PROFESORADO')} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] bg-white/60 backdrop-blur-3xl rounded-[3rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 flex flex-col items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.15)] hover:-translate-y-1 active:scale-[0.97] group overflow-hidden cursor-pointer safari-border-fix">
-          <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
+        <button onClick={() => irAPanel('PROFESORADO')} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer">
           <span className="text-[clamp(1.5rem,7vw,3.25rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">PROFESORADO</span>
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] bg-gradient-to-br from-[#002b5c] to-[#001a38] backdrop-blur-2xl rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_15px_35px_rgba(0,43,92,0.2)] border border-[#002b5c]/50 flex items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.35)] hover:-translate-y-1 active:scale-[0.96] group cursor-pointer overflow-hidden safari-border-fix">
-            <div className="absolute inset-0 rounded-[2rem] sm:rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] pointer-events-none"></div>
+          <button onClick={() => irAPanel('GESTION')} className="dark-glow-btn relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
             <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300">Gestión</span>
           </button>
 
-          <button onClick={() => irAPanel('REGISTRO')} className={`relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] backdrop-blur-3xl rounded-[2rem] sm:rounded-[2.5rem] border flex items-center justify-center transition-all duration-500 hover:-translate-y-1 active:scale-[0.96] group cursor-pointer overflow-hidden safari-border-fix ${!alumnoVinculado ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] shadow-[0_15px_35px_rgba(0,144,208,0.25)] border-[#0090d0]/50' : 'bg-white/60 shadow-[0_8px_30px_rgba(0,0,0,0.04)] border-white/50 hover:shadow-[0_15px_30px_rgba(0,0,0,0.08)] hover:bg-white'}`}>
-            <div className="absolute inset-0 rounded-[2rem] sm:rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
-            <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
+          <button onClick={() => irAPanel('REGISTRO')} className={`${!alumnoVinculado ? 'primary-glow-btn' : 'glass-button'} relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer`}>
+            <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors duration-300 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
               {!alumnoVinculado ? 'Vincular Móvil' : 'Mi Cuenta'}
             </span>
           </button>
