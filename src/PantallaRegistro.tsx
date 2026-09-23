@@ -162,10 +162,21 @@ export default function PantallaRegistro({ onVolver }: Props) {
             </button>
           </form>
 
-          <div className="mt-8 text-center">
-            <button onClick={() => { setEsRegistro(!esRegistro); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="text-xs font-bold text-slate-500 hover:text-[#0090d0] transition-colors cursor-pointer px-4 py-2 rounded-full hover:bg-slate-50">
-              {esRegistro ? 'Ya tengo una cuenta. Iniciar sesión.' : 'No tengo cuenta. Registrarme.'}
-            </button>
+          <div className="mt-8 text-center flex flex-col items-center gap-3">
+            <div className="w-16 h-[1px] bg-slate-200/60 mb-1"></div>
+            {esRegistro ? (
+              <button onClick={() => { setEsRegistro(false); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
+                  ¿Ya tienes cuenta? <span className="text-[#0090d0]">Vincula aquí</span>
+                </span>
+              </button>
+            ) : (
+              <button onClick={() => { setEsRegistro(true); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
+                  ¿Eres nuevo? <span className="text-[#002b5c] opacity-70 group-hover:opacity-100">Regístrate aquí</span>
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
