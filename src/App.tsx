@@ -204,12 +204,12 @@ export default function App() {
         </button>
 
         <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          <button onClick={() => irAPanel('GESTION')} className="dark-glow-btn relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
-            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300">Gestión</span>
+          <button onClick={() => irAPanel('GESTION')} className="glass-button relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
+            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-[#002b5c] tracking-tight group-hover:text-[#0090d0] transition-colors duration-300">Gestión</span>
           </button>
 
-          <button onClick={() => irAPanel('REGISTRO')} className={`${!alumnoVinculado ? 'primary-glow-btn' : 'glass-button'} relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer`}>
-            <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors duration-300 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
+          <button onClick={() => irAPanel('REGISTRO')} className="glass-button relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer">
+            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">
               {!alumnoVinculado ? 'Vincular Móvil' : 'Mi Cuenta'}
             </span>
           </button>
