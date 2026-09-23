@@ -400,13 +400,24 @@ export default function PantallaAlumno({ onVolver }: Props) {
         {tabActual === 'HORARIO' && !camaraActiva && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-[fade-in_0.4s_ease-out]">
             
-            <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto primary-glow-btn rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer transition-all duration-500 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-white/30 rounded-full blur-3xl -mr-12 -mt-12 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/40"></div>
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#00a8f3]/50 rounded-full blur-2xl -ml-10 -mb-10 transition-transform duration-700 group-hover:scale-150"></div>
-              <div className="w-16 h-16 rounded-[1.5rem] bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-8 border border-white/40 shadow-[inset_0_2px_15px_rgba(255,255,255,0.5)] z-10 transition-transform duration-300 group-hover:scale-110">
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+            <button onClick={() => setCamaraActiva(true)} className="md:col-span-1 aspect-square sm:aspect-auto primary-glow-btn rounded-[2.5rem] p-8 flex flex-col justify-between text-left cursor-pointer relative overflow-hidden group">
+              {/* Background glowing orbs */}
+              <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#00d2ff]/40 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-[#00d2ff]/50"></div>
+              <div className="absolute -bottom-16 -left-16 w-56 h-56 bg-[#002b5c]/40 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-[#002b5c]/50"></div>
+              
+              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl flex items-center justify-center text-white mb-8 border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.1),inset_0_1px_4px_rgba(255,255,255,0.4)] z-10 transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
+                <svg className="w-6 h-6 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
               </div>
-              <h3 className="text-3xl font-black tracking-tight text-white leading-tight z-10">Escanear<br/>Asistencia</h3>
+              
+              <div className="z-10 relative">
+                <h3 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-tight drop-shadow-md">Escanear</h3>
+                <p className="text-xl md:text-2xl font-bold tracking-tight text-white/80 leading-tight mt-1">Asistencia</p>
+                
+                <div className="mt-4 flex items-center gap-2 opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-md">Abrir cámara</span>
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                </div>
+              </div>
             </button>
 
             {/* Panel de Asignaturas y Activas */}
