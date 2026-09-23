@@ -487,11 +487,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[100px] shadow-[0_4px_20px_rgba(0,0,0,0.08),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:scale-105 ${
-                            item.estado === 'PRESENTE' ? 'bg-emerald-300/20 text-emerald-700 border-emerald-400/40 hover:bg-emerald-300/40 hover:shadow-[0_8px_25px_rgba(52,211,153,0.3)]' :
-                            item.estado === 'RETRASO' ? 'bg-amber-300/20 text-amber-700 border-amber-400/40 hover:bg-amber-300/40 hover:shadow-[0_8px_25px_rgba(251,191,36,0.3)]' :
-                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-300/20 text-purple-700 border-purple-400/40 hover:bg-purple-300/40 hover:shadow-[0_8px_25px_rgba(168,85,247,0.3)]' :
-                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0080b0] border-[#0090d0]/30 hover:bg-[#0090d0]/20 hover:shadow-[0_8px_25px_rgba(0,144,208,0.3)]' : 'bg-rose-300/20 text-rose-700 border-rose-400/40 hover:bg-rose-300/40 hover:shadow-[0_8px_25px_rgba(251,113,133,0.3)]'
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[100px] hover:scale-105 ${
+                            item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
+                            item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
+                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
+                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0090d0] border-[#0090d0]/40 shadow-[0_0_15px_rgba(0,144,208,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-[#0090d0]/20 hover:shadow-[0_0_25px_rgba(0,144,208,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' : 
+                            'bg-rose-500/10 text-rose-600 border-rose-400/50 shadow-[0_0_15px_rgba(251,113,133,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-rose-500/20 hover:shadow-[0_0_25px_rgba(251,113,133,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]'
                           }`}
                         >
                           <option value="PRESENTE">Presente</option>
@@ -531,11 +532,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[100px] shadow-[0_4px_20px_rgba(0,0,0,0.08),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:scale-105 ${
-                            item.estado === 'PRESENTE' ? 'bg-emerald-300/20 text-emerald-700 border-emerald-400/40 hover:bg-emerald-300/40 hover:shadow-[0_8px_25px_rgba(52,211,153,0.3)]' :
-                            item.estado === 'RETRASO' ? 'bg-amber-300/20 text-amber-700 border-amber-400/40 hover:bg-amber-300/40 hover:shadow-[0_8px_25px_rgba(251,191,36,0.3)]' :
-                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-300/20 text-purple-700 border-purple-400/40 hover:bg-purple-300/40 hover:shadow-[0_8px_25px_rgba(168,85,247,0.3)]' :
-                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0080b0] border-[#0090d0]/30 hover:bg-[#0090d0]/20 hover:shadow-[0_8px_25px_rgba(0,144,208,0.3)]' : 'bg-rose-300/20 text-rose-700 border-rose-400/40 hover:bg-rose-300/40 hover:shadow-[0_8px_25px_rgba(251,113,133,0.3)]'
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[100px] hover:scale-105 ${
+                            item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
+                            item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
+                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
+                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0090d0] border-[#0090d0]/40 shadow-[0_0_15px_rgba(0,144,208,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-[#0090d0]/20 hover:shadow-[0_0_25px_rgba(0,144,208,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' : 
+                            'bg-rose-500/10 text-rose-600 border-rose-400/50 shadow-[0_0_15px_rgba(251,113,133,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-rose-500/20 hover:shadow-[0_0_25px_rgba(251,113,133,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]'
                           }`}
                         >
                           <option value="PRESENTE">Presente</option>
