@@ -50,32 +50,16 @@ export default function App() {
   }, []);
 
   const irAPanel = (nuevaVista: Vista) => {
-    const doTransition = () => {
-      window.history.pushState({ panel: nuevaVista }, '');
-      setVista(nuevaVista);
-      setNotificacion(null);
-    };
-
-    if (!(document as any).startViewTransition) {
-      doTransition();
-    } else {
-      (document as any).startViewTransition(doTransition);
-    }
+    window.history.pushState({ panel: nuevaVista }, '');
+    setVista(nuevaVista);
+    setNotificacion(null);
   };
 
   const volverInicio = () => {
-    const doTransition = () => {
-      if (window.history.state?.panel !== 'INICIO') {
-        window.history.back();
-      } else {
-        setVista('INICIO');
-      }
-    };
-
-    if (!(document as any).startViewTransition) {
-      doTransition();
+    if (window.history.state?.panel !== 'INICIO') {
+      window.history.back();
     } else {
-      (document as any).startViewTransition(doTransition);
+      setVista('INICIO');
     }
   };
 
