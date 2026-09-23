@@ -142,7 +142,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
               if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
               
-              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. Vuelve a enfocar.');
+              if (Math.abs(Math.floor(Date.now() / 1000) - bloqueTiempo) > 1) throw new Error('Código caducado. Vuelve a enfocar.');
               
               const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
               if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
@@ -218,7 +218,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
     };
   }, [camaraActiva, alumnoId]);
 
-  // SISTEMA DE ZOOM HÍBRIDO CON TYPESCRIPT CORREGIDO
+  // SISTEMA DE ZOOM HÍBRIDO (Hardware + Software)
   const aplicarZoom = async (nivel: number) => {
     setZoomActual(nivel);
     try {
@@ -228,24 +228,30 @@ export default function PantallaAlumno({ onVolver }: Props) {
       const stream = videoElement.srcObject as MediaStream;
       if (stream) {
         const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities ? (track.getCapabilities() as any) : {};
         
-        // CORRECCIÓN: Forzamos el tipado a 'any' para evitar que TS bloquee la API experimental de zoom
-        const capabilities = track.getCapabilities ? track.getCapabilities() as any : {};
-        
-        // 1. Intento por Hardware (Android / iOS 17+)
+        // 1. Intento por Hardware (Android Chrome / navegadores con soporte de MediaTrackCapabilities.zoom)
         if (capabilities.zoom) {
-          const maxZoom = capabilities.zoom.max || 3;
-          const targetZoom = Math.min(nivel, maxZoom);
-          await track.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
-          videoElement.style.transform = `scale(1)`; // Reseteamos CSS si hay hardware
+          const minZoom = capabilities.zoom.min || 1;
+          const maxZoom = capabilities.zoom.max || 10;
+          const factor = minZoom >= 100 ? 100 : 1; // Maneja sensores en escala porcentual (100-800)
+          const hwZoom = Math.min(Math.max(nivel * factor, minZoom), maxZoom);
+          
+          await track.applyConstraints({ advanced: [{ zoom: hwZoom }] } as any);
+          
+          // Si el nivel pedido supera lo que el hardware soporta, compensamos el resto con CSS scale
+          const nivelEfectivoHw = hwZoom / factor;
+          const escalaRestante = nivel > nivelEfectivoHw ? nivel / nivelEfectivoHw : 1;
+          videoElement.style.transform = `scale(${escalaRestante})`;
+          videoElement.style.transformOrigin = 'center center';
           return;
         }
       }
-      // 2. Intento por Software (Fallback para iPhones antiguos y webkit estricto)
+      // 2. Intento por Software / CSS (iPhones, Safari y navegadores sin zoom por hardware)
       videoElement.style.transform = `scale(${nivel})`;
       videoElement.style.transformOrigin = 'center center';
     } catch (e) {
-      console.log("Fallback a zoom digital por políticas del navegador");
+      console.log("Fallback a zoom digital por políticas del navegador:", e);
       const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
       if (videoElement) {
         videoElement.style.transform = `scale(${nivel})`;
@@ -257,6 +263,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const cerrarCamara = () => {
     if (qrScannerRef.current) qrScannerRef.current.stop().catch(()=>{});
     setCamaraActiva(false);
+    setZoomActual(1);
   };
 
   const confirmarSalidaSegura = async () => {
@@ -325,20 +332,39 @@ export default function PantallaAlumno({ onVolver }: Props) {
             <div className="w-12"></div> {/* Espaciador para centrar el titulo */}
           </div>
 
-          {/* Visor UI (Cuadrado central) */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[70vw] max-w-[300px] aspect-square relative">
-              {/* Esquinas Lector */}
-              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/80 rounded-tl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
-              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/80 rounded-tr-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
-              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/80 rounded-bl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
-              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white/80 rounded-br-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+          {/* Visor UI (Cuadrado central con máscara de enfoque y esquinas luminosas) */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-40">
+            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] shadow-[0_0_0_9999px_rgba(0,0,0,0.52)] border border-white/20">
+              {/* Esquinas Lector Neón Cyan */}
+              <div className="absolute -top-0.5 -left-0.5 w-10 h-10 border-t-[3.5px] border-l-[3.5px] border-[#38bdf8] rounded-tl-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
+              <div className="absolute -top-0.5 -right-0.5 w-10 h-10 border-t-[3.5px] border-r-[3.5px] border-[#38bdf8] rounded-tr-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
+              <div className="absolute -bottom-0.5 -left-0.5 w-10 h-10 border-b-[3.5px] border-l-[3.5px] border-[#38bdf8] rounded-bl-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-10 h-10 border-b-[3.5px] border-r-[3.5px] border-[#38bdf8] rounded-br-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
+
+              {/* Láser de Escaneo Suave */}
+              {!procesandoQr && (
+                <div className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent shadow-[0_0_12px_#38bdf8] animate-qr-laser"></div>
+              )}
+
+              {/* Retícula sutil en el centro */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-25">
+                <div className="w-5 h-0.5 bg-white/60 rounded-full"></div>
+                <div className="h-5 w-0.5 bg-white/60 rounded-full absolute"></div>
+              </div>
               
+              {/* Overlay mientras procesa el QR */}
               {procesandoQr && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl transition-all">
-                  <div className="w-10 h-10 border-4 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.5)]"></div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded-[2rem] transition-all">
+                  <div className="w-11 h-11 border-4 border-emerald-400/20 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.6)]"></div>
+                  <span className="text-white text-[11px] font-bold tracking-widest uppercase mt-3 text-emerald-300">Validando QR</span>
                 </div>
               )}
+            </div>
+
+            {/* Píldora guía */}
+            <div className="mt-7 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/80 text-[11px] font-medium tracking-wide flex items-center gap-2 shadow-lg">
+              <span className="w-2 h-2 rounded-full bg-[#38bdf8] animate-pulse"></span>
+              Centra el código en el recuadro
             </div>
           </div>
 
@@ -348,14 +374,23 @@ export default function PantallaAlumno({ onVolver }: Props) {
           </div>
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}
-          <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
-            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
-            <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
-              {[1, 2, 3].map((nivel) => (
+          <div className="absolute bottom-0 left-0 right-0 p-6 pb-12 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/95 via-black/70 to-transparent">
+            <div className="flex items-center gap-1.5 mb-3 text-white/60">
+              <svg className="w-3.5 h-3.5 text-[#38bdf8]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
+              </svg>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Ajuste de Lente</span>
+            </div>
+            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-2xl p-1.5 rounded-full border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+              {[1, 2, 4, 6].map((nivel) => (
                 <button
                   key={nivel}
                   onClick={() => aplicarZoom(nivel)}
-                  className={`w-12 h-12 rounded-full font-bold text-sm transition-all duration-300 ${zoomActual === nivel ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-transparent text-white/70 hover:bg-white/10 hover:text-white'}`}
+                  className={`w-11 h-11 rounded-full font-black text-xs transition-all duration-300 flex items-center justify-center cursor-pointer active:scale-90 ${
+                    zoomActual === nivel
+                      ? 'bg-white text-slate-950 shadow-[0_0_20px_rgba(255,255,255,0.45)] scale-105'
+                      : 'bg-white/5 text-white/80 hover:bg-white/15 hover:text-white'
+                  }`}
                 >
                   {nivel}x
                 </button>
