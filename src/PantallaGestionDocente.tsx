@@ -357,7 +357,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const cabeceras = Object.keys(data.filas[0]);
       const lineasTSV = [
         cabeceras.join('\t'),
-        ...data.filas.map((fila) => cabeceras.map((campo) => `${fila[campo] || ''}`).join('\t'))
+        ...data.filas.map((fila) => cabeceras.map((campo) => `${fila[campo] ?? ''}`).join('\t'))
       ].join('\n');
 
       const textArea = document.createElement("textarea");
@@ -529,7 +529,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         lineasTSV += `[ MATERIA: ${asig.nombre.toUpperCase()} ]\n`;
         const cabeceras = Object.keys(asig.filas[0]);
         lineasTSV += cabeceras.join('\t') + '\n';
-        lineasTSV += asig.filas.map(fila => cabeceras.map(campo => `${fila[campo] || ''}`).join('\t')).join('\n');
+        lineasTSV += asig.filas.map(fila => cabeceras.map(campo => `${fila[campo] ?? ''}`).join('\t')).join('\n');
       });
 
       const textArea = document.createElement("textarea");
