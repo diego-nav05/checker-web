@@ -238,7 +238,10 @@ export default function PantallaAlumno({ onVolver }: Props) {
           const maxZoom = capabilities.zoom.max || 10;
           const targetZoom = Math.min(nivel, maxZoom);
           await track.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
-          videoElement.style.transform = `scale(1)`; // Reseteamos CSS si hay hardware
+          
+          const softwareZoom = nivel > targetZoom ? (nivel / targetZoom) : 1;
+          videoElement.style.transform = `scale(${softwareZoom})`;
+          videoElement.style.transformOrigin = 'center center';
           return;
         }
       }
