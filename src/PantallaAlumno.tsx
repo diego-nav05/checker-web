@@ -306,7 +306,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   };
 
   return (
-    <div className="pantalla-transicion min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
       
       {/* NOTIFICACIONES */}

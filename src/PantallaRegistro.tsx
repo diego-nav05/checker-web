@@ -124,7 +124,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
         </div>
       )}
 
-      <div className="pantalla-transicion glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
+      <div className="glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
         
         <button onClick={onVolver} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>

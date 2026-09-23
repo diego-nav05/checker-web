@@ -150,14 +150,11 @@ input[type="date"] {
   animation-duration: 0.8s;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
-::view-transition-old(pantalla) {
+::view-transition-old(root) {
   animation: fade-out 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-::view-transition-new(pantalla) {
+::view-transition-new(root) {
   animation: suave 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-/* Utility to bind transitioning elements */
-.pantalla-transicion {
-  view-transition-name: pantalla;
-}
+

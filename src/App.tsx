@@ -171,7 +171,7 @@ export default function App() {
           
           <ToastNotificacion />
           
-          <div className="pantalla-transicion glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
+          <div className="glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
             <button 
               onClick={() => { 
                 setVista('INICIO'); 
@@ -211,7 +211,7 @@ export default function App() {
 
       <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
-        <button onClick={manejarClickAlumnado} className="pantalla-transicion glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
+        <button onClick={manejarClickAlumnado} className="glass-button relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0">
           <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300">ALUMNADO</span>
         </button>
 

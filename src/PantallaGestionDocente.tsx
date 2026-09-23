@@ -596,8 +596,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative">
-      
+    <div className="min-h-[100dvh] bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
+      <div className="glow-blob"></div>
+
       {notificacion && (
         <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
           notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
