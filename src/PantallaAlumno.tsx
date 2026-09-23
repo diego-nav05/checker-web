@@ -235,7 +235,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
         
         // 1. Intento por Hardware (Android / iOS 17+)
         if (capabilities.zoom) {
-          const maxZoom = capabilities.zoom.max || 6;
+          const maxZoom = capabilities.zoom.max || 10;
           const targetZoom = Math.min(nivel, maxZoom);
           await track.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
           videoElement.style.transform = `scale(1)`; // Reseteamos CSS si hay hardware
@@ -352,7 +352,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
           <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
             <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
-              {[1, 2, 4, 6].map((nivel) => (
+              {[1, 2, 4, 7, 10].map((nivel) => (
                 <button
                   key={nivel}
                   onClick={() => aplicarZoom(nivel)}
