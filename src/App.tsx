@@ -98,6 +98,18 @@ export default function App() {
     irAPanel('GESTION');
   };
 
+  const manejarClickProfesorado = () => {
+    const idGuardado = localStorage.getItem('checker_alumno_id');
+    const rolActual = localStorage.getItem('checker_rol');
+
+    if (idGuardado && rolActual !== 'profesor') {
+      mostrarNotificacion('Solo acceso docente. Para desvincular tu móvil, debes pedírselo a un profesor.', 'error');
+      return;
+    }
+
+    irAPanel('PROFESORADO');
+  };
+
   const loginDocente = async (e: React.FormEvent) => {
     e.preventDefault();
     setNotificacion(null);
@@ -213,7 +225,7 @@ export default function App() {
           <span className="text-[clamp(2rem,8vw,3.5rem)] font-black tracking-tighter text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10 drop-shadow-sm">ALUMNADO</span>
         </button>
 
-        <button onClick={() => irAPanel('PROFESORADO')} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[130px] rounded-full flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.12)] bg-[#F0F4F8]/80 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
+        <button onClick={manejarClickProfesorado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[130px] rounded-full flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.12)] bg-[#F0F4F8]/80 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#002b5c]/5 rounded-full blur-2xl -ml-10 -mb-10 transition-transform duration-700 group-hover:scale-150"></div>
           <span className="text-[clamp(1.75rem,7vw,3.25rem)] font-black tracking-tighter text-[#002b5c]/90 group-hover:text-[#0090d0] transition-colors duration-300 relative z-10 drop-shadow-sm">PROFESORADO</span>
