@@ -142,7 +142,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
               if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
               
-              if (Math.abs(Math.floor(Date.now() / 1000) - bloqueTiempo) > 4) throw new Error('Código caducado. Vuelve a enfocar.');
+              if (Math.abs(Math.floor(Date.now() / 2000) - bloqueTiempo) > 2) throw new Error('Código caducado. Vuelve a enfocar.');
               
               const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
               if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
@@ -197,7 +197,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             }
           };
 
-          await html5QrCode.start({ facingMode: "environment" }, { fps: 15 }, onScanSuccess, () => {});
+          await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
         } catch {
           if (isMounted) {
             mostrarNotificacion('Error conectando con la cámara.', 'error');
@@ -218,7 +218,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
     };
   }, [camaraActiva, alumnoId]);
 
-  // SISTEMA DE ZOOM HÍBRIDO (Hardware + Software)
+  // SISTEMA DE ZOOM HÍBRIDO CON TYPESCRIPT CORREGIDO
   const aplicarZoom = async (nivel: number) => {
     setZoomActual(nivel);
     try {
@@ -228,18 +228,18 @@ export default function PantallaAlumno({ onVolver }: Props) {
       const stream = videoElement.srcObject as MediaStream;
       if (stream) {
         const track = stream.getVideoTracks()[0];
-        const capabilities = track.getCapabilities ? (track.getCapabilities() as any) : {};
         
-        // 1. Intento por Hardware (Android Chrome / navegadores con soporte de MediaTrackCapabilities.zoom)
+        // CORRECCIÓN: Forzamos el tipado a 'any' para evitar que TS bloquee la API experimental de zoom
+        const capabilities = track.getCapabilities ? track.getCapabilities() as any : {};
+        
+        // 1. Intento por Hardware (Android / iOS 17+)
         if (capabilities.zoom) {
+          const maxZoom = capabilities.zoom.max || 3;
           const minZoom = capabilities.zoom.min || 1;
-          const maxZoom = capabilities.zoom.max || 10;
-          const factor = minZoom >= 100 ? 100 : 1; // Maneja sensores en escala porcentual (100-800)
+          const factor = minZoom >= 100 ? 100 : 1;
           const hwZoom = Math.min(Math.max(nivel * factor, minZoom), maxZoom);
-          
           await track.applyConstraints({ advanced: [{ zoom: hwZoom }] } as any);
           
-          // Si el nivel pedido supera lo que el hardware soporta, compensamos el resto con CSS scale
           const nivelEfectivoHw = hwZoom / factor;
           const escalaRestante = nivel > nivelEfectivoHw ? nivel / nivelEfectivoHw : 1;
           videoElement.style.transform = `scale(${escalaRestante})`;
@@ -247,11 +247,11 @@ export default function PantallaAlumno({ onVolver }: Props) {
           return;
         }
       }
-      // 2. Intento por Software / CSS (iPhones, Safari y navegadores sin zoom por hardware)
+      // 2. Intento por Software (Fallback para iPhones antiguos y webkit estricto)
       videoElement.style.transform = `scale(${nivel})`;
       videoElement.style.transformOrigin = 'center center';
     } catch (e) {
-      console.log("Fallback a zoom digital por políticas del navegador:", e);
+      console.log("Fallback a zoom digital por políticas del navegador");
       const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
       if (videoElement) {
         videoElement.style.transform = `scale(${nivel})`;
@@ -263,7 +263,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const cerrarCamara = () => {
     if (qrScannerRef.current) qrScannerRef.current.stop().catch(()=>{});
     setCamaraActiva(false);
-    setZoomActual(1);
   };
 
   const confirmarSalidaSegura = async () => {
@@ -332,59 +331,37 @@ export default function PantallaAlumno({ onVolver }: Props) {
             <div className="w-12"></div> {/* Espaciador para centrar el titulo */}
           </div>
 
-          {/* Visor UI (Cuadrado central con máscara de enfoque) */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-40">
-            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] border border-white/10">
-              {/* Esquinas Limpias y Blancas */}
+          {/* Visor UI (Cuadrado central) */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
+            <div className="w-[70vw] max-w-[280px] aspect-square relative rounded-[2rem] border border-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]">
+              {/* Esquinas Blancas */}
               <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[4px] border-l-[4px] border-white rounded-tl-[2rem]"></div>
               <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[4px] border-r-[4px] border-white rounded-tr-[2rem]"></div>
               <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[4px] border-l-[4px] border-white rounded-bl-[2rem]"></div>
               <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[4px] border-r-[4px] border-white rounded-br-[2rem]"></div>
-
-              {/* Láser de Escaneo Sutil */}
-              {!procesandoQr && (
-                <div className="absolute left-6 right-6 h-[2px] bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.5)] animate-qr-laser rounded-full"></div>
-              )}
-
-              {/* Retícula sutil en el centro */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                <div className="w-4 h-px bg-white rounded-full"></div>
-                <div className="h-4 w-px bg-white rounded-full absolute"></div>
-              </div>
               
-              {/* Overlay mientras procesa el QR */}
               {procesandoQr && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded-[2rem] transition-all">
-                  <div className="w-10 h-10 border-3 border-white/20 border-t-white rounded-full animate-spin"></div>
-                  <span className="text-white text-[11px] font-bold tracking-widest uppercase mt-4">Procesando</span>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl transition-all">
+                  <div className="w-10 h-10 border-4 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.5)]"></div>
                 </div>
               )}
-            </div>
-
-            {/* Píldora guía */}
-            <div className="mt-8 px-5 py-2 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-white/90 text-xs font-medium tracking-wide flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-              Centra el código en el recuadro
             </div>
           </div>
 
           {/* Contenedor de Video del Escáner */}
           <div className="flex-1 w-full h-full overflow-hidden bg-black flex items-center justify-center">
-            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300"></div>
+            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300 [&_#qr-shaded-region]:hidden"></div>
           </div>
 
-          {/* Barra Inferior (Controles de Zoom) */}
-          <div className="absolute bottom-10 left-0 right-0 flex justify-center z-50 pointer-events-none">
-            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xl p-1.5 rounded-full border border-white/10 pointer-events-auto">
+          {/* Barra Inferior (Controles de Zoom Híbrido) */}
+          <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
+            <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
               {[1, 2, 4, 6].map((nivel) => (
                 <button
                   key={nivel}
                   onClick={() => aplicarZoom(nivel)}
-                  className={`w-11 h-11 rounded-full font-semibold text-[13px] transition-all duration-300 flex items-center justify-center cursor-pointer active:scale-95 ${
-                    zoomActual === nivel
-                      ? 'bg-white text-black shadow-lg scale-105'
-                      : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
-                  }`}
+                  className={`w-12 h-12 rounded-full font-bold text-sm transition-all duration-300 ${zoomActual === nivel ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-transparent text-white/70 hover:bg-white/10 hover:text-white'}`}
                 >
                   {nivel}x
                 </button>
