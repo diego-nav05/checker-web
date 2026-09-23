@@ -308,7 +308,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const sesion = sesionesFiltradas.find(s => s.id === asist.sesion_id);
       if (sesion && reporteAlumnos[asist.alumno_id]) {
         if (exportacionBinaria) {
-          reporteAlumnos[asist.alumno_id][sesion.fechaStr] = 1;
+          const st = asist.estado?.toUpperCase() || '';
+          if (st.includes('AUSENTE') || st.includes('INJUSTIFICADA') || st === 'FALTA') {
+            reporteAlumnos[asist.alumno_id][sesion.fechaStr] = 0;
+          } else {
+            reporteAlumnos[asist.alumno_id][sesion.fechaStr] = 1;
+          }
         } else {
           const inTime = formatTime(asist.hora_entrada);
           const outTime = formatTime(asist.hora_salida);
@@ -460,7 +465,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         const sesion = sesionesFiltradas.find(s => s.id === a.sesion_id);
         if (sesion && reporte[a.alumno_id]) {
           if (exportacionBinaria) {
-            reporte[a.alumno_id][sesion.fechaStr] = 1;
+            const st = a.estado?.toUpperCase() || '';
+            if (st.includes('AUSENTE') || st.includes('INJUSTIFICADA') || st === 'FALTA') {
+              reporte[a.alumno_id][sesion.fechaStr] = 0;
+            } else {
+              reporte[a.alumno_id][sesion.fechaStr] = 1;
+            }
           } else {
             const inTime = formatTime(a.hora_entrada);
             const outTime = formatTime(a.hora_salida);
@@ -744,8 +754,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[#002b5c]">Formato Binario Simplificado</p>
-                  <p className="text-[10px] text-slate-500 font-medium">Solo exportar 1 (presente) o 0 (falta)</p>
+                  <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
                 </div>
               </div>
 
@@ -893,8 +902,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[#002b5c]">Formato Binario Simplificado</p>
-                  <p className="text-[10px] text-slate-500 font-medium">Solo exportar 1 (presente) o 0 (falta)</p>
+                  <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
                 </div>
               </div>
 
