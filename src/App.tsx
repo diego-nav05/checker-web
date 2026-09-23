@@ -86,6 +86,18 @@ export default function App() {
     irAPanel('ALUMNADO');
   };
 
+  const manejarClickGestion = () => {
+    const idGuardado = localStorage.getItem('checker_alumno_id');
+    const rolActual = localStorage.getItem('checker_rol');
+
+    if (idGuardado && rolActual !== 'profesor') {
+      mostrarNotificacion('Solo acceso docente. Para desvincular tu móvil, debes pedírselo a un profesor.', 'error');
+      return;
+    }
+
+    irAPanel('GESTION');
+  };
+
   const loginDocente = async (e: React.FormEvent) => {
     e.preventDefault();
     setNotificacion(null);
@@ -208,7 +220,7 @@ export default function App() {
         </button>
 
         <div className="grid grid-cols-2 gap-4 sm:gap-5 mt-1 w-full">
-          <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-auto sm:h-[130px] rounded-full flex flex-col items-center justify-center gap-2 group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.3)] bg-gradient-to-br from-[#002b5c]/90 to-[#001530]/90 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
+          <button onClick={manejarClickGestion} className="relative w-full aspect-square sm:aspect-auto sm:h-[130px] rounded-full flex flex-col items-center justify-center gap-2 group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.3)] bg-gradient-to-br from-[#002b5c]/90 to-[#001530]/90 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-[30px] -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/10"></div>
             <svg className="w-8 h-8 text-white/80 group-hover:text-white transition-colors duration-300 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             <span className="text-[clamp(1.15rem,5vw,1.5rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300 relative z-10">Gestión</span>
