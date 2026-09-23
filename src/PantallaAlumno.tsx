@@ -401,22 +401,21 @@ export default function PantallaAlumno({ onVolver }: Props) {
           <div className="flex flex-col md:flex-row gap-6 animate-[fade-in_0.4s_ease-out]">
             
             {/* Columna Izquierda: Escanear */}
-            <button onClick={() => setCamaraActiva(true)} className="w-full md:w-1/3 aspect-square sm:aspect-auto sm:min-h-[380px] primary-glow-btn rounded-[3rem] p-8 flex flex-col justify-between text-left cursor-pointer relative overflow-hidden group">
+            <button onClick={() => setCamaraActiva(true)} className="w-full md:w-1/3 aspect-square sm:aspect-auto sm:min-h-[380px] bg-gradient-to-br from-[#0090d0]/90 to-[#002b5c]/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,144,208,0.2)] rounded-[3rem] p-8 flex flex-col items-center justify-center text-center cursor-pointer relative overflow-hidden group">
               {/* Background glowing orbs */}
-              <div className="absolute -top-12 -right-12 w-48 h-48 bg-[#00d2ff]/40 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-[#00d2ff]/50"></div>
-              <div className="absolute -bottom-16 -left-16 w-56 h-56 bg-[#002b5c]/40 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-[#002b5c]/50"></div>
+              <div className="absolute top-0 right-0 w-48 h-48 bg-[#00d2ff]/30 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-[#00d2ff]/40"></div>
+              <div className="absolute bottom-0 left-0 w-56 h-56 bg-white/10 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/20"></div>
               
-              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur-xl flex items-center justify-center text-white mb-8 border border-white/20 shadow-[0_4px_16px_rgba(0,0,0,0.1),inset_0_1px_4px_rgba(255,255,255,0.4)] z-10 transition-all duration-300 group-hover:scale-110 group-hover:bg-white/20">
-                <svg className="w-6 h-6 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+              <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center text-white mb-6 border border-white/30 shadow-[0_4px_20px_rgba(0,0,0,0.15),inset_0_1px_4px_rgba(255,255,255,0.5)] z-10 transition-all duration-500 group-hover:scale-110 group-hover:bg-white/30">
+                <svg className="w-10 h-10 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
               </div>
               
-              <div className="z-10 relative mt-auto">
+              <div className="z-10 relative">
                 <h3 className="text-3xl md:text-4xl font-black tracking-tight text-white leading-tight drop-shadow-md">Escanear</h3>
-                <p className="text-xl md:text-2xl font-bold tracking-tight text-white/80 leading-tight mt-1">Asistencia</p>
+                <p className="text-lg md:text-xl font-bold tracking-tight text-white/80 leading-tight mt-1">Asistencia</p>
                 
-                <div className="mt-4 flex items-center gap-2 opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white bg-white/20 px-3 py-1.5 rounded-full backdrop-blur-md">Abrir cámara</span>
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                <div className="mt-6 flex items-center justify-center gap-2 opacity-0 -translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#002b5c] bg-white px-4 py-2 rounded-full shadow-lg">Abrir cámara</span>
                 </div>
               </div>
             </button>
@@ -449,9 +448,16 @@ export default function PantallaAlumno({ onVolver }: Props) {
               )}
 
               {/* Mis Asignaturas */}
-              <div className="glass-container rounded-[3rem] p-6 sm:p-8 flex-1 flex flex-col relative overflow-hidden">
-                <div className="absolute bottom-0 right-0 w-64 h-64 bg-[#0090d0]/5 rounded-full blur-3xl -mr-20 -mb-20"></div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-6 relative z-10">Mis Asignaturas</h3>
+              <div className="bg-white/30 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.03)] rounded-[3rem] p-6 sm:p-8 flex-1 flex flex-col relative overflow-hidden group">
+                <div className="absolute bottom-0 right-0 w-64 h-64 bg-[#0090d0]/10 rounded-full blur-[60px] -mr-20 -mb-20 transition-transform duration-700 group-hover:scale-110"></div>
+                <div className="absolute top-0 left-0 w-40 h-40 bg-white/40 rounded-full blur-[40px] -ml-10 -mt-10"></div>
+                
+                <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-6 relative z-10 flex items-center gap-3">
+                  Mis Asignaturas
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0090d0]/10 text-[#0090d0] text-xs font-bold">
+                    {clasesHoy.length}
+                  </span>
+                </h3>
                 
                 {cargandoClases ? (
                   <div className="flex-1 flex justify-center items-center py-10 text-[#0090d0]/60 font-semibold tracking-wide animate-pulse relative z-10">Sincronizando clases...</div>
@@ -462,12 +468,17 @@ export default function PantallaAlumno({ onVolver }: Props) {
                 ) : (
                   <div className="space-y-4 relative z-10">
                     {clasesHoy.map((clase) => (
-                      <div key={clase.id} className="bento-card p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group/card bg-white/70 backdrop-blur-xl border border-white/80 hover:bg-white hover:shadow-[0_8px_30px_rgba(0,144,208,0.1)] hover:-translate-y-0.5 transition-all duration-300">
-                        <div>
-                          <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight">{clase.nombre}</h4>
-                          <p className="text-[11px] font-bold uppercase tracking-widest text-[#0090d0]/70 mt-1.5">{clase.horario}</p>
+                      <div key={clase.id} className="p-5 flex items-center justify-between gap-4 bg-white/60 backdrop-blur-lg border border-white hover:bg-white hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default">
+                        <div className="flex flex-col">
+                          <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight leading-snug">{clase.nombre}</h4>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <svg className="w-3.5 h-3.5 text-[#0090d0]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span className="text-[11px] font-bold tracking-widest text-[#0090d0]/80">{clase.horario}</span>
+                          </div>
                         </div>
-                        <span className="self-start sm:self-auto bg-slate-50/80 backdrop-blur-sm border border-slate-100/80 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest text-[#002b5c]/60 group-hover/card:bg-gradient-to-r group-hover/card:from-[#0090d0] group-hover/card:to-[#007fb8] group-hover/card:text-white group-hover/card:border-transparent transition-all duration-300 shadow-sm">{clase.aula}</span>
+                        <div className="bg-[#F0F4F8] border border-slate-200/60 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-widest text-[#002b5c] group-hover/card:bg-gradient-to-r group-hover/card:from-[#0090d0] group-hover/card:to-[#002b5c] group-hover/card:text-white group-hover/card:border-transparent transition-colors duration-500 shadow-sm flex-shrink-0">
+                          {clase.aula}
+                        </div>
                       </div>
                     ))}
                   </div>

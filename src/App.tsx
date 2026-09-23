@@ -193,28 +193,36 @@ export default function App() {
       
       <ToastNotificacion />
 
-      <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
+      <div className="w-full max-w-xl mx-auto flex flex-col gap-4 sm:gap-5 z-10 anim-suave">
         
-        <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0 overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,144,208,0.15)] bg-white/80 backdrop-blur-xl border border-white">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/80 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
-          <span className="text-[clamp(1.75rem,8vw,3.5rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10">ALUMNADO</span>
-        </button>
-
-        <button onClick={() => irAPanel('PROFESORADO')} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[120px] rounded-[2.5rem] flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,43,92,0.1)] bg-slate-50/70 backdrop-blur-xl border border-white/60">
+        <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[130px] rounded-[3rem] flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,144,208,0.15)] bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
-          <span className="text-[clamp(1.5rem,7vw,3.25rem)] font-black tracking-tight text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10">PROFESORADO</span>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#00d2ff]/10 rounded-full blur-2xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
+          <span className="text-[clamp(2rem,8vw,3.5rem)] font-black tracking-tighter text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10 drop-shadow-sm">ALUMNADO</span>
         </button>
 
-        <div className="grid grid-cols-2 gap-5 sm:gap-6 mt-2">
-          <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(0,43,92,0.3)] bg-gradient-to-br from-[#002b5c]/95 to-[#001530]/95 backdrop-blur-xl border border-white/10">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
-            <span className="text-[clamp(1.15rem,5vw,1.75rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300 relative z-10">Gestión</span>
+        <button onClick={() => irAPanel('PROFESORADO')} className="relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[130px] rounded-[3rem] flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.12)] bg-[#F0F4F8]/80 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#002b5c]/5 rounded-full blur-2xl -ml-10 -mb-10 transition-transform duration-700 group-hover:scale-150"></div>
+          <span className="text-[clamp(1.75rem,7vw,3.25rem)] font-black tracking-tighter text-[#002b5c]/90 group-hover:text-[#0090d0] transition-colors duration-300 relative z-10 drop-shadow-sm">PROFESORADO</span>
+        </button>
+
+        <div className="grid grid-cols-2 gap-4 sm:gap-5 mt-1">
+          <button onClick={() => irAPanel('GESTION')} className="relative w-full aspect-square sm:aspect-[4/3] min-h-[130px] rounded-[2.5rem] flex flex-col items-center justify-center gap-2 group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.3)] bg-gradient-to-br from-[#002b5c]/90 to-[#001530]/90 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-[30px] -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/10"></div>
+            <svg className="w-8 h-8 text-white/80 group-hover:text-white transition-colors duration-300 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <span className="text-[clamp(1.15rem,5vw,1.5rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300 relative z-10">Gestión</span>
           </button>
 
-          <button onClick={() => irAPanel('REGISTRO')} className={`relative w-full aspect-square sm:aspect-[4/3] min-h-[120px] rounded-[2.5rem] flex items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 ${!alumnoVinculado ? 'bg-gradient-to-br from-[#0090d0]/95 to-[#0070a0]/95 hover:shadow-[0_12px_40px_rgba(0,144,208,0.3)] border border-white/20' : 'bg-white/40 hover:bg-white/60 hover:shadow-[0_8px_30px_rgba(0,43,92,0.05)] border border-white/50'} backdrop-blur-xl`}>
-            {!alumnoVinculado && <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -ml-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>}
-            <span className={`text-[clamp(1.15rem,5vw,1.75rem)] font-black tracking-tight transition-colors duration-300 relative z-10 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
-              {!alumnoVinculado ? 'Vincular Móvil' : 'Mi Cuenta'}
+          <button onClick={() => irAPanel('REGISTRO')} className={`relative w-full aspect-square sm:aspect-[4/3] min-h-[130px] rounded-[2.5rem] flex flex-col items-center justify-center gap-2 group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 ${!alumnoVinculado ? 'bg-gradient-to-br from-[#0090d0]/90 to-[#0070a0]/90 hover:shadow-[0_16px_40px_rgba(0,144,208,0.3)] border border-white/20 shadow-[0_8px_32px_rgba(0,144,208,0.2)]' : 'bg-white/50 hover:bg-white/70 hover:shadow-[0_16px_40px_rgba(0,43,92,0.08)] border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]'} backdrop-blur-2xl`}>
+            {!alumnoVinculado && <div className="absolute top-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-[30px] -ml-10 -mt-10 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/20"></div>}
+            
+            <svg className={`w-8 h-8 relative z-10 transition-colors duration-300 ${!alumnoVinculado ? 'text-white/80 group-hover:text-white' : 'text-[#002b5c]/60 group-hover:text-[#0090d0]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              {!alumnoVinculado ? <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />}
+            </svg>
+            
+            <span className={`text-[clamp(1.15rem,5vw,1.5rem)] font-black tracking-tight transition-colors duration-300 relative z-10 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
+              {!alumnoVinculado ? 'Vincular' : 'Mi Cuenta'}
             </span>
           </button>
         </div>
