@@ -480,8 +480,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
                           <div className="flex gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
-                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
                           </div>
                         </div>
                         <select
@@ -524,8 +524,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
                           <div className="flex gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
-                            <span className="bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
                           </div>
                         </div>
                         <select
