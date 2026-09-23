@@ -480,18 +480,18 @@ export default function PantallaProfesor({ onVolver }: Props) {
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
                           <div className="flex gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
-                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/60 shadow-[0_2px_4px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.9)] text-slate-500">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/60 shadow-[0_2px_4px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.9)] text-slate-500">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
                           </div>
                         </div>
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-lg outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border flex-shrink-0 min-w-[90px] ${
-                            item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                            item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/20' : 'bg-rose-50 text-rose-600 border-rose-100'
+                          className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-full outline-none transition-all duration-300 cursor-pointer appearance-none text-center backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_1px_2px_rgba(255,255,255,0.9)] border flex-shrink-0 min-w-[90px] ${
+                            item.estado === 'PRESENTE' ? 'bg-emerald-50/60 text-emerald-700 border-emerald-200/60 hover:shadow-[0_0_12px_rgba(52,211,153,0.4)]' :
+                            item.estado === 'RETRASO' ? 'bg-amber-50/60 text-amber-700 border-amber-200/60 hover:shadow-[0_0_12px_rgba(251,191,36,0.4)]' :
+                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50/60 text-purple-700 border-purple-200/60 hover:shadow-[0_0_12px_rgba(168,85,247,0.4)]' :
+                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0080b0] border-[#0090d0]/20 hover:shadow-[0_0_12px_rgba(0,144,208,0.4)]' : 'bg-rose-50/60 text-rose-700 border-rose-200/60 hover:shadow-[0_0_12px_rgba(251,113,133,0.4)]'
                           }`}
                         >
                           <option value="PRESENTE">Presente</option>
@@ -524,18 +524,18 @@ export default function PantallaProfesor({ onVolver }: Props) {
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
                           <div className="flex gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
-                            <span className="whitespace-nowrap bg-slate-50/80 px-1.5 py-0.5 rounded-md border border-slate-100">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/60 shadow-[0_2px_4px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.9)] text-slate-500">In: {item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
+                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-sm px-2 py-0.5 rounded-full border border-white/60 shadow-[0_2px_4px_rgba(0,0,0,0.02),inset_0_1px_2px_rgba(255,255,255,0.9)] text-slate-500">Out: {item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span>
                           </div>
                         </div>
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-lg outline-none transition-all cursor-pointer appearance-none text-center shadow-sm border flex-shrink-0 min-w-[90px] ${
-                            item.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                            item.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/20' : 'bg-rose-50 text-rose-600 border-rose-100'
+                          className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-full outline-none transition-all duration-300 cursor-pointer appearance-none text-center backdrop-blur-md shadow-[0_2px_8px_rgba(0,0,0,0.04),inset_0_1px_2px_rgba(255,255,255,0.9)] border flex-shrink-0 min-w-[90px] ${
+                            item.estado === 'PRESENTE' ? 'bg-emerald-50/60 text-emerald-700 border-emerald-200/60 hover:shadow-[0_0_12px_rgba(52,211,153,0.4)]' :
+                            item.estado === 'RETRASO' ? 'bg-amber-50/60 text-amber-700 border-amber-200/60 hover:shadow-[0_0_12px_rgba(251,191,36,0.4)]' :
+                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50/60 text-purple-700 border-purple-200/60 hover:shadow-[0_0_12px_rgba(168,85,247,0.4)]' :
+                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/5 text-[#0080b0] border-[#0090d0]/20 hover:shadow-[0_0_12px_rgba(0,144,208,0.4)]' : 'bg-rose-50/60 text-rose-700 border-rose-200/60 hover:shadow-[0_0_12px_rgba(251,113,133,0.4)]'
                           }`}
                         >
                           <option value="PRESENTE">Presente</option>
