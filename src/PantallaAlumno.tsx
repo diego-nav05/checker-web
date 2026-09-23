@@ -142,7 +142,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
               if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
               
-              if (Math.abs(Math.floor(Date.now() / 2000) - bloqueTiempo) > 2) throw new Error('Código caducado. Vuelve a enfocar.');
+              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. Vuelve a enfocar.');
               
               const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
               if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
@@ -235,15 +235,9 @@ export default function PantallaAlumno({ onVolver }: Props) {
         // 1. Intento por Hardware (Android / iOS 17+)
         if (capabilities.zoom) {
           const maxZoom = capabilities.zoom.max || 3;
-          const minZoom = capabilities.zoom.min || 1;
-          const factor = minZoom >= 100 ? 100 : 1;
-          const hwZoom = Math.min(Math.max(nivel * factor, minZoom), maxZoom);
-          await track.applyConstraints({ advanced: [{ zoom: hwZoom }] } as any);
-          
-          const nivelEfectivoHw = hwZoom / factor;
-          const escalaRestante = nivel > nivelEfectivoHw ? nivel / nivelEfectivoHw : 1;
-          videoElement.style.transform = `scale(${escalaRestante})`;
-          videoElement.style.transformOrigin = 'center center';
+          const targetZoom = Math.min(nivel, maxZoom);
+          await track.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
+          videoElement.style.transform = `scale(1)`; // Reseteamos CSS si hay hardware
           return;
         }
       }
@@ -333,12 +327,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Visor UI (Cuadrado central) */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[70vw] max-w-[280px] aspect-square relative rounded-[2rem] border border-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]">
-              {/* Esquinas Blancas */}
-              <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[4px] border-l-[4px] border-white rounded-tl-[2rem]"></div>
-              <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[4px] border-r-[4px] border-white rounded-tr-[2rem]"></div>
-              <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[4px] border-l-[4px] border-white rounded-bl-[2rem]"></div>
-              <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[4px] border-r-[4px] border-white rounded-br-[2rem]"></div>
+            <div className="w-[70vw] max-w-[300px] aspect-square relative">
+              {/* Esquinas Lector */}
+              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/80 rounded-tl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/80 rounded-tr-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/80 rounded-bl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white/80 rounded-br-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
               
               {procesandoQr && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl transition-all">
@@ -350,14 +344,14 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Contenedor de Video del Escáner */}
           <div className="flex-1 w-full h-full overflow-hidden bg-black flex items-center justify-center">
-            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300 [&_#qr-shaded-region]:hidden"></div>
+            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300"></div>
           </div>
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}
           <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
             <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
-              {[1, 2, 4, 6].map((nivel) => (
+              {[1, 2, 3].map((nivel) => (
                 <button
                   key={nivel}
                   onClick={() => aplicarZoom(nivel)}
