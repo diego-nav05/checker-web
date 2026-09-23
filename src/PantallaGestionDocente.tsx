@@ -25,6 +25,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [asignaturaSeleccionada, setAsignaturaSeleccionada] = useState<any | null>(null);
   const [cargandoHistorialAsig, setCargandoHistorialAsig] = useState(false);
   const [modalExportadorGlobal, setModalExportadorGlobal] = useState(false);
+  const [exportacionBinaria, setExportacionBinaria] = useState(false);
+  const [modalExpulsion, setModalExpulsion] = useState<{tipo: 'UNA'|'TODAS', aluId: string, asigId?: string} | null>(null);
 
   const [fechaInicioGlobal, setFechaInicioGlobal] = useState<string>('');
   const [fechaFinGlobal, setFechaFinGlobal] = useState<string>('');
@@ -134,46 +136,49 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
   };
 
-  const expulsarDeAsignatura = async (alumnoId: string, asigId: string) => {
-    const confirmar = window.confirm('¿Expulsar a este alumno de esta materia? Se eliminarán sus registros de asistencia.');
-    if (!confirmar) return;
-
-    const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
-    if (sesiones && sesiones.length > 0) {
-      const sIds = sesiones.map((s: any) => s.id);
-      await supabase.from('asistencias')
-        .delete()
-        .eq('alumno_id', alumnoId)
-        .in('sesion_id', sIds);
-    }
-    mostrarNotificacion('Alumno eliminado de la materia.', 'exito');
-    setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
-    if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
-    cargarAlumnos();
+  const expulsarDeAsignatura = (alumnoId: string, asigId: string) => {
+    setModalExpulsion({ tipo: 'UNA', aluId: alumnoId, asigId });
   };
 
-  const expulsarDeTodas = async (alumnoId: string) => {
-    const confirmar = window.confirm('¿Expulsar de TODAS TUS MATERIAS? Se eliminarán sus registros de asistencia en tus materias.');
-    if (!confirmar) return;
+  const expulsarDeTodas = (alumnoId: string) => {
+    setModalExpulsion({ tipo: 'TODAS', aluId: alumnoId });
+  };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
-
-    if (asigs && asigs.length > 0) {
-      const asigIds = asigs.map((a: any) => a.id);
-      const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
-
+  const ejecutarExpulsion = async () => {
+    if (!modalExpulsion) return;
+    const { tipo, aluId, asigId } = modalExpulsion;
+    
+    if (tipo === 'UNA' && asigId) {
+      const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
       if (sesiones && sesiones.length > 0) {
         const sIds = sesiones.map((s: any) => s.id);
         await supabase.from('asistencias')
           .delete()
-          .eq('alumno_id', alumnoId)
+          .eq('alumno_id', aluId)
           .in('sesion_id', sIds);
       }
+      mostrarNotificacion('Alumno eliminado de la materia.', 'exito');
+      setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
+      if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
+    } else if (tipo === 'TODAS') {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
+      if (asigs && asigs.length > 0) {
+        const asigIds = asigs.map((a: any) => a.id);
+        const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
+        if (sesiones && sesiones.length > 0) {
+          const sIds = sesiones.map((s: any) => s.id);
+          await supabase.from('asistencias')
+            .delete()
+            .eq('alumno_id', aluId)
+            .in('sesion_id', sIds);
+        }
+      }
+      mostrarNotificacion('Alumno eliminado de todas tus materias.', 'exito');
+      setAlumnoGestion(null);
     }
-    mostrarNotificacion('Alumno eliminado de todas tus materias.', 'exito');
-    setAlumnoGestion(null);
     cargarAlumnos();
+    setModalExpulsion(null);
   };
 
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
@@ -296,17 +301,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
     aluIds.forEach(aluId => {
       reporteAlumnos[aluId] = { Alumno: mapPerfiles[aluId] || 'Estudiante Desconocido' };
-      sesionesFiltradas.forEach(ses => { reporteAlumnos[aluId][ses.fechaStr] = 'AUSENTE'; });
+      sesionesFiltradas.forEach(ses => { reporteAlumnos[aluId][ses.fechaStr] = exportacionBinaria ? 0 : 'AUSENTE'; });
     });
 
     asistData.forEach(asist => {
       const sesion = sesionesFiltradas.find(s => s.id === asist.sesion_id);
       if (sesion && reporteAlumnos[asist.alumno_id]) {
-        const inTime = formatTime(asist.hora_entrada);
-        const outTime = formatTime(asist.hora_salida);
-        const estadoLimpio = asist.estado.replace(/_/g, ' ');
-        // Formato inyectado con entrada y salida
-        reporteAlumnos[asist.alumno_id][sesion.fechaStr] = `${estadoLimpio} (In: ${inTime} | Out: ${outTime})`;
+        if (exportacionBinaria) {
+          reporteAlumnos[asist.alumno_id][sesion.fechaStr] = 1;
+        } else {
+          const inTime = formatTime(asist.hora_entrada);
+          const outTime = formatTime(asist.hora_salida);
+          const estadoLimpio = asist.estado.replace(/_/g, ' ');
+          reporteAlumnos[asist.alumno_id][sesion.fechaStr] = `${estadoLimpio} (In: ${inTime} | Out: ${outTime})`;
+        }
       }
     });
 
@@ -445,16 +453,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       alumnosEnEstaAsig.forEach(idAlu => {
         reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante Desconocido' };
-        sesionesFiltradas.forEach(ses => { reporte[idAlu][ses.fechaStr] = 'AUSENTE'; });
+        sesionesFiltradas.forEach(ses => { reporte[idAlu][ses.fechaStr] = exportacionBinaria ? 0 : 'AUSENTE'; });
       });
 
       asistsDeEstaAsig.forEach(a => {
         const sesion = sesionesFiltradas.find(s => s.id === a.sesion_id);
         if (sesion && reporte[a.alumno_id]) {
-          const inTime = formatTime(a.hora_entrada);
-          const outTime = formatTime(a.hora_salida);
-          const estadoLimpio = a.estado.replace(/_/g, ' ');
-          reporte[a.alumno_id][sesion.fechaStr] = `${estadoLimpio} (In: ${inTime} | Out: ${outTime})`;
+          if (exportacionBinaria) {
+            reporte[a.alumno_id][sesion.fechaStr] = 1;
+          } else {
+            const inTime = formatTime(a.hora_entrada);
+            const outTime = formatTime(a.hora_salida);
+            const estadoLimpio = a.estado.replace(/_/g, ' ');
+            reporte[a.alumno_id][sesion.fechaStr] = `${estadoLimpio} (In: ${inTime} | Out: ${outTime})`;
+          }
         }
       });
 
@@ -718,12 +730,22 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="bg-slate-50/80 rounded-[2rem] p-6">
               <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar Fechas (Opcional)</h4>
               
-              <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <input type="date" value={fechaInicioGlobal} onChange={(e) => setFechaInicioGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
                 <div>
                   <input type="date" value={fechaFinGlobal} onChange={(e) => setFechaFinGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                </div>
+              </div>
+
+              <div className="mb-6 flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                  {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#002b5c]">Formato Binario Simplificado</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Solo exportar 1 (presente) o 0 (falta)</p>
                 </div>
               </div>
 
@@ -857,12 +879,22 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="bg-slate-50/80 rounded-[2rem] p-6">
               <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar Fechas (Opcional)</h4>
               
-              <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
                 <div>
                   <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                </div>
+              </div>
+
+              <div className="mb-6 flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
+                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                  {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#002b5c]">Formato Binario Simplificado</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Solo exportar 1 (presente) o 0 (falta)</p>
                 </div>
               </div>
 
@@ -883,6 +915,28 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   {cargandoHistorialAsig ? 'Procesando...' : 'Descargar Excel (.xlsx)'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: CONFIRMAR EXPULSIÓN --- */}
+      {modalExpulsion && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-[fade-in_0.2s_ease-out]">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border border-rose-100">
+            <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">
+              {modalExpulsion.tipo === 'UNA' ? 'Expulsar de la materia' : 'Expulsar de todas las materias'}
+            </h3>
+            <p className="text-sm text-slate-500 font-medium mb-6">
+              Esta acción eliminará <strong className="text-rose-500">todos los registros de asistencia</strong> de este alumno en las asignaturas afectadas.<br/><br/>
+              Si quieres conservar los datos, por favor, cierra esta ventana y <strong className="text-[#002b5c]">descarga un reporte</strong> (Excel o Sheets) antes de continuar.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button onClick={() => setModalExpulsion(null)} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 cursor-pointer transition-all">Cancelar y volver</button>
+              <button onClick={ejecutarExpulsion} className="py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-95 shadow-md shadow-rose-500/20 cursor-pointer transition-all">Lo entiendo, borrar datos</button>
             </div>
           </div>
         </div>
