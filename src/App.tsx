@@ -26,7 +26,7 @@ export default function App() {
     const idAlumno = localStorage.getItem('checker_alumno_id');
     
     if (!idAlumno && rol !== 'profesor') {
-      setNotificacion({ texto: '👋 Si eres un nuevo alumno, regístrate en "Vincular Móvil".', tipo: 'info' });
+      setNotificacion({ texto: '👋 Si eres un nuevo alumno, ve al apartado "Vincular".', tipo: 'info' });
       const timer = setTimeout(() => setNotificacion(null), 8000);
       return () => clearTimeout(timer);
     }
@@ -78,7 +78,7 @@ export default function App() {
     }
 
     if (!idGuardado) {
-      mostrarNotificacion('Debes crear una cuenta para vincular este móvil.', 'info');
+      mostrarNotificacion('Ve al apartado "Vincular" para enlazar tu dispositivo.', 'info');
       irAPanel('REGISTRO');
       return;
     }
@@ -221,9 +221,16 @@ export default function App() {
               {!alumnoVinculado ? <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />}
             </svg>
             
-            <span className={`text-[clamp(1.15rem,5vw,1.5rem)] font-black tracking-tight transition-colors duration-300 relative z-10 ${!alumnoVinculado ? 'text-white' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
-              {!alumnoVinculado ? 'Vincular' : 'Mi Cuenta'}
-            </span>
+            <div className="relative z-10 flex flex-col items-center gap-1.5">
+              <span className={`text-[clamp(1.15rem,5vw,1.5rem)] font-black tracking-tight transition-colors duration-300 ${!alumnoVinculado ? 'text-white drop-shadow-md' : 'text-[#002b5c] group-hover:text-[#0090d0]'}`}>
+                {!alumnoVinculado ? 'Vincular' : 'Mi Cuenta'}
+              </span>
+              {!alumnoVinculado && (
+                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] bg-[#b3e6ff] px-3 py-1 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.1)] group-hover:bg-white group-hover:scale-105 group-hover:shadow-[0_4px_15px_rgba(0,144,208,0.3)] transition-all duration-300 text-center leading-tight">
+                  ¿Ya tienes cuenta?<br/>Vincula aquí
+                </span>
+              )}
+            </div>
           </button>
         </div>
       </div>
