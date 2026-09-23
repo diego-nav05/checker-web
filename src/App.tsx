@@ -30,8 +30,8 @@ const GlobalAnimStyles = () => (
       transform: translateZ(0);
     }
     .safari-border-fix {
-      -webkit-mask-image: -webkit-radial-gradient(white, black);
-      mask-image: radial-gradient(white, black);
+      -webkit-mask-image: -webkit-linear-gradient(white, white);
+      mask-image: linear-gradient(white, white);
       -webkit-backface-visibility: hidden;
       backface-visibility: hidden;
       -webkit-transform: translate3d(0, 0, 0);
@@ -225,7 +225,7 @@ export default function App() {
       
       <ToastNotificacion />
 
-      <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave safari-border-fix">
+      <div className="w-full max-w-xl mx-auto flex flex-col gap-5 sm:gap-6 z-10 anim-suave">
         
         <button onClick={manejarClickAlumnado} className="relative w-full aspect-[21/9] sm:aspect-[3/1] bg-white/60 backdrop-blur-3xl rounded-[3rem] shadow-[0_8px_32px_rgba(0,43,92,0.04)] border border-white/50 flex flex-col items-center justify-center transition-all duration-500 hover:shadow-[0_20px_40px_rgba(0,144,208,0.15)] hover:-translate-y-1 active:scale-[0.97] group overflow-hidden cursor-pointer mt-4 sm:mt-0 safari-border-fix">
           <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>

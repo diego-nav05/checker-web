@@ -29,8 +29,8 @@ const GlobalAnimStyles = () => (
       transform: translateZ(0);
     }
     .safari-border-fix {
-      -webkit-mask-image: -webkit-radial-gradient(white, black);
-      mask-image: radial-gradient(white, black);
+      -webkit-mask-image: -webkit-linear-gradient(white, white);
+      mask-image: linear-gradient(white, white);
       -webkit-backface-visibility: hidden;
       backface-visibility: hidden;
       -webkit-transform: translate3d(0, 0, 0);
