@@ -332,38 +332,38 @@ export default function PantallaAlumno({ onVolver }: Props) {
             <div className="w-12"></div> {/* Espaciador para centrar el titulo */}
           </div>
 
-          {/* Visor UI (Cuadrado central con máscara de enfoque y esquinas luminosas) */}
+          {/* Visor UI (Cuadrado central con máscara de enfoque) */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-40">
-            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] shadow-[0_0_0_9999px_rgba(0,0,0,0.52)] border border-white/20">
-              {/* Esquinas Lector Neón Cyan */}
-              <div className="absolute -top-0.5 -left-0.5 w-10 h-10 border-t-[3.5px] border-l-[3.5px] border-[#38bdf8] rounded-tl-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
-              <div className="absolute -top-0.5 -right-0.5 w-10 h-10 border-t-[3.5px] border-r-[3.5px] border-[#38bdf8] rounded-tr-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
-              <div className="absolute -bottom-0.5 -left-0.5 w-10 h-10 border-b-[3.5px] border-l-[3.5px] border-[#38bdf8] rounded-bl-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-10 h-10 border-b-[3.5px] border-r-[3.5px] border-[#38bdf8] rounded-br-[1.8rem] shadow-[0_0_14px_rgba(56,189,248,0.7)]"></div>
+            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] border border-white/10">
+              {/* Esquinas Limpias y Blancas */}
+              <div className="absolute -top-1 -left-1 w-12 h-12 border-t-[4px] border-l-[4px] border-white rounded-tl-[2rem]"></div>
+              <div className="absolute -top-1 -right-1 w-12 h-12 border-t-[4px] border-r-[4px] border-white rounded-tr-[2rem]"></div>
+              <div className="absolute -bottom-1 -left-1 w-12 h-12 border-b-[4px] border-l-[4px] border-white rounded-bl-[2rem]"></div>
+              <div className="absolute -bottom-1 -right-1 w-12 h-12 border-b-[4px] border-r-[4px] border-white rounded-br-[2rem]"></div>
 
-              {/* Láser de Escaneo Suave */}
+              {/* Láser de Escaneo Sutil */}
               {!procesandoQr && (
-                <div className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-[#38bdf8] to-transparent shadow-[0_0_12px_#38bdf8] animate-qr-laser"></div>
+                <div className="absolute left-6 right-6 h-[2px] bg-white/40 shadow-[0_0_8px_rgba(255,255,255,0.5)] animate-qr-laser rounded-full"></div>
               )}
 
               {/* Retícula sutil en el centro */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-25">
-                <div className="w-5 h-0.5 bg-white/60 rounded-full"></div>
-                <div className="h-5 w-0.5 bg-white/60 rounded-full absolute"></div>
+              <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                <div className="w-4 h-px bg-white rounded-full"></div>
+                <div className="h-4 w-px bg-white rounded-full absolute"></div>
               </div>
               
               {/* Overlay mientras procesa el QR */}
               {procesandoQr && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md rounded-[2rem] transition-all">
-                  <div className="w-11 h-11 border-4 border-emerald-400/20 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.6)]"></div>
-                  <span className="text-white text-[11px] font-bold tracking-widest uppercase mt-3 text-emerald-300">Validando QR</span>
+                  <div className="w-10 h-10 border-3 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  <span className="text-white text-[11px] font-bold tracking-widest uppercase mt-4">Procesando</span>
                 </div>
               )}
             </div>
 
             {/* Píldora guía */}
-            <div className="mt-7 px-4 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white/80 text-[11px] font-medium tracking-wide flex items-center gap-2 shadow-lg">
-              <span className="w-2 h-2 rounded-full bg-[#38bdf8] animate-pulse"></span>
+            <div className="mt-8 px-5 py-2 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-white/90 text-xs font-medium tracking-wide flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
               Centra el código en el recuadro
             </div>
           </div>
@@ -373,23 +373,17 @@ export default function PantallaAlumno({ onVolver }: Props) {
             <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300"></div>
           </div>
 
-          {/* Barra Inferior (Controles de Zoom Híbrido) */}
-          <div className="absolute bottom-0 left-0 right-0 p-6 pb-12 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/95 via-black/70 to-transparent">
-            <div className="flex items-center gap-1.5 mb-3 text-white/60">
-              <svg className="w-3.5 h-3.5 text-[#38bdf8]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
-              </svg>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Ajuste de Lente</span>
-            </div>
-            <div className="flex items-center gap-2 bg-black/60 backdrop-blur-2xl p-1.5 rounded-full border border-white/15 shadow-[0_10px_30px_rgba(0,0,0,0.6)]">
+          {/* Barra Inferior (Controles de Zoom) */}
+          <div className="absolute bottom-10 left-0 right-0 flex justify-center z-50 pointer-events-none">
+            <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-xl p-1.5 rounded-full border border-white/10 pointer-events-auto">
               {[1, 2, 4, 6].map((nivel) => (
                 <button
                   key={nivel}
                   onClick={() => aplicarZoom(nivel)}
-                  className={`w-11 h-11 rounded-full font-black text-xs transition-all duration-300 flex items-center justify-center cursor-pointer active:scale-90 ${
+                  className={`w-11 h-11 rounded-full font-semibold text-[13px] transition-all duration-300 flex items-center justify-center cursor-pointer active:scale-95 ${
                     zoomActual === nivel
-                      ? 'bg-white text-slate-950 shadow-[0_0_20px_rgba(255,255,255,0.45)] scale-105'
-                      : 'bg-white/5 text-white/80 hover:bg-white/15 hover:text-white'
+                      ? 'bg-white text-black shadow-lg scale-105'
+                      : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   {nivel}x
