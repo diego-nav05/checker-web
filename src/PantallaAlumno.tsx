@@ -18,7 +18,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [tabActual, setTabActual] = useState<TabAlumno>('HORARIO');
   const [camaraActiva, setCamaraActiva] = useState(false);
   const [procesandoQr, setProcesandoQr] = useState(false);
-  const [zoomActual, setZoomActual] = useState<number>(1);
+  const [zoomActual, setZoomActual] = useState<number | string>(1);
   
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
@@ -220,13 +220,15 @@ export default function PantallaAlumno({ onVolver }: Props) {
   }, [camaraActiva, alumnoId]);
 
   // SISTEMA DE ZOOM HÍBRIDO CON TYPESCRIPT CORREGIDO
-  const aplicarZoom = async (nivel: number) => {
+  const aplicarZoom = async (nivel: number | string) => {
     setZoomActual(nivel);
     try {
       const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
       if (!videoElement) return;
 
       const stream = videoElement.srcObject as MediaStream;
+      let targetNivel = typeof nivel === 'number' ? nivel : 5; // fallback
+      
       if (stream) {
         const track = stream.getVideoTracks()[0];
         
@@ -235,24 +237,29 @@ export default function PantallaAlumno({ onVolver }: Props) {
         
         // 1. Intento por Hardware (Android / iOS 17+)
         if (capabilities.zoom) {
-          const maxZoom = capabilities.zoom.max || 10;
-          const targetZoom = Math.min(nivel, maxZoom);
+          const maxZoom = capabilities.zoom.max || 5;
+          if (nivel === 'MAX') {
+            targetNivel = maxZoom;
+          }
+          
+          const targetZoom = Math.min(targetNivel, maxZoom);
           await track.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
           
-          const softwareZoom = nivel > targetZoom ? (nivel / targetZoom) : 1;
+          const softwareZoom = (nivel !== 'MAX' && targetNivel > targetZoom) ? (targetNivel / targetZoom) : 1;
           videoElement.style.transform = `scale(${softwareZoom})`;
           videoElement.style.transformOrigin = 'center center';
           return;
         }
       }
       // 2. Intento por Software (Fallback para iPhones antiguos y webkit estricto)
-      videoElement.style.transform = `scale(${nivel})`;
+      videoElement.style.transform = `scale(${targetNivel})`;
       videoElement.style.transformOrigin = 'center center';
     } catch (e) {
       console.log("Fallback a zoom digital por políticas del navegador");
       const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
       if (videoElement) {
-        videoElement.style.transform = `scale(${nivel})`;
+        const targetNivel = typeof nivel === 'number' ? nivel : 5;
+        videoElement.style.transform = `scale(${targetNivel})`;
         videoElement.style.transformOrigin = 'center center';
       }
     }
@@ -355,13 +362,13 @@ export default function PantallaAlumno({ onVolver }: Props) {
           <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
             <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
             <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
-              {[1, 2, 4, 7, 10].map((nivel) => (
+              {[1, 2, 3, 5, 'MAX'].map((nivel) => (
                 <button
                   key={nivel}
                   onClick={() => aplicarZoom(nivel)}
-                  className={`w-12 h-12 rounded-full font-bold text-sm transition-all duration-300 ${zoomActual === nivel ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-transparent text-white/70 hover:bg-white/10 hover:text-white'}`}
+                  className={`w-12 h-12 rounded-full font-bold transition-all duration-300 ${nivel === 'MAX' ? 'text-[11px]' : 'text-sm'} ${zoomActual === nivel ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-transparent text-white/70 hover:bg-white/10 hover:text-white'}`}
                 >
-                  {nivel}x
+                  {typeof nivel === 'number' ? `${nivel}x` : nivel}
                 </button>
               ))}
             </div>
