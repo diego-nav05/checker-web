@@ -379,7 +379,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {clasesHoy.map((clase) => (
-                <div key={clase.id} className="bg-white/70 backdrop-blur-2xl rounded-[2.5rem] p-7 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border border-white/80 flex flex-col justify-between hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)] hover:-translate-y-1 transition-all duration-500 group">
+                <div key={clase.id} className="bg-white/70 backdrop-blur-2xl rounded-[2.5rem] p-7 shadow-[0_8px_30px_rgba(0,0,0,0.03)] border border-white/80 flex flex-col justify-between hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)] hover:-translate-y-1 transition-all duration-500 group safari-border-fix">
                   <div>
                     <div className="flex items-center justify-between mb-5">
                       <span className="px-4 py-1.5 bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold uppercase tracking-widest rounded-full group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>

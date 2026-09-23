@@ -15,6 +15,8 @@ const GlobalAnimStyles = () => (
     .anim-suave {
       animation: suave 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       will-change: transform, opacity;
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
     }
     @keyframes drop-in {
       0% { opacity: 0; transform: translate(-50%, -15px) scale(0.95); }
@@ -23,6 +25,16 @@ const GlobalAnimStyles = () => (
     .anim-drop {
       animation: drop-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       will-change: transform, opacity;
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+    .safari-border-fix {
+      -webkit-mask-image: -webkit-radial-gradient(white, black);
+      mask-image: radial-gradient(white, black);
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      -webkit-transform: translate3d(0, 0, 0);
+      transform: translate3d(0, 0, 0);
     }
   `}</style>
 );
@@ -145,7 +157,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
       )}
 
       {/* APLICAMOS anim-suave AQUÍ */}
-      <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 anim-suave relative">
+      <div className="bg-white/60 backdrop-blur-3xl rounded-[3rem] p-8 sm:p-12 max-w-sm w-full shadow-[0_20px_40px_-15px_rgba(0,43,92,0.1)] border border-white/60 anim-suave relative safari-border-fix">
         <div className="absolute inset-0 rounded-[3rem] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.8)] pointer-events-none"></div>
         
         <button onClick={onVolver} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10">
