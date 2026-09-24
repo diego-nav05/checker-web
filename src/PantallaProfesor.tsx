@@ -466,10 +466,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
-                          <div className="flex gap-2 text-[9px] font-black uppercase tracking-widest mt-1">
-                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/60 shadow-[0_4px_12px_rgba(0,43,92,0.06),inset_0_1px_2px_rgba(255,255,255,0.8)] text-[#002b5c] transition-all duration-300 hover:bg-white/60 hover:shadow-[0_4px_15px_rgba(0,144,208,0.15)]">In: <span className="text-[#0090d0]">{item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span></span>
-                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/60 shadow-[0_4px_12px_rgba(0,43,92,0.06),inset_0_1px_2px_rgba(255,255,255,0.8)] text-[#002b5c] transition-all duration-300 hover:bg-white/60 hover:shadow-[0_4px_15px_rgba(0,144,208,0.15)]">Out: <span className="text-[#0090d0]">{item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span></span>
-                          </div>
+
                         </div>
                         <select
                           value={item.estado}
@@ -511,10 +508,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
-                          <div className="flex gap-2 text-[9px] font-black uppercase tracking-widest mt-1">
-                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/60 shadow-[0_4px_12px_rgba(0,43,92,0.06),inset_0_1px_2px_rgba(255,255,255,0.8)] text-[#002b5c] transition-all duration-300 hover:bg-white/60 hover:shadow-[0_4px_15px_rgba(0,144,208,0.15)]">In: <span className="text-[#0090d0]">{item.hora_entrada ? new Date(item.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span></span>
-                            <span className="whitespace-nowrap bg-white/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/60 shadow-[0_4px_12px_rgba(0,43,92,0.06),inset_0_1px_2px_rgba(255,255,255,0.8)] text-[#002b5c] transition-all duration-300 hover:bg-white/60 hover:shadow-[0_4px_15px_rgba(0,144,208,0.15)]">Out: <span className="text-[#0090d0]">{item.hora_salida ? new Date(item.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--'}</span></span>
-                          </div>
+
                         </div>
                         <select
                           value={item.estado}
