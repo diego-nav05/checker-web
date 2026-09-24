@@ -544,11 +544,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
             <p className="text-xs text-slate-500 font-medium mb-8">Confirma tu identidad docente.</p>
             <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
-              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y Guardar</button>
+            <div className="flex flex-col gap-3">
+              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y Guardar</button>
+              <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="w-full py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Volver</button>
+              <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="w-full py-3 mt-2 rounded-2xl bg-transparent text-slate-400 text-xs font-bold hover:text-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">No registrar la clase (Eliminar)</button>
             </div>
-            <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="mt-4 w-full py-4 rounded-2xl bg-rose-50 text-rose-600 text-sm font-bold hover:bg-rose-100 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar sin guardar (Eliminar)</button>
           </div>
         </div>
       )}
