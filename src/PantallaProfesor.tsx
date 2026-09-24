@@ -28,9 +28,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const [diccionarioAlumnos, setDiccionarioAlumnos] = useState<Record<string, any>>({});
 
-  const [mostrarModalHistorial, setMostrarModalHistorial] = useState<boolean>(false);
-  const [historialSesiones, setHistorialSesiones] = useState<any[]>([]);
-  const [cargandoHistorial, setCargandoHistorial] = useState<boolean>(false);
+
 
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
 
@@ -315,44 +313,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     cargarAsistencias(sesionId!, diccionarioAlumnos); 
   };
 
-  const abrirHistorial = async () => {
-    setMostrarModalHistorial(true);
-    setCargandoHistorial(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    
-    const { data: asigData } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id);
-    if (asigData && asigData.length > 0) {
-      const asigIds = asigData.map(a => a.id);
-      const { data: sesionesData } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds).order('created_at', { ascending: false });
 
-      if (sesionesData) {
-        const mapeado = sesionesData.map(sesion => {
-          const asig = asigData.find(a => a.id === sesion.asignatura_id);
-          return { ...sesion, asignatura_nombre: asig ? asig.nombre : 'Clase Eliminada' };
-        });
-        setHistorialSesiones(mapeado);
-      }
-    }
-    setCargandoHistorial(false);
-  };
-
-  const descargarExcelPasado = async (sesionPasadaId: string, asigNombre: string) => {
-    const { data } = await supabase.from('asistencias').select('*').eq('sesion_id', sesionPasadaId);
-    if (!data || data.length === 0) return mostrarNotificacion('No hay registros en esta clase.', 'error');
-    
-    const filas = data.map((a: any) => ({
-      Alumno: diccionarioAlumnos[a.alumno_id]?.nombre_completo || 'Desconocido',
-      Estado: a.estado.replace(/_/g, ' '),
-      Entrada: a.hora_entrada ? new Date(a.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '-',
-      Salida: a.hora_salida ? new Date(a.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '-',
-    }));
-    
-    const libro = XLSX.utils.book_new();
-    const hoja = XLSX.utils.json_to_sheet(filas);
-    XLSX.utils.book_append_sheet(libro, hoja, 'Asistencia');
-    XLSX.writeFile(libro, `${asigNombre.replace(/[/\\?%*:|"<>]/g, '-')}.xlsx`);
-  };
 
   return (
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
@@ -386,23 +347,17 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
 
         <div className="flex items-center gap-3">
-          {!sesionId ? (
-            <button onClick={abrirHistorial} className="px-6 py-3 bg-white text-[#002b5c] text-xs font-bold rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] border border-slate-100 transition-all duration-300 active:scale-95 cursor-pointer">
-              Ver Historial
-            </button>
-          ) : (
-            fase !== 'CERRADA' && (
-              <>
-                {fase === 'ENTRADA' && (
-                  <button onClick={pasarASalida} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                    Activar Salida
-                  </button>
-                )}
-                <button onClick={intentarCerrarAula} className="px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
-                  Cerrar Clase
+          {sesionId && fase !== 'CERRADA' && (
+            <>
+              {fase === 'ENTRADA' && (
+                <button onClick={pasarASalida} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
+                  Activar Salida
                 </button>
-              </>
-            )
+              )}
+              <button onClick={intentarCerrarAula} className="px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
+                Cerrar Clase
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -604,42 +559,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
-      {mostrarModalHistorial && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-lg w-full">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial Docente</h3>
-              <button onClick={() => setMostrarModalHistorial(false)} className="w-10 h-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer active:scale-90">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            
-            {cargandoHistorial ? (
-              <div className="py-16 text-center text-slate-400 font-semibold tracking-wide animate-pulse">Buscando en la bóveda...</div>
-            ) : historialSesiones.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 font-medium">No hay clases archivadas todavía.</div>
-            ) : (
-              <div className="space-y-3 max-h-[450px] overflow-y-auto pr-3 scrollbar-hide">
-                {historialSesiones.map((sesion, idx) => (
-                  <div key={idx} className="p-5 bg-white border border-slate-100 shadow-sm rounded-[2rem] flex items-center justify-between transition-all duration-300 hover:shadow-md hover:-translate-y-0.5">
-                    <div>
-                      <h4 className="font-bold text-[#002b5c] text-sm tracking-tight">{sesion.asignatura_nombre}</h4>
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mt-1.5 flex items-center gap-2">
-                        <span>{new Date(sesion.created_at).toLocaleDateString()}</span>
-                        <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
-                        <span>{new Date(sesion.created_at).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</span>
-                      </p>
-                    </div>
-                    <button onClick={() => descargarExcelPasado(sesion.id, sesion.asignatura_nombre)} className="px-5 py-2.5 bg-slate-50 hover:bg-[#0090d0] text-[#0090d0] hover:text-white text-[10px] font-bold uppercase tracking-widest rounded-full transition-colors duration-300 active:scale-90 cursor-pointer">
-                      Excel
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
