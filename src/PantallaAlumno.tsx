@@ -23,10 +23,9 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
-  const [asistenciasActivas, setAsistenciasActivas] = useState<any[]>([]);
+
   
-  const [modalSalir, setModalSalir] = useState<string | null>(null); 
-  const [passConfirm, setPassConfirm] = useState('');
+
   const [cargandoPass, setCargandoPass] = useState(false);
 
   const [historial, setHistorial] = useState<any[]>([]);
@@ -87,15 +86,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
     }
   };
 
-  const cargarAsistenciasActivas = async () => {
-    if (!alumnoId) return;
-    const { data } = await supabase.from('asistencias').select('id, hora_entrada, sesion_id').eq('alumno_id', alumnoId).eq('estado', 'PRESENTE').is('hora_salida', null);
-    if (data) setAsistenciasActivas(data);
-  };
-
-  useEffect(() => { 
+  useEffect(() => {
     cargarAsignaturas();
-    cargarAsistenciasActivas(); 
   }, [alumnoId]);
 
   useEffect(() => {
@@ -217,7 +209,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
                 });
               } catch (e) {}
 
-              cargarAsistenciasActivas();
+
               cargarAsignaturas();
               
               if (html5QrCode.getState() !== 1) await html5QrCode.stop();
@@ -304,25 +296,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
     setCamaraActiva(false);
   };
 
-  const confirmarSalidaSegura = async () => {
-    setCargandoPass(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
-      const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: passConfirm });
-      if (error) throw new Error("Contraseña incorrecta.");
-      
-      await supabase.from('asistencias').update({ estado: 'FALTA_INJUSTIFICADA', hora_entrada: null }).eq('id', modalSalir);
-      setModalSalir(null);
-      setPassConfirm('');
-      cargarAsistenciasActivas();
-      mostrarNotificacion('Registro anulado.', 'info');
-    } catch (error: any) { 
-      mostrarNotificacion(error.message, 'error'); 
-    } finally { 
-      setCargandoPass(false); 
-    }
-  };
+
 
   const exportarHistorialAlumno = () => {
     if (historial.length === 0) return mostrarNotificacion('No hay datos.', 'info');
@@ -494,29 +468,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             {/* Columna Derecha: Clases */}
             <div className="w-full md:w-2/3 flex flex-col gap-6">
               
-              {asistenciasActivas.length > 0 && (
-                <div className="glass-container rounded-[2.5rem] p-6 sm:p-8 relative overflow-hidden group border border-emerald-200/50 bg-emerald-50/30 shadow-[0_8px_32px_rgba(52,211,153,0.05)]">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-400/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-                  <div className="relative z-10">
-                    <h4 className="text-[11px] font-bold text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(52,211,153,0.5)]"></span>En Clase Activa</h4>
-                    <div className="space-y-3">
-                      {asistenciasActivas.map((asist) => (
-                        <div key={asist.id} className="p-5 bg-gradient-to-r from-emerald-50/90 to-white/90 backdrop-blur-md border border-emerald-100/80 rounded-[2rem] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-shadow duration-300">
-                          <div>
-                            <h4 className="font-bold text-emerald-900 text-sm tracking-tight">Registro Confirmado</h4>
-                            <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600/70 mt-1.5 flex items-center gap-2">
-                              <span>Llegada</span>
-                              <span className="w-1 h-1 bg-emerald-300 rounded-full"></span>
-                              <span>{new Date(asist.hora_entrada).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            </p>
-                          </div>
-                          <button onClick={() => setModalSalir(asist.id)} className="w-full sm:w-auto px-6 py-3 bg-white/90 backdrop-blur-sm border border-rose-100 text-rose-500 text-[10px] font-bold uppercase tracking-widest rounded-full shadow-[0_2px_10px_rgba(244,63,94,0.1)] hover:text-white hover:bg-rose-500 hover:border-transparent hover:shadow-[0_8px_20px_rgba(244,63,94,0.25)] transition-all duration-300 cursor-pointer active:scale-95 text-center">Anular</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Mis Asignaturas */}
               <div className="bg-white/30 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.03)] rounded-[3rem] p-6 sm:p-8 flex-1 flex flex-col relative overflow-hidden group">
@@ -611,19 +563,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
         )}
       </div>
 
-      {modalSalir && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-[200] animate-[fade-in_0.2s_ease-out]">
-          <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Anular Asistencia</h3>
-            <p className="text-xs text-slate-500 font-medium mb-8">Introduce tu contraseña para confirmar.</p>
-            <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={() => { setModalSalir(null); setPassConfirm(''); }} className="py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
-              <button onClick={confirmarSalidaSegura} disabled={cargandoPass || !passConfirm} className="py-4 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold shadow-md shadow-rose-500/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Confirmar</button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
