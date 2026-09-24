@@ -324,7 +324,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
     // Fila 1: Porcentajes
     const filaStats: Record<string, string> = { Fecha: '% Faltas' };
     asignaturasUnicas.forEach(asigNombre => {
-      const asigObj = clasesHoy.find((a: any) => a.nombre === asigNombre);
+      const asigObj = clasesHoy.find(a => a.nombre === asigNombre) as any;
       if (asigObj && asigObj.statsFaltas) {
         filaStats[asigNombre] = `${asigObj.statsFaltas.porcentaje}% (${asigObj.statsFaltas.faltas}/${asigObj.statsFaltas.total})`;
       } else {
