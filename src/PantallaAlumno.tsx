@@ -98,7 +98,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
           
           let sesionesData: any[] = [];
           if (sesionIds.length > 0) {
-            const { data } = await supabase.from('sesiones').select('id, created_at, asignatura_id').in('id', sesionIds);
+            const { data, error } = await supabase.from('sesiones').select('id, fecha, asignatura_id').in('id', sesionIds);
+            if (error) console.error("Error cargando sesiones:", error);
             if (data) sesionesData = data;
           }
           
@@ -116,7 +117,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             return {
               ...registro,
               asignatura_nombre: asig?.nombre || 'Clase registrada',
-              fecha: registro.hora_entrada || ses?.created_at || new Date().toISOString()
+              fecha: registro.hora_entrada || ses?.fecha || new Date().toISOString()
             };
           }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
 
