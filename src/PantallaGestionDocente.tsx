@@ -8,6 +8,23 @@ interface Props {
 
 type TabGestion = 'ALUMNOS' | 'ASIGNATURAS';
 
+const obtenerClaveOrden = (nombreCompleto: string | undefined | null, porApellido: boolean) => {
+  if (!nombreCompleto) return '';
+  const str = nombreCompleto.trim().toLowerCase();
+  if (!porApellido) return str;
+  
+  const partes = str.split(/\s+/);
+  if (partes.length <= 1) return str;
+  
+  if (partes.length >= 3) {
+    const apellidos = partes.slice(-2).join(' ');
+    const nombre = partes.slice(0, -2).join(' ');
+    return `${apellidos} ${nombre}`;
+  } else {
+    return `${partes[1]} ${partes[0]}`;
+  }
+};
+
 export default function PantallaGestionDocente({ onVolver }: Props) {
   const [tabActual, setTabActual] = useState<TabGestion>('ALUMNOS');
   const [cargando, setCargando] = useState(true);
@@ -26,6 +43,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [cargandoHistorialAsig, setCargandoHistorialAsig] = useState(false);
   const [modalExportadorGlobal, setModalExportadorGlobal] = useState(false);
   const [exportacionBinaria, setExportacionBinaria] = useState(false);
+  const [ordenarPorApellido, setOrdenarPorApellido] = useState(true);
   const [modalExpulsion, setModalExpulsion] = useState<{tipo: 'UNA'|'TODAS', aluId: string, asigId?: string} | null>(null);
 
   const [fechaInicioGlobal, setFechaInicioGlobal] = useState<string>('');
@@ -323,7 +341,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       }
     });
 
-    const filas = Object.values(reporteAlumnos).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
+    const filas = Object.values(reporteAlumnos).sort((a: any, b: any) => 
+      obtenerClaveOrden(a.Alumno, ordenarPorApellido).localeCompare(obtenerClaveOrden(b.Alumno, ordenarPorApellido))
+    );
     return { filas };
   };
 
@@ -480,7 +500,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         }
       });
 
-      const filas = Object.values(reporte).sort((a: any, b: any) => a.Alumno.localeCompare(b.Alumno));
+      const filas = Object.values(reporte).sort((a: any, b: any) => 
+        obtenerClaveOrden(a.Alumno, ordenarPorApellido).localeCompare(obtenerClaveOrden(b.Alumno, ordenarPorApellido))
+      );
       if (filas.length > 0) {
         resultadosGlobales.push({ nombre: asig.nombre, filas });
       }
@@ -750,12 +772,23 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 </div>
               </div>
 
-              <div className="mb-6 flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
-                  {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+              <div className="mb-6 flex flex-col gap-3">
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                    {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
+
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setOrdenarPorApellido(!ordenarPorApellido)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${ordenarPorApellido ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                    {ordenarPorApellido && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por Apellidos</p>
+                  </div>
                 </div>
               </div>
 
@@ -898,12 +931,23 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 </div>
               </div>
 
-              <div className="mb-6 flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
-                <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
-                  {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+              <div className="mb-6 flex flex-col gap-3">
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                    {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
+
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setOrdenarPorApellido(!ordenarPorApellido)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${ordenarPorApellido ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                    {ordenarPorApellido && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por Apellidos</p>
+                  </div>
                 </div>
               </div>
 
