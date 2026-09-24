@@ -292,7 +292,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       await supabase.from('asistencias').delete().eq('sesion_id', sesionId);
       await supabase.from('sesiones').delete().eq('id', sesionId);
       
-      setFase('INICIO');
+      setFase('ENTRADA');
       setSesionId(null);
       setAsistencias([]);
       setMostrarModalCierre(false);
