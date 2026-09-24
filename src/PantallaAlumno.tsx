@@ -24,9 +24,6 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
 
-  
-
-  const [cargandoPass, setCargandoPass] = useState(false);
 
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
