@@ -97,9 +97,15 @@ export default function PantallaAlumno({ onVolver }: Props) {
       try {
         const { data: asistData } = await supabase.from('asistencias').select('*').eq('alumno_id', alumnoId);
         if (asistData && asistData.length > 0) {
-          const sesionIds = [...new Set(asistData.map(a => a.sesion_id))];
-          const { data: sesionesData } = await supabase.from('sesiones').select('id, created_at, asignatura_id').in('id', sesionIds);
-          const asigIds = [...new Set(sesionesData?.map(s => s.asignatura_id) || [])].filter(Boolean);
+          const sesionIds = [...new Set(asistData.map(a => a.sesion_id))].filter(Boolean);
+          
+          let sesionesData: any[] = [];
+          if (sesionIds.length > 0) {
+            const { data } = await supabase.from('sesiones').select('id, created_at, asignatura_id').in('id', sesionIds);
+            if (data) sesionesData = data;
+          }
+          
+          const asigIds = [...new Set(sesionesData.map(s => s.asignatura_id))].filter(Boolean);
           
           let asigData: any[] = [];
           if (asigIds.length > 0) {
@@ -108,7 +114,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
           }
 
           const historialMapeado = asistData.map((registro: any) => {
-            const ses = sesionesData?.find(s => s.id === registro.sesion_id);
+            const ses = sesionesData.find(s => s.id === registro.sesion_id);
             const asig = asigData.find(a => a.id === ses?.asignatura_id);
             return {
               ...registro,
