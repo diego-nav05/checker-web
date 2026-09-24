@@ -3,7 +3,6 @@ import QRCode from 'qrcode';
 import CryptoJS from 'crypto-js';
 import { supabase } from './supabase';
 import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
-import * as XLSX from 'xlsx';
 
 interface Props {
   onVolver: () => void;
