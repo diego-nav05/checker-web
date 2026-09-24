@@ -50,8 +50,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
       const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id');
       if (!sesiones || sesiones.length === 0) return;
       
-      const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))];
-      const { data: asignaturas } = await supabase.from('asignaturas').select('*').in('id', asigIdsAlumno).order('horario', { ascending: true });
+      const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))].filter(Boolean);
+      let asignaturas: any[] = [];
+      if (asigIdsAlumno.length > 0) {
+        const res = await supabase.from('asignaturas').select('*').in('id', asigIdsAlumno).order('horario', { ascending: true });
+        if (res.data) asignaturas = res.data;
+      }
       
       if (asignaturas) {
         const asigsConStats = asignaturas.map(asig => {
@@ -103,15 +107,20 @@ export default function PantallaAlumno({ onVolver }: Props) {
         if (asistData && asistData.length > 0) {
           const sesionIds = [...new Set(asistData.map(a => a.sesion_id))];
           const { data: sesionesData } = await supabase.from('sesiones').select('id, created_at, asignatura_id').in('id', sesionIds);
-          const asigIds = [...new Set(sesionesData?.map(s => s.asignatura_id) || [])];
-          const { data: asigData } = await supabase.from('asignaturas').select('id, nombre').in('id', asigIds);
+          const asigIds = [...new Set(sesionesData?.map(s => s.asignatura_id) || [])].filter(Boolean);
+          
+          let asigData: any[] = [];
+          if (asigIds.length > 0) {
+            const { data } = await supabase.from('asignaturas').select('id, nombre').in('id', asigIds);
+            if (data) asigData = data;
+          }
 
           const historialMapeado = asistData.map((registro: any) => {
             const ses = sesionesData?.find(s => s.id === registro.sesion_id);
-            const asig = asigData?.find(a => a.id === ses?.asignatura_id);
+            const asig = asigData.find(a => a.id === ses?.asignatura_id);
             return {
               ...registro,
-              asignatura_nombre: asig ? asig.nombre : 'Clase registrada',
+              asignatura_nombre: asig?.nombre || 'Clase registrada',
               fecha: registro.hora_entrada || ses?.created_at || new Date().toISOString()
             };
           }).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
