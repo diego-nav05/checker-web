@@ -318,22 +318,50 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const exportarHistorialAlumno = () => {
     if (historial.length === 0) return mostrarNotificacion('No hay datos.', 'info');
     
-    const statsPorAsig: Record<string, string> = {};
-    clasesHoy.forEach((asig: any) => {
-      if (asig.statsFaltas) {
-        statsPorAsig[asig.nombre] = `${asig.statsFaltas.porcentaje}% (${asig.statsFaltas.faltas}/${asig.statsFaltas.total})`;
+    // Obtener nombres de asignaturas únicas
+    const asignaturasUnicas = Array.from(new Set(historial.map(reg => reg.asignatura_nombre)));
+    
+    // Fila 1: Porcentajes
+    const filaStats: Record<string, string> = { Fecha: '% Faltas' };
+    asignaturasUnicas.forEach(asigNombre => {
+      const asigObj = clasesHoy.find((a: any) => a.nombre === asigNombre);
+      if (asigObj && asigObj.statsFaltas) {
+        filaStats[asigNombre] = `${asigObj.statsFaltas.porcentaje}% (${asigObj.statsFaltas.faltas}/${asigObj.statsFaltas.total})`;
+      } else {
+        filaStats[asigNombre] = 'N/A';
       }
     });
 
-    const filas = historial.map(reg => ({
-      '% Faltas Materia': statsPorAsig[reg.asignatura_nombre] || 'N/A',
-      Fecha: new Date(reg.fecha).toLocaleDateString(),
-      Asignatura: reg.asignatura_nombre,
-      Estado: reg.estado.replace(/_/g, ' '),
-      Entrada: reg.hora_entrada ? new Date(reg.hora_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-',
-      Salida: reg.hora_salida ? new Date(reg.hora_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '-',
-    }));
-    const hoja = XLSX.utils.json_to_sheet(filas);
+    // Agrupar asistencias por fecha
+    const registrosPorFecha: Record<string, Record<string, string>> = {};
+    const fechasOrdenadas: string[] = [];
+
+    historial.forEach(reg => {
+      const fechaStr = new Date(reg.fecha).toLocaleDateString();
+      if (!registrosPorFecha[fechaStr]) {
+        registrosPorFecha[fechaStr] = { Fecha: fechaStr };
+        fechasOrdenadas.push(fechaStr); // Como el historial viene ordenado desc, esto mantiene el orden
+      }
+      
+      const estadoLimpio = reg.estado.replace(/_/g, ' ');
+      const horaStr = reg.hora_entrada 
+        ? new Date(reg.hora_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+        : (reg.hora_salida ? new Date(reg.hora_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '');
+      
+      const valor = horaStr ? `${estadoLimpio} (${horaStr})` : estadoLimpio;
+      
+      // Si ya hay un registro de esa asignatura ese día, lo concatenamos
+      if (registrosPorFecha[fechaStr][reg.asignatura_nombre]) {
+        registrosPorFecha[fechaStr][reg.asignatura_nombre] += ` | ${valor}`;
+      } else {
+        registrosPorFecha[fechaStr][reg.asignatura_nombre] = valor;
+      }
+    });
+
+    const filasData = fechasOrdenadas.map(f => registrosPorFecha[f]);
+    const filasFinales = [filaStats, ...filasData];
+
+    const hoja = XLSX.utils.json_to_sheet(filasFinales);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Mi_Asistencia');
     XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
