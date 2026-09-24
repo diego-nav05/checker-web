@@ -75,11 +75,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       if (!asigs || asigs.length === 0) return setAlumnos([]);
       
       const asigIds = asigs.map(a => a.id);
-      const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
       if (!sesiones || sesiones.length === 0) return setAlumnos([]);
       
       const sesionIds = sesiones.map(s => s.id);
-      const { data: asistencias } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', sesionIds);
+      const { data: asistencias } = await supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', sesionIds);
       if (!asistencias || asistencias.length === 0) return setAlumnos([]);
 
       const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
@@ -90,8 +90,31 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         .in('id', aluIds)
         .eq('rol', 'alumno')
         .order('nombre_completo', { ascending: true });
-      
-      if (perfiles) setAlumnos(perfiles);
+      if (perfiles) {
+        const perfilesConStats = perfiles.map(perfil => {
+          const asistsAlumno = asistencias.filter(a => a.alumno_id === perfil.id);
+          const asigIdsAlumno = [...new Set(asistsAlumno.map(a => sesiones.find(s => s.id === a.sesion_id)?.asignatura_id).filter(Boolean))];
+          const totalSesionesPosibles = sesiones.filter(s => asigIdsAlumno.includes(s.asignatura_id)).length;
+          
+          const asistenciasValidas = asistsAlumno.filter(a => {
+            const st = a.estado?.toUpperCase() || '';
+            return !(st.includes('AUSENTE') || st.includes('INJUSTIFICADA') || st === 'FALTA');
+          }).length;
+          
+          const faltas = totalSesionesPosibles - asistenciasValidas;
+          const porcentajeFaltas = totalSesionesPosibles > 0 ? Math.round((faltas / totalSesionesPosibles) * 100) : 0;
+          
+          return {
+            ...perfil,
+            statsFaltas: {
+              faltas,
+              total: totalSesionesPosibles,
+              porcentaje: porcentajeFaltas
+            }
+          };
+        });
+        setAlumnos(perfilesConStats);
+      }
     } finally {
       setCargando(false);
     }
@@ -316,9 +339,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     sesionesFiltradas.sort((a, b) => new Date(a.fechaIso).getTime() - new Date(b.fechaIso).getTime());
 
     const reporteAlumnos: Record<string, any> = {};
+    const totalSesiones = sesionesFiltradas.length;
 
     aluIds.forEach(aluId => {
-      reporteAlumnos[aluId] = { Alumno: mapPerfiles[aluId] || 'Estudiante Desconocido' };
+      reporteAlumnos[aluId] = { Alumno: mapPerfiles[aluId] || 'Estudiante Desconocido', '% Faltas': '' };
       sesionesFiltradas.forEach(ses => { reporteAlumnos[aluId][ses.fechaStr] = exportacionBinaria ? 0 : 'AUSENTE'; });
     });
 
@@ -340,6 +364,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         }
       }
     });
+
+    if (totalSesiones > 0) {
+      Object.keys(reporteAlumnos).forEach(aluId => {
+        let faltas = 0;
+        sesionesFiltradas.forEach(ses => {
+           const val = reporteAlumnos[aluId][ses.fechaStr];
+           if (val === 0 || (typeof val === 'string' && (val.includes('AUSENTE') || val.includes('INJUSTIFICADA') || val === 'FALTA'))) {
+              faltas++;
+           }
+        });
+        const porcentaje = Math.round((faltas / totalSesiones) * 100);
+        reporteAlumnos[aluId]['% Faltas'] = `${porcentaje}% (${faltas}/${totalSesiones})`;
+      });
+    }
 
     const filas = Object.values(reporteAlumnos).sort((a: any, b: any) => 
       obtenerClaveOrden(a.Alumno, ordenarPorApellido).localeCompare(obtenerClaveOrden(b.Alumno, ordenarPorApellido))
@@ -474,10 +512,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       if (asistsDeEstaAsig.length === 0) return;
 
       const reporte: Record<string, any> = {};
+      const totalSesionesAsig = sesionesFiltradas.length;
       const alumnosEnEstaAsig = [...new Set(asistsDeEstaAsig.map(a => a.alumno_id))];
 
       alumnosEnEstaAsig.forEach(idAlu => {
-        reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante Desconocido' };
+        reporte[idAlu] = { Alumno: mapPerfiles[idAlu] || 'Estudiante Desconocido', '% Faltas': '' };
         sesionesFiltradas.forEach(ses => { reporte[idAlu][ses.fechaStr] = exportacionBinaria ? 0 : 'AUSENTE'; });
       });
 
@@ -499,6 +538,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           }
         }
       });
+
+      if (totalSesionesAsig > 0) {
+        Object.keys(reporte).forEach(idAlu => {
+          let faltas = 0;
+          sesionesFiltradas.forEach(ses => {
+             const val = reporte[idAlu][ses.fechaStr];
+             if (val === 0 || (typeof val === 'string' && (val.includes('AUSENTE') || val.includes('INJUSTIFICADA') || val === 'FALTA'))) {
+                faltas++;
+             }
+          });
+          const porcentaje = Math.round((faltas / totalSesionesAsig) * 100);
+          reporte[idAlu]['% Faltas'] = `${porcentaje}% (${faltas}/${totalSesionesAsig})`;
+        });
+      }
 
       const filas = Object.values(reporte).sort((a: any, b: any) => 
         obtenerClaveOrden(a.Alumno, ordenarPorApellido).localeCompare(obtenerClaveOrden(b.Alumno, ordenarPorApellido))
@@ -666,9 +719,20 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     <div className="overflow-hidden pr-4">
                       <h3 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h3>
                       <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{alumno.email}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className={`w-2 h-2 rounded-full ${alumno.dispositivo_hash ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{alumno.dispositivo_hash ? 'Vinculado' : 'Sin Dispositivo'}</span>
+                      <div className="flex flex-wrap items-center gap-3 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`w-2 h-2 rounded-full ${alumno.dispositivo_hash ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{alumno.dispositivo_hash ? 'Vinculado' : 'Sin Disp.'}</span>
+                        </div>
+                        {alumno.statsFaltas && (
+                          <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md border ${
+                            alumno.statsFaltas.porcentaje >= 30 ? 'bg-rose-50 text-rose-600 border-rose-100' : 
+                            alumno.statsFaltas.porcentaje >= 15 ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                            'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          }`}>
+                            <span>{alumno.statsFaltas.porcentaje}% Faltas ({alumno.statsFaltas.faltas}/{alumno.statsFaltas.total})</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <button onClick={() => abrirGestionAlumno(alumno)} className="shrink-0 px-4 py-2.5 bg-slate-50 text-[#002b5c] hover:text-white hover:bg-[#0090d0] text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm">

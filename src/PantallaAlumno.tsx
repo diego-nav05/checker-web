@@ -43,16 +43,41 @@ export default function PantallaAlumno({ onVolver }: Props) {
     if (!alumnoId) return;
     setCargandoClases(true);
     try {
-      const { data: misAsistencias } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumnoId);
+      const { data: misAsistencias } = await supabase.from('asistencias').select('sesion_id, estado').eq('alumno_id', alumnoId);
       if (!misAsistencias || misAsistencias.length === 0) return setClasesHoy([]);
       
-      const sesionIds = [...new Set(misAsistencias.map(a => a.sesion_id))];
-      const { data: sesiones } = await supabase.from('sesiones').select('asignatura_id').in('id', sesionIds);
+      const sesionIdsAlumno = [...new Set(misAsistencias.map(a => a.sesion_id))];
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id');
       if (!sesiones || sesiones.length === 0) return;
       
-      const asigIds = [...new Set(sesiones.map(s => s.asignatura_id))];
-      const { data: asignaturas } = await supabase.from('asignaturas').select('*').in('id', asigIds).order('horario', { ascending: true });
-      if (asignaturas) setClasesHoy(asignaturas as Asignatura[]);
+      const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))];
+      const { data: asignaturas } = await supabase.from('asignaturas').select('*').in('id', asigIdsAlumno).order('horario', { ascending: true });
+      
+      if (asignaturas) {
+        const asigsConStats = asignaturas.map(asig => {
+           const sesionesDeAsig = sesiones.filter(s => s.asignatura_id === asig.id);
+           const totalSesionesPosibles = sesionesDeAsig.length;
+           
+           const asistsDeEstaAsig = misAsistencias.filter(a => sesionesDeAsig.some(s => s.id === a.sesion_id));
+           const asistenciasValidas = asistsDeEstaAsig.filter(a => {
+              const st = a.estado?.toUpperCase() || '';
+              return !(st.includes('AUSENTE') || st.includes('INJUSTIFICADA') || st === 'FALTA');
+           }).length;
+           
+           const faltas = totalSesionesPosibles - asistenciasValidas;
+           const porcentajeFaltas = totalSesionesPosibles > 0 ? Math.round((faltas / totalSesionesPosibles) * 100) : 0;
+           
+           return {
+             ...asig,
+             statsFaltas: {
+                faltas,
+                total: totalSesionesPosibles,
+                porcentaje: porcentajeFaltas
+             }
+           }
+        });
+        setClasesHoy(asigsConStats as Asignatura[]);
+      }
     } finally {
       setCargandoClases(false);
     }
@@ -292,7 +317,16 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
   const exportarHistorialAlumno = () => {
     if (historial.length === 0) return mostrarNotificacion('No hay datos.', 'info');
+    
+    const statsPorAsig: Record<string, string> = {};
+    clasesHoy.forEach((asig: any) => {
+      if (asig.statsFaltas) {
+        statsPorAsig[asig.nombre] = `${asig.statsFaltas.porcentaje}% (${asig.statsFaltas.faltas}/${asig.statsFaltas.total})`;
+      }
+    });
+
     const filas = historial.map(reg => ({
+      '% Faltas Materia': statsPorAsig[reg.asignatura_nombre] || 'N/A',
       Fecha: new Date(reg.fecha).toLocaleDateString(),
       Asignatura: reg.asignatura_nombre,
       Estado: reg.estado.replace(/_/g, ' '),
@@ -467,13 +501,24 @@ export default function PantallaAlumno({ onVolver }: Props) {
                   </div>
                 ) : (
                   <div className="space-y-4 relative z-10">
-                    {clasesHoy.map((clase) => (
+                    {clasesHoy.map((clase: any) => (
                       <div key={clase.id} className="p-5 flex items-center justify-between gap-4 bg-white/60 backdrop-blur-lg border border-white hover:bg-white hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default">
                         <div className="flex flex-col">
                           <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight leading-snug">{clase.nombre}</h4>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <svg className="w-3.5 h-3.5 text-[#0090d0]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <span className="text-[11px] font-bold tracking-widest text-[#0090d0]/80">{clase.horario}</span>
+                          <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-3.5 h-3.5 text-[#0090d0]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                              <span className="text-[11px] font-bold tracking-widest text-[#0090d0]/80">{clase.horario}</span>
+                            </div>
+                            {clase.statsFaltas && (
+                              <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md border ${
+                                clase.statsFaltas.porcentaje >= 30 ? 'bg-rose-50 text-rose-600 border-rose-100' : 
+                                clase.statsFaltas.porcentaje >= 15 ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                                'bg-emerald-50 text-emerald-600 border-emerald-100'
+                              }`}>
+                                <span>{clase.statsFaltas.porcentaje}% Faltas ({clase.statsFaltas.faltas}/{clase.statsFaltas.total})</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="bg-[#F0F4F8] border border-slate-200/60 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-widest text-[#002b5c] group-hover/card:bg-gradient-to-r group-hover/card:from-[#0090d0] group-hover/card:to-[#002b5c] group-hover/card:text-white group-hover/card:border-transparent transition-colors duration-500 shadow-sm flex-shrink-0">
