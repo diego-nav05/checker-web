@@ -278,6 +278,38 @@ export default function PantallaProfesor({ onVolver }: Props) {
     }
   };
 
+  const descartarClaseSinGuardar = async () => {
+    if (!passInput) return;
+    setCargandoCierre(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error("Sin sesión activa.");
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
+      if (authError) throw new Error("Contraseña incorrecta.");
+
+      if (!sesionId) return;
+      
+      await supabase.from('asistencias').delete().eq('sesion_id', sesionId);
+      await supabase.from('sesiones').delete().eq('id', sesionId);
+      
+      setFase('INICIO');
+      setSesionId(null);
+      setAsistencias([]);
+      setMostrarModalCierre(false);
+      setPassInput('');
+      mostrarNotificacion('Clase descartada.', 'exito');
+      
+      if (popUpRef.current && !popUpRef.current.closed) {
+        popUpRef.current.close();
+      }
+
+    } catch (error: any) {
+      mostrarNotificacion(error.message, 'error');
+    } finally {
+      setCargandoCierre(false);
+    }
+  };
+
   const cambiarEstadoManual = async (asistenciaId: string, nuevoEstado: EstadoAsistencia) => {
     await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
     cargarAsistencias(sesionId!, diccionarioAlumnos); 
@@ -565,8 +597,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
             <div className="grid grid-cols-2 gap-4">
               <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
-              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-4 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold shadow-md shadow-rose-500/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar</button>
+              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y Guardar</button>
             </div>
+            <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="mt-4 w-full py-4 rounded-2xl bg-rose-50 text-rose-600 text-sm font-bold hover:bg-rose-100 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar sin guardar (Eliminar)</button>
           </div>
         </div>
       )}
