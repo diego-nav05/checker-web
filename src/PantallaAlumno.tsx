@@ -196,17 +196,21 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
               if (fase === 'ENTRADA') {
                 if (existe) {
-                  await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
+                  const { error } = await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
+                  if (error) throw new Error(error.message);
                 } else {
-                  await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
+                  const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
+                  if (error) throw new Error(error.message);
                 }
                 mostrarNotificacion('¡Entrada registrada!', 'exito');
               } else {
                 if (existe) {
                   const nuevoEstado = existe.hora_entrada ? existe.estado : 'RETRASO';
-                  await supabase.from('asistencias').update({ hora_salida: ahora, estado: nuevoEstado }).eq('id', existe.id);
+                  const { error } = await supabase.from('asistencias').update({ hora_salida: ahora, estado: nuevoEstado }).eq('id', existe.id);
+                  if (error) throw new Error(error.message);
                 } else {
-                  await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'RETRASO', hora_salida: ahora });
+                  const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'RETRASO', hora_salida: ahora });
+                  if (error) throw new Error(error.message);
                 }
                 mostrarNotificacion('¡Salida completada!', 'exito');
               }
