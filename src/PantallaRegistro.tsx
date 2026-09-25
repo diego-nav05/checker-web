@@ -34,10 +34,10 @@ export default function PantallaRegistro({ onVolver }: Props) {
     setCargando(true);
     setNotificacion(null);
 
-    // Excepción para tu correo: si en el recuadro de profe escribes tu gmail, 
-    // el estado tendrá el sufijo añadido, así que lo detectamos y lo limpiamos.
+    // Excepción para tu correo: si en el recuadro de profe escribes "diegogr.navia.oficial", 
+    // el estado tendrá el sufijo @uneatlantico.es añadido, lo interceptamos y lo cambiamos a gmail.
     let emailFinal = email;
-    if (esRegistro && rolRegistro === 'profesor' && email === 'diegogr.navia.oficial@gmail.com@uneatlantico.es') {
+    if (esRegistro && rolRegistro === 'profesor' && email === 'diegogr.navia.oficial@uneatlantico.es') {
       emailFinal = 'diegogr.navia.oficial@gmail.com';
     }
 
