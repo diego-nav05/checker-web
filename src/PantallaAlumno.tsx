@@ -170,7 +170,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
           const onScanSuccess = async (decodedText: string) => {
             if (isProcessingLocally) return;
             isProcessingLocally = true;
-            const tiempoEscaneo = Date.now();
+
             if (html5QrCode.getState() === 2) html5QrCode.pause();
             setProcesandoQr(true);
 
@@ -181,7 +181,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
               if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
               
-              if (Math.abs(Math.floor(tiempoEscaneo / 1000) - bloqueTiempo) > 4) throw new Error('Código caducado. Vuelve a enfocar.');
+              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. Vuelve a enfocar.');
               
               const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
               if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
@@ -236,7 +236,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             }
           };
 
-          await html5QrCode.start({ facingMode: "environment" }, { fps: 15 }, onScanSuccess, () => {});
+          await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
         } catch {
           if (isMounted) {
             mostrarNotificacion('Error conectando con la cámara.', 'error');
@@ -396,22 +396,15 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Visor UI (Cuadrado central) */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] border-2 border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-              {/* Esquinas guía del escáner */}
-              <div className="absolute -top-[1px] -left-[1px] w-14 h-14 border-t-4 border-l-4 border-[#00d2ff] rounded-tl-[2rem]"></div>
-              <div className="absolute -top-[1px] -right-[1px] w-14 h-14 border-t-4 border-r-4 border-[#00d2ff] rounded-tr-[2rem]"></div>
-              <div className="absolute -bottom-[1px] -left-[1px] w-14 h-14 border-b-4 border-l-4 border-[#00d2ff] rounded-bl-[2rem]"></div>
-              <div className="absolute -bottom-[1px] -right-[1px] w-14 h-14 border-b-4 border-r-4 border-[#00d2ff] rounded-br-[2rem]"></div>
-
-              {/* Indicador de ayuda */}
-              <div className="absolute -bottom-10 inset-x-0 flex justify-center text-center">
-                <span className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md bg-black/40 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/10">
-                  Enfoca el código QR aquí
-                </span>
-              </div>
+            <div className="w-[70vw] max-w-[300px] aspect-square relative">
+              {/* Esquinas Lector */}
+              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/80 rounded-tl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/80 rounded-tr-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/80 rounded-bl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white/80 rounded-br-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
               
               {procesandoQr && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-[2rem] transition-all">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl transition-all">
                   <div className="w-10 h-10 border-4 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.5)]"></div>
                 </div>
               )}
@@ -420,7 +413,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Contenedor de Video del Escáner */}
           <div className="flex-1 w-full h-full overflow-hidden bg-black flex items-center justify-center">
-            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300 [&_#qr-shaded-region]:hidden"></div>
+            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300"></div>
           </div>
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}
