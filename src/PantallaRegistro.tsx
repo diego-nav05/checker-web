@@ -38,14 +38,14 @@ export default function PantallaRegistro({ onVolver }: Props) {
     // Excepción para tu correo: si en el recuadro de profe escribes "diegogr.navia.oficial", 
     // el estado tendrá el sufijo @uneatlantico.es añadido, lo interceptamos y lo cambiamos a gmail.
     let emailFinal = email;
-    if (esRegistro && rolRegistro === 'profesor' && email === 'diegogr.navia.oficial@uneatlantico.es') {
+    if (email === 'diegogr.navia.oficial@uneatlantico.es') {
       emailFinal = 'diegogr.navia.oficial@gmail.com';
     }
 
     try {
       if (esRecuperarPass) {
         if (!email.trim()) throw new Error('Introduce tu correo electrónico.');
-        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        const { error } = await supabase.auth.resetPasswordForEmail(emailFinal);
         if (error) throw error;
         mostrarNotificacion('Te hemos enviado un correo para restablecer la contraseña.', 'exito');
         setTimeout(() => setEsRecuperarPass(false), 3000);
@@ -98,7 +98,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
         setTimeout(onVolver, 1500);
 
       } else {
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: emailFinal, password });
         if (authError) throw authError;
 
         const { data: perfil, error: profileError } = await supabase.from('perfiles').select('*').eq('id', authData.user.id).single();
@@ -134,6 +134,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
       const msgLower = mensaje.toLowerCase();
       
       if (msgLower.includes('invalid login credentials')) mensaje = 'Correo o contraseña incorrectos.';
+      else if (msgLower.includes('email not confirmed')) mensaje = 'Debes confirmar tu correo. Revisa tu bandeja de entrada.';
       else if (msgLower.includes('already registered')) mensaje = 'Este correo ya tiene una cuenta. Inicia sesión.';
       else if (msgLower.includes('password should be at least')) mensaje = 'La contraseña debe tener al menos 6 caracteres.';
       else if (msgLower.includes('unable to validate email address') || msgLower.includes('invalid format')) mensaje = 'El formato del correo electrónico es inválido.';

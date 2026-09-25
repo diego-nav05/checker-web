@@ -236,7 +236,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             }
           };
 
-          await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {});
+          await html5QrCode.start({ facingMode: "environment" }, { fps: 15 }, onScanSuccess, () => {});
         } catch {
           if (isMounted) {
             mostrarNotificacion('Error conectando con la cámara.', 'error');

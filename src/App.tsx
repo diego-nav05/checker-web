@@ -26,7 +26,7 @@ export default function App() {
     const idAlumno = localStorage.getItem('checker_alumno_id');
     
     if (!idAlumno && rol !== 'profesor') {
-      setNotificacion({ texto: '👋 Si eres un nuevo alumno, ve al apartado "Vincular".', tipo: 'info' });
+      setNotificacion({ texto: '👋 Si eres un nuevo alumno, ve al apartado "Vincular" (o "Mi Cuenta" en PC).', tipo: 'info' });
       const timer = setTimeout(() => setNotificacion(null), 8000);
       return () => clearTimeout(timer);
     }
@@ -78,7 +78,7 @@ export default function App() {
     }
 
     if (!idGuardado) {
-      mostrarNotificacion('Ve al apartado "Vincular" para enlazar tu dispositivo.', 'info');
+      mostrarNotificacion('Ve al apartado "Vincular" (o "Mi Cuenta" en PC) para enlazar tu dispositivo.', 'info');
       irAPanel('REGISTRO');
       return;
     }
@@ -242,11 +242,23 @@ export default function App() {
             <div className="absolute top-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-[30px] -ml-10 -mt-10 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/20"></div>
             
             <svg className="w-8 h-8 relative z-10 transition-colors duration-300 text-white/90 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-              {(!alumnoVinculado && localStorage.getItem('checker_rol') !== 'profesor') ? <path strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /> : <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />}
+              {alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor' ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              ) : (
+                <>
+                  <path className="sm:hidden" strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <path className="hidden sm:block" strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </>
+              )}
             </svg>
             
             <span className="text-[clamp(1.15rem,5vw,1.5rem)] font-black tracking-tight transition-colors duration-300 relative z-10 text-white">
-              {(!alumnoVinculado && localStorage.getItem('checker_rol') !== 'profesor') ? 'Vincular' : 'Mi Cuenta'}
+              {alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor' ? 'Mi Cuenta' : (
+                <>
+                  <span className="sm:hidden">Vincular</span>
+                  <span className="hidden sm:inline">Mi Cuenta</span>
+                </>
+              )}
             </span>
           </button>
         </div>
