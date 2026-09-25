@@ -197,20 +197,40 @@ export default function PantallaAlumno({ onVolver }: Props) {
               if (fase === 'ENTRADA') {
                 if (existe) {
                   const { error } = await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
-                  if (error) throw new Error(error.message);
+                  if (error) {
+                    if (error.message.includes('asistencias_alumno_id_fkey')) {
+                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
+                    }
+                    throw new Error(error.message);
+                  }
                 } else {
                   const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
-                  if (error) throw new Error(error.message);
+                  if (error) {
+                    if (error.message.includes('asistencias_alumno_id_fkey')) {
+                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
+                    }
+                    throw new Error(error.message);
+                  }
                 }
                 mostrarNotificacion('¡Entrada registrada!', 'exito');
               } else {
                 if (existe) {
                   const nuevoEstado = existe.hora_entrada ? existe.estado : 'RETRASO';
                   const { error } = await supabase.from('asistencias').update({ hora_salida: ahora, estado: nuevoEstado }).eq('id', existe.id);
-                  if (error) throw new Error(error.message);
+                  if (error) {
+                    if (error.message.includes('asistencias_alumno_id_fkey')) {
+                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
+                    }
+                    throw new Error(error.message);
+                  }
                 } else {
                   const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'RETRASO', hora_salida: ahora });
-                  if (error) throw new Error(error.message);
+                  if (error) {
+                    if (error.message.includes('asistencias_alumno_id_fkey')) {
+                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
+                    }
+                    throw new Error(error.message);
+                  }
                 }
                 mostrarNotificacion('¡Salida completada!', 'exito');
               }
@@ -233,7 +253,15 @@ export default function PantallaAlumno({ onVolver }: Props) {
               setCamaraActiva(false);
               
             } catch (e: any) {
-              mostrarNotificacion(e.message || 'Error procesando código.', 'error');
+              if (e.message && e.message.includes('Cuenta eliminada o desvinculada')) {
+                localStorage.removeItem('checker_alumno_id');
+                mostrarNotificacion('Tu sesión expiró o fue eliminada. Vincula tu móvil de nuevo.', 'error');
+                setTimeout(() => {
+                  window.location.reload();
+                }, 2000);
+              } else {
+                mostrarNotificacion(e.message || 'Error procesando código.', 'error');
+              }
               setProcesandoQr(false);
               isProcessingLocally = false;
               if (html5QrCode.getState() === 3) html5QrCode.resume();
@@ -410,15 +438,22 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Visor UI (Cuadrado central) */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[70vw] max-w-[300px] aspect-square relative">
-              {/* Esquinas Lector */}
-              <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white/80 rounded-tl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
-              <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white/80 rounded-tr-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
-              <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white/80 rounded-bl-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
-              <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white/80 rounded-br-3xl shadow-[0_0_15px_rgba(255,255,255,0.2)]"></div>
+            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] border-2 border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+              {/* Esquinas guía del escáner */}
+              <div className="absolute -top-[1px] -left-[1px] w-14 h-14 border-t-4 border-l-4 border-[#00d2ff] rounded-tl-[2rem]"></div>
+              <div className="absolute -top-[1px] -right-[1px] w-14 h-14 border-t-4 border-r-4 border-[#00d2ff] rounded-tr-[2rem]"></div>
+              <div className="absolute -bottom-[1px] -left-[1px] w-14 h-14 border-b-4 border-l-4 border-[#00d2ff] rounded-bl-[2rem]"></div>
+              <div className="absolute -bottom-[1px] -right-[1px] w-14 h-14 border-b-4 border-r-4 border-[#00d2ff] rounded-br-[2rem]"></div>
+
+              {/* Indicador de ayuda */}
+              <div className="absolute -bottom-10 inset-x-0 flex justify-center text-center">
+                <span className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md bg-black/40 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/10">
+                  Enfoca el código QR aquí
+                </span>
+              </div>
               
               {procesandoQr && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl transition-all">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-[2rem] transition-all">
                   <div className="w-10 h-10 border-4 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.5)]"></div>
                 </div>
               )}
@@ -427,7 +462,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Contenedor de Video del Escáner */}
           <div className="flex-1 w-full h-full overflow-hidden bg-black flex items-center justify-center">
-            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300"></div>
+            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300 [&_#qr-shaded-region]:hidden"></div>
           </div>
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}
