@@ -54,9 +54,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
 
-  const [editandoDiasId, setEditandoDiasId] = useState<string | null>(null);
-  const [diasTemp, setDiasTemp] = useState<number[]>([]);
-
   const [alumnoGestion, setAlumnoGestion] = useState<any | null>(null);
   const [asignaturasAlumno, setAsignaturasAlumno] = useState<any[]>([]);
   const [cargandoAlumno, setCargandoAlumno] = useState(false);
@@ -688,28 +685,18 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     else if (e.key === 'Escape') setEditandoAulaId(null);
   };
 
-  const iniciarEdicionDias = (id: string, diasActuales: number[]) => {
-    setEditandoDiasId(id);
-    setDiasTemp(diasActuales || []);
-  };
+  const toggleDiaDirecto = async (asig: any, diaId: number) => {
+    const diasActuales = asig.dias_semana || [];
+    const nuevosDias = diasActuales.includes(diaId)
+      ? diasActuales.filter((d: number) => d !== diaId)
+      : [...diasActuales, diaId];
 
-  const toggleDiaEdicion = (dia: number) => {
-    setDiasTemp(prev => 
-      prev.includes(dia) ? prev.filter(d => d !== dia) : [...prev, dia]
-    );
-  };
+    setAsignaturas(prev => prev.map(a => a.id === asig.id ? { ...a, dias_semana: nuevosDias } : a));
 
-  const guardarEdicionDias = async (id: string) => {
-    setEditandoDiasId(null);
-
-    setAsignaturas(prev => prev.map(a => a.id === id ? { ...a, dias_semana: diasTemp } : a));
-
-    const { error } = await supabase.from('asignaturas').update({ dias_semana: diasTemp }).eq('id', id);
+    const { error } = await supabase.from('asignaturas').update({ dias_semana: nuevosDias }).eq('id', asig.id);
     if (error) {
       mostrarNotificacion('Error actualizando días.', 'error');
       cargarAsignaturas();
-    } else {
-      mostrarNotificacion('Días actualizados.', 'exito');
     }
   };
 
@@ -844,50 +831,26 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         
                       </div>
 
-                      <div className="mt-4 border-t border-slate-100 pt-3 flex flex-wrap gap-1.5">
-                        {editandoDiasId === asig.id ? (
-                          <div className="flex flex-col gap-2 w-full">
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
-                                { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                              ].map(dia => {
-                                const seleccionado = diasTemp.includes(dia.id);
-                                return (
-                                  <button
-                                    key={dia.id}
-                                    onClick={() => toggleDiaEdicion(dia.id)}
-                                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                                      seleccionado ? 'bg-[#0090d0] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                    }`}
-                                  >
-                                    {dia.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={() => guardarEdicionDias(asig.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold transition-colors">Guardar</button>
-                              <button onClick={() => setEditandoDiasId(null)} className="bg-slate-200 hover:bg-slate-300 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold transition-colors">Cancelar</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 group/dias cursor-pointer" onClick={() => iniciarEdicionDias(asig.id, asig.dias_semana)}>
-                            {[
-                              { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
-                              { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                            ].map(dia => {
-                              const seleccionado = (asig.dias_semana || []).includes(dia.id);
-                              if (!seleccionado) return null;
-                              return (
-                                <span key={dia.id} className="w-5 h-5 rounded-full bg-slate-100 text-[#002b5c] flex items-center justify-center text-[9px] font-bold">
-                                  {dia.label}
-                                </span>
-                              );
-                            })}
-                            <span className="text-[10px] text-slate-400 font-semibold opacity-0 group-hover/dias:opacity-100 transition-opacity ml-1">Editar</span>
-                          </div>
-                        )}
+                      <div className="mt-4 border-t border-slate-100 pt-4 flex flex-wrap gap-1.5 justify-center">
+                        {[
+                          { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
+                          { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
+                        ].map(dia => {
+                          const seleccionado = (asig.dias_semana || []).includes(dia.id);
+                          return (
+                            <button
+                              key={dia.id}
+                              onClick={() => toggleDiaDirecto(asig, dia.id)}
+                              className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all cursor-pointer ${
+                                seleccionado 
+                                  ? 'bg-[#0090d0] text-white shadow-md shadow-[#0090d0]/20 scale-110' 
+                                  : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                              }`}
+                            >
+                              {dia.label}
+                            </button>
+                          );
+                        })}
                       </div>
 
                     </div>
