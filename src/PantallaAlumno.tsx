@@ -245,7 +245,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             { fps: 10 },
             onScanSuccess,
             () => {}
-          ).catch((err) => {
+          ).catch(() => {
             if (isMounted) {
               mostrarNotificacion('Error conectando con la cámara.', 'error');
               setCamaraActiva(false);
