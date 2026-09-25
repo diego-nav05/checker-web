@@ -34,14 +34,21 @@ export default function PantallaRegistro({ onVolver }: Props) {
     setCargando(true);
     setNotificacion(null);
 
+    // Excepción para tu correo: si en el recuadro de profe escribes tu gmail, 
+    // el estado tendrá el sufijo añadido, así que lo detectamos y lo limpiamos.
+    let emailFinal = email;
+    if (esRegistro && rolRegistro === 'profesor' && email === 'diegogr.navia.oficial@gmail.com@uneatlantico.es') {
+      emailFinal = 'diegogr.navia.oficial@gmail.com';
+    }
+
     try {
       if (esRegistro) {
         if (!nombre.trim()) throw new Error('El nombre es obligatorio.');
-        if (rolRegistro === 'profesor' && !email.endsWith('@uneatlantico.es')) {
+        if (rolRegistro === 'profesor' && !emailFinal.endsWith('@uneatlantico.es') && emailFinal !== 'diegogr.navia.oficial@gmail.com') {
           throw new Error('Los docentes deben registrarse con un correo @uneatlantico.es');
         }
         
-        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+        const { data: authData, error: authError } = await supabase.auth.signUp({ email: emailFinal, password });
         if (authError) throw authError;
         if (!authData.user) throw new Error('Error interno al crear la cuenta.');
 
@@ -50,7 +57,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
         const { error: profileError } = await supabase.from('perfiles').insert([{
           id: authData.user.id,
           nombre_completo: nombre,
-          email: email,
+          email: emailFinal,
           rol: rolRegistro,
           dispositivo_hash: hash
         }]);
@@ -199,7 +206,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
             {esRegistro ? (
               <button onClick={() => { setEsRegistro(false); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
                 <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
-                  ¿Ya tienes cuenta? <span className="text-[#0090d0]">Vincula aquí</span>
+                  ¿Ya tienes una cuenta? <span className="text-[#0090d0]">Inicia sesión</span>
                 </span>
               </button>
             ) : (
