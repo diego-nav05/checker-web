@@ -37,6 +37,9 @@ export default function PantallaRegistro({ onVolver }: Props) {
     try {
       if (esRegistro) {
         if (!nombre.trim()) throw new Error('El nombre es obligatorio.');
+        if (rolRegistro === 'profesor' && !email.endsWith('@uneatlantico.es')) {
+          throw new Error('Los docentes deben registrarse con un correo @uneatlantico.es');
+        }
         
         const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
         if (authError) throw authError;
@@ -53,6 +56,17 @@ export default function PantallaRegistro({ onVolver }: Props) {
         }]);
 
         if (profileError) throw profileError;
+
+        if (!authData.session) {
+          mostrarNotificacion('Se ha enviado un enlace a tu correo. Revísalo para activar tu cuenta.', 'info');
+          setTimeout(() => {
+            setEsRegistro(false);
+            setNombre('');
+            setEmail('');
+            setPassword('');
+          }, 3500);
+          return;
+        }
 
         localStorage.setItem('checker_nombre', nombre);
         localStorage.setItem('checker_rol', rolRegistro);
@@ -115,12 +129,14 @@ export default function PantallaRegistro({ onVolver }: Props) {
       <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
 
       {notificacion && (
-        <div className={`fixed top-6 left-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 anim-drop w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-          'bg-[#002b5c]/95 border-white/10 text-white'
-        }`}>
-          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
+        <div className="fixed top-6 left-0 w-full flex justify-center z-[200] pointer-events-none">
+          <div className={`px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 anim-drop w-fit min-w-[280px] max-w-sm border ${
+            notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
+            notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
+            'bg-[#002b5c]/95 border-white/10 text-white'
+          }`}>
+            <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
+          </div>
         </div>
       )}
 
@@ -154,7 +170,23 @@ export default function PantallaRegistro({ onVolver }: Props) {
               </div>
             )}
 
-            <input type="email" placeholder="Correo UNEATLANTICO" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
+            {esRegistro && rolRegistro === 'profesor' ? (
+              <div className="flex w-full bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus-within:border-[#0090d0]/30 focus-within:ring-4 focus-within:ring-[#0090d0]/10 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden">
+                <input 
+                  type="text" 
+                  placeholder="nombre.apellido" 
+                  value={email.replace('@uneatlantico.es', '')} 
+                  onChange={(e) => setEmail(e.target.value.replace('@uneatlantico.es', '') + '@uneatlantico.es')} 
+                  className="w-full p-4 bg-transparent outline-none text-[#002b5c] text-sm font-bold tracking-wide" 
+                  required
+                />
+                <div className="pr-4 py-4 flex items-center text-[#002b5c]/60 text-sm font-bold select-none pointer-events-none">
+                  @uneatlantico.es
+                </div>
+              </div>
+            ) : (
+              <input type="email" placeholder="Correo UNEATLANTICO" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
+            )}
             <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
 
             <button type="submit" disabled={cargando} className={`w-full mt-4 py-4 text-white font-bold rounded-[1.5rem] transition-all duration-300 shadow-[0_8px_20px_rgba(0,43,92,0.3)] hover:shadow-[0_12px_25px_rgba(0,144,208,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide border ${esRegistro ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] border-[#0090d0]/50 shadow-[0_8px_20px_rgba(0,144,208,0.3)]' : 'bg-gradient-to-br from-[#002b5c] to-[#001a38] border-[#002b5c]/50'}`}>
