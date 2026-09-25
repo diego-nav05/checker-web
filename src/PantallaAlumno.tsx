@@ -396,12 +396,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Visor UI (Cuadrado central) */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] border border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] border-2 border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
               {/* Esquinas guía del escáner */}
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00d2ff] rounded-tl-[1.25rem] -translate-x-[2px] -translate-y-[2px]"></div>
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#00d2ff] rounded-tr-[1.25rem] translate-x-[2px] -translate-y-[2px]"></div>
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#00d2ff] rounded-bl-[1.25rem] -translate-x-[2px] translate-y-[2px]"></div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#00d2ff] rounded-br-[1.25rem] translate-x-[2px] translate-y-[2px]"></div>
+              <div className="absolute -top-[1px] -left-[1px] w-14 h-14 border-t-4 border-l-4 border-[#00d2ff] rounded-tl-[2rem]"></div>
+              <div className="absolute -top-[1px] -right-[1px] w-14 h-14 border-t-4 border-r-4 border-[#00d2ff] rounded-tr-[2rem]"></div>
+              <div className="absolute -bottom-[1px] -left-[1px] w-14 h-14 border-b-4 border-l-4 border-[#00d2ff] rounded-bl-[2rem]"></div>
+              <div className="absolute -bottom-[1px] -right-[1px] w-14 h-14 border-b-4 border-r-4 border-[#00d2ff] rounded-br-[2rem]"></div>
 
               {/* Indicador de ayuda */}
               <div className="absolute -bottom-10 inset-x-0 flex justify-center text-center">
