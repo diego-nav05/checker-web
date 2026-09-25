@@ -32,7 +32,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [alumnos, setAlumnos] = useState<any[]>([]);
   const [asignaturas, setAsignaturas] = useState<any[]>([]);
   const [modalAsignatura, setModalAsignatura] = useState(false);
-  const [formAsignatura, setFormAsignatura] = useState({ nombre: '', aula: '', horario: '' });
+  const [formAsignatura, setFormAsignatura] = useState({ nombre: '', aula: '', horario: '', dias_semana: [] as number[] });
   const [guardandoAsig, setGuardandoAsig] = useState(false);
 
   const [modalEliminarAsig, setModalEliminarAsig] = useState<string | null>(null);
@@ -53,6 +53,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
   const [editandoAulaId, setEditandoAulaId] = useState<string | null>(null);
   const [aulaTemp, setAulaTemp] = useState<string>('');
+
+  const [editandoDiasId, setEditandoDiasId] = useState<string | null>(null);
+  const [diasTemp, setDiasTemp] = useState<number[]>([]);
 
   const [alumnoGestion, setAlumnoGestion] = useState<any | null>(null);
   const [asignaturasAlumno, setAsignaturasAlumno] = useState<any[]>([]);
@@ -222,15 +225,30 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setModalExpulsion(null);
   };
 
+  const toggleDiaSemana = (dia: number) => {
+    setFormAsignatura(prev => {
+      const dias = prev.dias_semana.includes(dia) 
+        ? prev.dias_semana.filter(d => d !== dia) 
+        : [...prev.dias_semana, dia];
+      return { ...prev, dias_semana: dias };
+    });
+  };
+
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
     e.preventDefault();
     setGuardandoAsig(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('asignaturas').insert([{ nombre: formAsignatura.nombre, aula: formAsignatura.aula, horario: formAsignatura.horario, profesor_id: user?.id }]);
+    const { error } = await supabase.from('asignaturas').insert([{ 
+      nombre: formAsignatura.nombre, 
+      aula: formAsignatura.aula, 
+      horario: formAsignatura.horario, 
+      profesor_id: user?.id,
+      dias_semana: formAsignatura.dias_semana
+    }]);
     setGuardandoAsig(false);
     if (error) mostrarNotificacion('Error al crear asignatura.', 'error');
     else { 
-      setFormAsignatura({ nombre: '', aula: '', horario: '' }); 
+      setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); 
       setModalAsignatura(false); 
       mostrarNotificacion('Asignatura creada.', 'exito');
       cargarAsignaturas(); 
@@ -670,6 +688,31 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     else if (e.key === 'Escape') setEditandoAulaId(null);
   };
 
+  const iniciarEdicionDias = (id: string, diasActuales: number[]) => {
+    setEditandoDiasId(id);
+    setDiasTemp(diasActuales || []);
+  };
+
+  const toggleDiaEdicion = (dia: number) => {
+    setDiasTemp(prev => 
+      prev.includes(dia) ? prev.filter(d => d !== dia) : [...prev, dia]
+    );
+  };
+
+  const guardarEdicionDias = async (id: string) => {
+    setEditandoDiasId(null);
+
+    setAsignaturas(prev => prev.map(a => a.id === id ? { ...a, dias_semana: diasTemp } : a));
+
+    const { error } = await supabase.from('asignaturas').update({ dias_semana: diasTemp }).eq('id', id);
+    if (error) {
+      mostrarNotificacion('Error actualizando días.', 'error');
+      cargarAsignaturas();
+    } else {
+      mostrarNotificacion('Días actualizados.', 'exito');
+    }
+  };
+
   return (
     <div className="min-h-[100dvh] bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
@@ -800,6 +843,53 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         )}
                         
                       </div>
+
+                      <div className="mt-4 border-t border-slate-100 pt-3 flex flex-wrap gap-1.5">
+                        {editandoDiasId === asig.id ? (
+                          <div className="flex flex-col gap-2 w-full">
+                            <div className="flex flex-wrap gap-1.5">
+                              {[
+                                { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
+                                { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
+                              ].map(dia => {
+                                const seleccionado = diasTemp.includes(dia.id);
+                                return (
+                                  <button
+                                    key={dia.id}
+                                    onClick={() => toggleDiaEdicion(dia.id)}
+                                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                                      seleccionado ? 'bg-[#0090d0] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {dia.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="flex gap-2">
+                              <button onClick={() => guardarEdicionDias(asig.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded-lg text-[10px] font-bold transition-colors">Guardar</button>
+                              <button onClick={() => setEditandoDiasId(null)} className="bg-slate-200 hover:bg-slate-300 text-slate-600 px-3 py-1 rounded-lg text-[10px] font-bold transition-colors">Cancelar</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group/dias cursor-pointer" onClick={() => iniciarEdicionDias(asig.id, asig.dias_semana)}>
+                            {[
+                              { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
+                              { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
+                            ].map(dia => {
+                              const seleccionado = (asig.dias_semana || []).includes(dia.id);
+                              if (!seleccionado) return null;
+                              return (
+                                <span key={dia.id} className="w-5 h-5 rounded-full bg-slate-100 text-[#002b5c] flex items-center justify-center text-[9px] font-bold">
+                                  {dia.label}
+                                </span>
+                              );
+                            })}
+                            <span className="text-[10px] text-slate-400 font-semibold opacity-0 group-hover/dias:opacity-100 transition-opacity ml-1">Editar</span>
+                          </div>
+                        )}
+                      </div>
+
                     </div>
                     <button onClick={() => abrirDetallesAsignatura(asig)} className="mt-6 w-full py-3 bg-slate-50 hover:bg-[#0090d0] text-[#002b5c] hover:text-white text-xs font-bold rounded-[1rem] transition-all cursor-pointer active:scale-95">
                       Exportar Matriz
@@ -945,14 +1035,39 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Crear Asignatura</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Completa los datos base.</p>
+            <p className="text-xs text-slate-500 font-medium mb-6">Completa los datos base y días de clase.</p>
             <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
               <input type="text" placeholder="Materia (ej. Física)" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
               <input type="text" placeholder="Aula (ej. Lab 1)" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({...formAsignatura, aula: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
               <input type="text" placeholder="Horario (ej. L - 09:00)" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
+              
+              <div className="mt-2">
+                <p className="text-xs font-bold text-[#002b5c] uppercase tracking-wider mb-3">Días de la semana</p>
+                <div className="flex justify-between gap-1">
+                  {[
+                    { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
+                    { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
+                  ].map(dia => {
+                    const seleccionado = formAsignatura.dias_semana.includes(dia.id);
+                    return (
+                      <button
+                        key={dia.id}
+                        type="button"
+                        onClick={() => toggleDiaSemana(dia.id)}
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                          seleccionado ? 'bg-[#0090d0] text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {dia.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3 mt-4">
-                <button type="button" onClick={() => setModalAsignatura(false)} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
-                <button type="submit" disabled={guardandoAsig} className="py-3.5 rounded-2xl bg-[#002b5c] text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Guardar</button>
+                <button type="button" onClick={() => { setModalAsignatura(false); setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
+                <button type="submit" disabled={guardandoAsig || formAsignatura.dias_semana.length === 0} className="py-3.5 rounded-2xl bg-[#002b5c] text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Guardar</button>
               </div>
             </form>
           </div>

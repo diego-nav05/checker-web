@@ -48,7 +48,15 @@ export default function PantallaProfesor({ onVolver }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('horario', { ascending: true });
-        if (data) setClasesHoy(data);
+        if (data) {
+          const hoy = new Date().getDay();
+          const sorted = [...data].sort((a, b) => {
+            const aHoy = (a.dias_semana || []).includes(hoy) ? 1 : 0;
+            const bHoy = (b.dias_semana || []).includes(hoy) ? 1 : 0;
+            return bHoy - aHoy;
+          });
+          setClasesHoy(sorted);
+        }
       }
       setCargandoClases(false);
     };
@@ -376,20 +384,27 @@ export default function PantallaProfesor({ onVolver }: Props) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clasesHoy.map((clase) => (
-                <div key={clase.id} className="glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)] hover:-translate-y-1 transition-all duration-500 group">
+              {clasesHoy.map((clase) => {
+                const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
+                return (
+                <div key={clase.id} className={`glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:-translate-y-1 transition-all duration-500 group ${esHoy ? 'border-2 border-emerald-400/50 shadow-[0_20px_40px_-12px_rgba(52,211,153,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(52,211,153,0.4)]' : 'hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)]'}`}>
                   <div>
                     <div className="flex items-center justify-between mb-5">
-                      <span className="px-4 py-1.5 bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold uppercase tracking-widest rounded-full group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>
+                      <div className="flex items-center gap-2">
+                        {esHoy && (
+                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-black uppercase tracking-widest rounded-full animate-pulse">¡Hoy!</span>
+                        )}
+                        <span className="px-4 py-1.5 bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold uppercase tracking-widest rounded-full group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>
+                      </div>
                       <span className="text-slate-400 text-[11px] font-bold tracking-wider uppercase">{clase.horario}</span>
                     </div>
                     <h3 className="text-2xl font-black text-[#002b5c] mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
                   </div>
-                  <button onClick={() => iniciarClase(clase.id)} className="w-full py-4 bg-slate-50 text-[#002b5c] hover:bg-[#002b5c] hover:text-white border border-slate-100 text-sm font-bold rounded-[1.5rem] transition-all duration-300 shadow-sm hover:shadow-[0_10px_20px_rgba(0,43,92,0.15)] active:scale-95 cursor-pointer">
+                  <button onClick={() => iniciarClase(clase.id)} className={`w-full py-4 text-sm font-bold rounded-[1.5rem] transition-all duration-300 shadow-sm active:scale-95 cursor-pointer border ${esHoy ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:text-white border-emerald-100 hover:shadow-[0_10px_20px_rgba(52,211,153,0.2)]' : 'bg-slate-50 text-[#002b5c] hover:bg-[#002b5c] hover:text-white border-slate-100 hover:shadow-[0_10px_20px_rgba(0,43,92,0.15)]'}`}>
                     Iniciar Aula
                   </button>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>

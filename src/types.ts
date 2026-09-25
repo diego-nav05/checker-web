@@ -18,6 +18,7 @@ export interface Asignatura {
   codigo?: string;
   profesor_id?: string;
   created_at?: string;
+  dias_semana?: number[]; // 0 = Domingo, 1 = Lunes, ..., 6 = Sabado
 }
 
 
