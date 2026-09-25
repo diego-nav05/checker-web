@@ -143,7 +143,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
   useEffect(() => {
     if (!sesionId || !secretTotp || fase === 'CERRADA') return;
     const actualizarQR = async () => {
-      const bloqueTiempo = Math.floor(Date.now() / 4000);
+      const bloqueTiempo = Math.floor(Date.now() / 1000);
       const payload = `${sesionId}|${fase}|${bloqueTiempo}`;
       const token = CryptoJS.HmacSHA256(payload, secretTotp).toString();
       const qrPayload = JSON.stringify({ s: sesionId, f: fase, t: bloqueTiempo, token });
@@ -167,7 +167,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     };
     
     actualizarQR();
-    timerRef.current = setInterval(actualizarQR, 4000);
+    timerRef.current = setInterval(actualizarQR, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [sesionId, secretTotp, fase]);
 

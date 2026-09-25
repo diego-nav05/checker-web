@@ -181,7 +181,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
               const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
               if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
               
-              if (Math.abs(Math.floor(Date.now() / 4000) - bloqueTiempo) > 1) throw new Error('Código caducado. Vuelve a enfocar.');
+              if (Math.abs(Math.floor(Date.now() / 1000) - bloqueTiempo) > 4) throw new Error('Código caducado. Vuelve a enfocar.');
               
               const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
               if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
