@@ -10,6 +10,7 @@ interface Props {
 
 export default function PantallaRegistro({ onVolver }: Props) {
   const [esRegistro, setEsRegistro] = useState(true);
+  const [esRecuperarPass, setEsRecuperarPass] = useState(false);
   const [rolRegistro, setRolRegistro] = useState<'alumno' | 'profesor'>('alumno');
   
   const [email, setEmail] = useState('');
@@ -42,6 +43,15 @@ export default function PantallaRegistro({ onVolver }: Props) {
     }
 
     try {
+      if (esRecuperarPass) {
+        if (!email.trim()) throw new Error('Introduce tu correo electrónico.');
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        mostrarNotificacion('Te hemos enviado un correo para restablecer la contraseña.', 'exito');
+        setTimeout(() => setEsRecuperarPass(false), 3000);
+        return;
+      }
+
       if (esRegistro) {
         if (!nombre.trim()) throw new Error('El nombre es obligatorio.');
         if (rolRegistro === 'profesor' && !emailFinal.endsWith('@uneatlantico.es') && emailFinal !== 'diegogr.navia.oficial@gmail.com') {
@@ -155,14 +165,14 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
         <div className="relative z-10">
           <h2 className="text-3xl font-black text-[#002b5c] tracking-tight leading-none mb-3">
-            {esRegistro ? 'Nueva Cuenta' : 'Bienvenido'}
+            {esRecuperarPass ? 'Recuperar Contraseña' : (esRegistro ? 'Nueva Cuenta' : 'Bienvenido')}
           </h2>
           <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
-            {esRegistro ? 'Regístrate una sola vez para vincular tu dispositivo de forma segura.' : 'Introduce tu correo y contraseña para acceder.'}
+            {esRecuperarPass ? 'Introduce tu correo y te enviaremos un enlace para cambiarla.' : (esRegistro ? 'Regístrate una sola vez para vincular tu dispositivo de forma segura.' : 'Introduce tu correo y contraseña para acceder.')}
           </p>
 
           <form onSubmit={autenticar} className="flex flex-col gap-4">
-            {esRegistro && (
+            {!esRecuperarPass && esRegistro && (
               <div className="animate-[fade-in-down_0.3s_ease-out]">
                 <div className="flex bg-white/50 backdrop-blur-md p-1.5 rounded-[1.5rem] border border-white mb-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
                   <button type="button" onClick={() => setRolRegistro('alumno')} className={`flex-1 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all duration-300 cursor-pointer ${rolRegistro === 'alumno' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>
@@ -177,7 +187,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
               </div>
             )}
 
-            {esRegistro && rolRegistro === 'profesor' ? (
+            {!esRecuperarPass && esRegistro && rolRegistro === 'profesor' ? (
               <div className="flex w-full bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus-within:border-[#0090d0]/30 focus-within:ring-4 focus-within:ring-[#0090d0]/10 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden">
                 <input 
                   type="text" 
@@ -194,27 +204,38 @@ export default function PantallaRegistro({ onVolver }: Props) {
             ) : (
               <input type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
             )}
-            <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
+            {!esRecuperarPass && (
+              <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
+            )}
 
-            <button type="submit" disabled={cargando} className={`w-full mt-4 py-4 text-white font-bold rounded-[1.5rem] transition-all duration-300 shadow-[0_8px_20px_rgba(0,43,92,0.3)] hover:shadow-[0_12px_25px_rgba(0,144,208,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide border ${esRegistro ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] border-[#0090d0]/50 shadow-[0_8px_20px_rgba(0,144,208,0.3)]' : 'bg-gradient-to-br from-[#002b5c] to-[#001a38] border-[#002b5c]/50'}`}>
-              {cargando ? 'Procesando...' : (esRegistro ? 'Crear mi Cuenta' : 'Iniciar Sesión')}
+            <button type="submit" disabled={cargando} className={`w-full mt-4 py-4 text-white font-bold rounded-[1.5rem] transition-all duration-300 shadow-[0_8px_20px_rgba(0,43,92,0.3)] hover:shadow-[0_12px_25px_rgba(0,144,208,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide border ${esRegistro || esRecuperarPass ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] border-[#0090d0]/50 shadow-[0_8px_20px_rgba(0,144,208,0.3)]' : 'bg-gradient-to-br from-[#002b5c] to-[#001a38] border-[#002b5c]/50'}`}>
+              {cargando ? 'Procesando...' : (esRecuperarPass ? 'Enviar correo de recuperación' : (esRegistro ? 'Crear mi Cuenta' : 'Iniciar Sesión'))}
             </button>
           </form>
 
           <div className="mt-8 text-center flex flex-col items-center gap-3">
             <div className="w-16 h-[1px] bg-slate-200/60 mb-1"></div>
-            {esRegistro ? (
-              <button onClick={() => { setEsRegistro(false); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+            {esRecuperarPass ? (
+              <button type="button" onClick={() => setEsRecuperarPass(false)} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">Volver a <span className="text-[#0090d0]">Iniciar Sesión</span></span>
+              </button>
+            ) : esRegistro ? (
+              <button type="button" onClick={() => { setEsRegistro(false); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
                 <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
                   ¿Ya tienes una cuenta? <span className="text-[#0090d0]">Inicia sesión</span>
                 </span>
               </button>
             ) : (
-              <button onClick={() => { setEsRegistro(true); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
-                  ¿Eres nuevo? <span className="text-[#002b5c] opacity-70 group-hover:opacity-100">Regístrate aquí</span>
-                </span>
-              </button>
+              <div className="flex flex-col items-center gap-4">
+                <button type="button" onClick={() => { setEsRegistro(true); setNotificacion(null); setEmail(''); setPassword(''); setNombre(''); }} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                  <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
+                    ¿Eres nuevo? <span className="text-[#002b5c] opacity-70 group-hover:opacity-100">Regístrate aquí</span>
+                  </span>
+                </button>
+                <button type="button" onClick={() => { setEsRecuperarPass(true); setNotificacion(null); setPassword(''); }} className="text-xs font-bold text-slate-400 hover:text-[#0090d0] transition-colors cursor-pointer active:scale-95">
+                  ¿Has olvidado tu contraseña?
+                </button>
+              </div>
             )}
           </div>
         </div>
