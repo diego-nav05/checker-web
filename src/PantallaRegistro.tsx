@@ -130,10 +130,18 @@ export default function PantallaRegistro({ onVolver }: Props) {
         setTimeout(onVolver, 1000);
       }
     } catch (error: any) {
-      let mensaje = error.message;
-      if (mensaje.includes('Invalid login credentials')) mensaje = 'Correo o contraseña incorrectos.';
-      if (mensaje.includes('already registered')) mensaje = 'Este correo ya tiene una cuenta. Pulsa abajo para Iniciar Sesión.';
-      if (mensaje.includes('Password should be at least')) mensaje = 'La contraseña debe tener al menos 6 caracteres.';
+      let mensaje = error.message || 'Ha ocurrido un error inesperado.';
+      const msgLower = mensaje.toLowerCase();
+      
+      if (msgLower.includes('invalid login credentials')) mensaje = 'Correo o contraseña incorrectos.';
+      else if (msgLower.includes('already registered')) mensaje = 'Este correo ya tiene una cuenta. Inicia sesión.';
+      else if (msgLower.includes('password should be at least')) mensaje = 'La contraseña debe tener al menos 6 caracteres.';
+      else if (msgLower.includes('unable to validate email address') || msgLower.includes('invalid format')) mensaje = 'El formato del correo electrónico es inválido.';
+      else if (msgLower.includes('rate limit')) mensaje = 'Demasiados intentos. Por favor, espera unos minutos.';
+      else if (msgLower.includes('email link is invalid')) mensaje = 'El enlace ha caducado o no es válido.';
+      else if (msgLower.includes('user not found')) mensaje = 'No hay ninguna cuenta registrada con este correo.';
+      else if (msgLower.includes('email not confirmed')) mensaje = 'Debes confirmar tu correo electrónico para poder entrar.';
+      else if (msgLower.includes('missing email')) mensaje = 'Por favor, introduce tu correo electrónico.';
       
       mostrarNotificacion(mensaje, 'error');
     } finally {
