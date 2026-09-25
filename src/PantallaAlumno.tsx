@@ -396,11 +396,22 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Visor UI (Cuadrado central) */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[70vw] max-w-[300px] aspect-square relative">
-              {/* Esquinas Lector ocultas */}
+            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] border border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+              {/* Esquinas guía del escáner */}
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#00d2ff] rounded-tl-[1.25rem] -translate-x-[2px] -translate-y-[2px]"></div>
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#00d2ff] rounded-tr-[1.25rem] translate-x-[2px] -translate-y-[2px]"></div>
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#00d2ff] rounded-bl-[1.25rem] -translate-x-[2px] translate-y-[2px]"></div>
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#00d2ff] rounded-br-[1.25rem] translate-x-[2px] translate-y-[2px]"></div>
+
+              {/* Indicador de ayuda */}
+              <div className="absolute -bottom-10 inset-x-0 flex justify-center text-center">
+                <span className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md bg-black/40 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/10">
+                  Enfoca el código QR aquí
+                </span>
+              </div>
               
               {procesandoQr && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-3xl transition-all">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-[2rem] transition-all">
                   <div className="w-10 h-10 border-4 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.5)]"></div>
                 </div>
               )}
