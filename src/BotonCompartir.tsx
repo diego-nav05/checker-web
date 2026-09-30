@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface Props {
@@ -7,6 +7,26 @@ interface Props {
 
 export default function BotonCompartir({ mostrarNotificacion }: Props) {
   const [mostrarQR, setMostrarQR] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setMostrarQR(false);
+      setIsClosing(false);
+    }, 300);
+  };
+
+  // Escuchar tecla Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && mostrarQR) {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mostrarQR]);
 
   return (
     <>
@@ -30,15 +50,15 @@ export default function BotonCompartir({ mostrarNotificacion }: Props) {
       </button>
 
       {mostrarQR && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#F0F4F8] p-4 sm:p-8 anim-drop overflow-y-auto select-none">
+        <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/30 backdrop-blur-md p-4 sm:p-8 overflow-y-auto select-none transition-all duration-300 ${isClosing ? 'opacity-0' : 'opacity-100 animate-[fade-in_0.3s_ease-out]'}`}>
           <button 
-            onClick={() => setMostrarQR(false)} 
-            className="absolute top-4 right-4 sm:top-8 sm:right-8 w-12 h-12 flex items-center justify-center bg-white border border-slate-200/50 rounded-full text-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:scale-105 active:scale-95 cursor-pointer z-10"
+            onClick={handleClose} 
+            className={`absolute top-4 right-4 sm:top-8 sm:right-8 w-12 h-12 flex items-center justify-center bg-white border border-slate-200/50 rounded-full text-slate-500 shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:scale-105 active:scale-95 cursor-pointer z-10 ${isClosing ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}
           >
             <svg className="w-6 h-6 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
 
-          <div className="flex flex-col items-center justify-center w-full max-w-2xl lg:max-w-4xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-12 relative overflow-hidden">
+          <div className={`flex flex-col items-center justify-center w-full max-w-2xl lg:max-w-4xl bg-white rounded-[2rem] shadow-2xl p-6 sm:p-12 relative overflow-hidden transition-all duration-300 transform ${isClosing ? 'scale-95 opacity-0 translate-y-4' : 'scale-100 opacity-100 translate-y-0 anim-drop'}`}>
             <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-[#002b5c] tracking-tight mb-8 text-center leading-tight">Escanea para unirte</h2>
             
             <div className="bg-white p-4 sm:p-8 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] border border-slate-100 mb-8 aspect-square w-full flex items-center justify-center" style={{ maxWidth: 'min(70vh, 100%)' }}>

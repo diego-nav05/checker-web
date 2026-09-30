@@ -473,7 +473,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
@@ -488,7 +488,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[100px] hover:scale-105 ${
+                          style={{ textAlignLast: 'center' }}
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[90px] sm:min-w-[100px] hover:scale-105 ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
@@ -515,7 +516,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
@@ -530,7 +531,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[100px] hover:scale-105 ${
+                          style={{ textAlignLast: 'center' }}
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[90px] sm:min-w-[100px] hover:scale-105 ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
