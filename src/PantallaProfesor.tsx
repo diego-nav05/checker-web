@@ -236,7 +236,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const intentarCerrarAula = () => {
     if (fase === 'ENTRADA') {
-      const confirmar = window.confirm('Aviso: No activaste la salida.\nSi cierras ahora, se validará la asistencia a todos.\n¿Cerrar?');
+      const confirmar = window.confirm('Aviso: No activaste la salida.\nSi cierras ahora, se validará automáticamente la salida a los alumnos que ya estaban en clase.\nLos alumnos que no entraron a tiempo ya no podrán escanear y quedarán como pendientes/ausentes.\n\n¿Cerrar clase de todos modos?');
       if (!confirmar) return;
     }
     setMostrarModalCierre(true);
