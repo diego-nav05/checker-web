@@ -53,12 +53,14 @@ export default function PantallaProfesor({ onVolver }: Props) {
         if (data) {
           const asigIds = data.map((a: any) => a.id);
           
+          let sAbiertas: any[] | null = null;
           if (asigIds.length > 0) {
-            const { data: sAbiertas } = await supabase.from('sesiones')
+            const { data: sesiones } = await supabase.from('sesiones')
               .select('*')
               .in('asignatura_id', asigIds)
               .in('fase', ['ENTRADA', 'SALIDA']);
             
+            sAbiertas = sesiones;
             if (sAbiertas) {
                const activas: Record<string, any> = {};
                sAbiertas.forEach(s => activas[s.asignatura_id] = s);
