@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import CryptoJS from 'crypto-js';
 import { supabase } from './supabase';
 import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
+import BotonCompartir from './BotonCompartir';
 
 interface Props {
   onVolver: () => void;
@@ -570,7 +571,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
-
+      <BotonCompartir mostrarNotificacion={mostrarNotificacion} />
     </div>
   );
 }

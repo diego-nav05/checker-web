@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import * as XLSX from 'xlsx';
+import BotonCompartir from './BotonCompartir';
 
 interface Props {
   onVolver: () => void;
@@ -1137,6 +1138,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         </div>
       )}
 
+      <BotonCompartir mostrarNotificacion={mostrarNotificacion} />
     </div>
   );
 }
