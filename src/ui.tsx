@@ -16,14 +16,17 @@ interface PantallaProps {
   ancho?: 'estrecho' | 'normal' | 'amplio';
   centrada?: boolean;
   className?: string;
+  // Elementos pegados a los bordes de la pantalla (botón de compartir, sesión del docente...)
+  esquinas?: ReactNode;
 }
 
 const ANCHOS = { estrecho: 'max-w-sm', normal: 'max-w-6xl', amplio: 'max-w-[1700px]' };
 
-export function Pantalla({ children, ancho = 'normal', centrada = false, className }: PantallaProps) {
+export function Pantalla({ children, ancho = 'normal', centrada = false, className, esquinas }: PantallaProps) {
   return (
-    <div className="min-h-[100dvh] bg-fondo p-4 sm:p-8 flex flex-col font-sans selection:bg-azul selection:text-white relative overflow-hidden">
+    <div className={unir('min-h-[100dvh] bg-fondo p-4 sm:p-8 flex flex-col font-sans selection:bg-azul selection:text-white relative overflow-hidden', esquinas && 'pb-24 sm:pb-24')}>
       <div className="glow-blob"></div>
+      {esquinas}
       <div className={unir('relative z-10 w-full mx-auto flex flex-col flex-1', ANCHOS[ancho], centrada && 'justify-center', className)}>
         {children}
       </div>

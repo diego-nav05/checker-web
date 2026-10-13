@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import * as XLSX from 'xlsx';
 import BotonCompartir from './BotonCompartir';
-import { Boton, Cabecera, Esqueleto, Pantalla, Pestanas, TituloSeccion, Vacio } from './ui';
+import { Boton, Cabecera, Campo, Esqueleto, Modal, Pantalla, Pestanas, TituloSeccion, Vacio } from './ui';
+import EditorHorario from './EditorHorario';
+import ClasesPasadas from './ClasesPasadas';
+import { DIAS, aEditable, cargarHorarios, filasDe, guardarHorario, tramo, type FilaHorario, type HorarioEditable } from './horario';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { altaAlumno, mensajeError, tieneCorreoReal, type ResultadoAlta } from './cuentas';
 import { borrarPorLotes, traerPorLotes, traerTodas } from './consultas';
@@ -40,7 +43,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [alumnos, setAlumnos] = useState<any[]>([]);
   const [asignaturas, setAsignaturas] = useState<any[]>([]);
   const [modalAsignatura, setModalAsignatura] = useState(false);
-  const [formAsignatura, setFormAsignatura] = useState({ nombre: '', aula: '', horario: '', dias_semana: [] as number[] });
+  const [formAsignatura, setFormAsignatura] = useState({ nombre: '', aula: '' });
+  const [horarioNuevo, setHorarioNuevo] = useState<HorarioEditable>({});
+  const [horarios, setHorarios] = useState<FilaHorario[]>([]);
+  // Editar el horario de una asignatura ya creada
+  const [editandoHorario, setEditandoHorario] = useState<{ asig: any; valor: HorarioEditable } | null>(null);
+  const [guardandoHorario, setGuardandoHorario] = useState(false);
+  // Corregir la asistencia de clases pasadas
+  const [clasesPasadasDe, setClasesPasadasDe] = useState<{ id: string; nombre: string } | null>(null);
   const [guardandoAsig, setGuardandoAsig] = useState(false);
 
   const [modalEliminarAsig, setModalEliminarAsig] = useState<string | null>(null);
@@ -204,7 +214,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('nombre', { ascending: true });
-      if (data) setAsignaturas(data);
+      if (data) {
+        setAsignaturas(data);
+        setHorarios(await cargarHorarios(data.map(a => a.id)));
+      }
     }
     setCargando(false);
   };
@@ -297,33 +310,51 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setModalExpulsion(null);
   };
 
-  const toggleDiaSemana = (dia: number) => {
-    setFormAsignatura(prev => {
-      const dias = prev.dias_semana.includes(dia) 
-        ? prev.dias_semana.filter(d => d !== dia) 
-        : [...prev.dias_semana, dia];
-      return { ...prev, dias_semana: dias };
-    });
-  };
+  // Comprueba que todos los días marcados tengan hora de inicio
+  const horarioIncompleto = (horario: HorarioEditable) =>
+    Object.keys(horario).length === 0 || Object.values(horario).some(h => !h.inicio);
 
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (horarioIncompleto(horarioNuevo)) return mostrarNotificacion('Marca al menos un día y escribe la hora de cada día.', 'error');
     setGuardandoAsig(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('asignaturas').insert([{ 
-      nombre: formAsignatura.nombre, 
-      aula: formAsignatura.aula, 
-      horario: formAsignatura.horario, 
-      profesor_id: user?.id,
-      dias_semana: formAsignatura.dias_semana
-    }]);
-    setGuardandoAsig(false);
-    if (error) mostrarNotificacion('No se pudo crear la asignatura. Inténtalo de nuevo.', 'error');
-    else { 
-      setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); 
-      setModalAsignatura(false); 
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from('asignaturas').insert([{
+        nombre: formAsignatura.nombre.trim(),
+        aula: formAsignatura.aula.trim(),
+        profesor_id: user?.id,
+      }]).select('id').single();
+      if (error || !data) throw error;
+      await guardarHorario(data.id, horarioNuevo, formAsignatura.aula.trim());
+      setFormAsignatura({ nombre: '', aula: '' });
+      setHorarioNuevo({});
+      setModalAsignatura(false);
       mostrarNotificacion('Asignatura creada.', 'exito');
-      cargarAsignaturas(); 
+      cargarAsignaturas();
+    } catch {
+      mostrarNotificacion('No se pudo crear la asignatura. Inténtalo de nuevo.', 'error');
+    } finally {
+      setGuardandoAsig(false);
+    }
+  };
+
+  const abrirEditorHorario = (asig: any) =>
+    setEditandoHorario({ asig, valor: aEditable(filasDe(horarios, asig.id)) });
+
+  const guardarHorarioEditado = async () => {
+    if (!editandoHorario) return;
+    if (horarioIncompleto(editandoHorario.valor)) return mostrarNotificacion('Marca al menos un día y escribe la hora de cada día.', 'error');
+    setGuardandoHorario(true);
+    try {
+      await guardarHorario(editandoHorario.asig.id, editandoHorario.valor, editandoHorario.asig.aula);
+      mostrarNotificacion('Horario guardado.', 'exito');
+      setEditandoHorario(null);
+      cargarAsignaturas();
+    } catch {
+      mostrarNotificacion('No se pudo guardar el horario. Inténtalo de nuevo.', 'error');
+    } finally {
+      setGuardandoHorario(false);
     }
   };
 
@@ -764,23 +795,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     else if (e.key === 'Escape') setEditandoAulaId(null);
   };
 
-  const toggleDiaDirecto = async (asig: any, diaId: number) => {
-    const diasActuales = asig.dias_semana || [];
-    const nuevosDias = diasActuales.includes(diaId)
-      ? diasActuales.filter((d: number) => d !== diaId)
-      : [...diasActuales, diaId];
-
-    setAsignaturas(prev => prev.map(a => a.id === asig.id ? { ...a, dias_semana: nuevosDias } : a));
-
-    const { error } = await supabase.from('asignaturas').update({ dias_semana: nuevosDias }).eq('id', asig.id);
-    if (error) {
-      mostrarNotificacion('No se pudieron guardar los días.', 'error');
-      cargarAsignaturas();
-    }
-  };
-
   return (
-    <Pantalla>
+    <Pantalla esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} />}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       <Cabecera titulo="Gestión" subtitulo="Tus alumnos y asignaturas" onVolver={onVolver} />
@@ -927,13 +943,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     <button onClick={() => setModalEliminarAsig(asig.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-400 hover:text-white hover:bg-rose-500 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer" title="Eliminar">✕</button>
                     <div>
                       <h3 className="font-bold text-marino text-lg pr-8">{asig.nombre}</h3>
-                      <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mt-3">
-                        <span>{asig.horario}</span>
-                        
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mt-3">
+                        <span>Aula</span>
                         {editandoAulaId === asig.id ? (
-                          <input 
+                          <input
                             autoFocus
-                            type="text" 
+                            type="text"
                             value={aulaTemp}
                             onChange={(e) => setAulaTemp(e.target.value)}
                             onBlur={() => guardarEdicionAula(asig.id)}
@@ -941,42 +956,38 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                             className="bg-slate-50 w-20 px-3 py-1.5 rounded-full border-none focus:ring-2 focus:ring-azul/20 text-marino text-center font-bold outline-none"
                           />
                         ) : (
-                          <span 
+                          <span
                             onClick={() => iniciarEdicionAula(asig.id, asig.aula)}
+                            title="Pulsa para cambiar el aula"
                             className="bg-azul/10 text-azul px-3 py-1.5 rounded-full uppercase tracking-wider text-[10px] font-bold cursor-pointer hover:bg-azul/20 transition-colors"
                           >
                             {asig.aula}
                           </span>
                         )}
-                        
                       </div>
 
-                      <div className="mt-4 border-t border-slate-100 pt-4 flex flex-wrap gap-1.5 justify-center">
-                        {[
-                          { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
-                          { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                        ].map(dia => {
-                          const seleccionado = (asig.dias_semana || []).includes(dia.id);
-                          return (
-                            <button
-                              key={dia.id}
-                              onClick={() => toggleDiaDirecto(asig, dia.id)}
-                              className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all cursor-pointer ${
-                                seleccionado 
-                                  ? 'bg-azul text-white shadow-md shadow-azul/20 scale-110' 
-                                  : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
-                              }`}
-                            >
-                              {dia.label}
-                            </button>
-                          );
-                        })}
+                      <div className="mt-4 border-t border-slate-100 pt-4 space-y-1.5">
+                        {filasDe(horarios, asig.id).length === 0 ? (
+                          <p className="text-xs text-slate-400 font-semibold">{asig.horario || 'Sin horario'}</p>
+                        ) : filasDe(horarios, asig.id).map(f => (
+                          <div key={f.dia_semana} className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-marino">{DIAS[f.dia_semana - 1].largo}</span>
+                            <span className="font-semibold text-slate-500">{tramo(f)}</span>
+                          </div>
+                        ))}
+                        <button onClick={() => abrirEditorHorario(asig)} className="text-xs font-bold text-azul hover:text-marino transition-colors cursor-pointer pt-1">
+                          Editar horario
+                        </button>
                       </div>
-
                     </div>
-                    <button onClick={() => abrirDetallesAsignatura(asig)} className="mt-6 w-full py-3 bg-slate-50 hover:bg-azul text-marino hover:text-white text-xs font-bold rounded-control transition-all cursor-pointer active:scale-95">
-                      Exportar asistencia
-                    </button>
+                    <div className="mt-6 grid grid-cols-2 gap-2">
+                      <button onClick={() => setClasesPasadasDe({ id: asig.id, nombre: asig.nombre })} className="py-3 bg-marino/5 hover:bg-marino text-marino hover:text-white text-xs font-bold rounded-control transition-all cursor-pointer active:scale-95">
+                        Clases pasadas
+                      </button>
+                      <button onClick={() => abrirDetallesAsignatura(asig)} className="py-3 bg-slate-50 hover:bg-azul text-marino hover:text-white text-xs font-bold rounded-control transition-all cursor-pointer active:scale-95">
+                        Exportar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1128,46 +1139,36 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- OTROS MODALES (Crear, Eliminar, Exportar Individual) --- */}
       {modalAsignatura && (
-        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-sm w-full shadow-2xl max-h-[90dvh] overflow-y-auto">
-            <h3 className="text-xl font-black text-marino tracking-tight mb-2">Nueva asignatura</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Rellena los datos y marca los días de clase.</p>
-            <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
-              <input type="text" placeholder="Nombre de la asignatura" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino" required/>
-              <input type="text" placeholder="Aula" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({...formAsignatura, aula: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino" required/>
-              <input type="text" placeholder="Horario (ej. 9:00 - 11:00)" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino" required/>
-              
-              <div className="mt-2">
-                <p className="text-xs font-bold text-marino uppercase tracking-wider mb-3">Días de la semana</p>
-                <div className="flex justify-between gap-1">
-                  {[
-                    { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
-                    { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                  ].map(dia => {
-                    const seleccionado = formAsignatura.dias_semana.includes(dia.id);
-                    return (
-                      <button
-                        key={dia.id}
-                        type="button"
-                        onClick={() => toggleDiaSemana(dia.id)}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                          seleccionado ? 'bg-azul text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                        }`}
-                      >
-                        {dia.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+        <Modal ancho="md" titulo="Nueva asignatura" descripcion="Rellena los datos y marca los días y horas de clase." onCerrar={() => setModalAsignatura(false)}>
+          <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
+            <Campo type="text" placeholder="Nombre de la asignatura" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({ ...formAsignatura, nombre: e.target.value })} required />
+            <Campo type="text" placeholder="Aula" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({ ...formAsignatura, aula: e.target.value })} required />
+            <div className="mt-1">
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Días y horas de clase</p>
+              <EditorHorario valor={horarioNuevo} onCambiar={setHorarioNuevo} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <Boton variante="secundario" onClick={() => { setModalAsignatura(false); setFormAsignatura({ nombre: '', aula: '' }); setHorarioNuevo({}); }}>Cancelar</Boton>
+              <Boton type="submit" disabled={guardandoAsig || horarioIncompleto(horarioNuevo)}>{guardandoAsig ? 'Guardando...' : 'Guardar'}</Boton>
+            </div>
+          </form>
+        </Modal>
+      )}
 
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <button type="button" onClick={() => { setModalAsignatura(false); setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); }} className="py-3.5 rounded-control text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
-                <button type="submit" disabled={guardandoAsig || formAsignatura.dias_semana.length === 0} className="py-3.5 rounded-control bg-marino text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Guardar</button>
-              </div>
-            </form>
+      {/* --- MODAL: EDITAR HORARIO DE UNA ASIGNATURA --- */}
+      {editandoHorario && (
+        <Modal ancho="md" titulo="Horario" descripcion={editandoHorario.asig.nombre} onCerrar={() => setEditandoHorario(null)}>
+          <EditorHorario valor={editandoHorario.valor} onCambiar={(valor) => setEditandoHorario({ ...editandoHorario, valor })} />
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Boton variante="secundario" onClick={() => setEditandoHorario(null)}>Cancelar</Boton>
+            <Boton onClick={guardarHorarioEditado} disabled={guardandoHorario || horarioIncompleto(editandoHorario.valor)}>{guardandoHorario ? 'Guardando...' : 'Guardar horario'}</Boton>
           </div>
-        </div>
+        </Modal>
+      )}
+
+      {/* --- MODAL: CLASES PASADAS (corregir asistencia) --- */}
+      {clasesPasadasDe && (
+        <ClasesPasadas asignatura={clasesPasadasDe} onCerrar={() => setClasesPasadasDe(null)} avisar={mostrarNotificacion} />
       )}
 
       {modalEliminarAsig && (
@@ -1364,8 +1365,6 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           </div>
         </div>
       )}
-
-      <BotonCompartir mostrarNotificacion={mostrarNotificacion} />
     </Pantalla>
   );
 }

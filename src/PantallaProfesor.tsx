@@ -7,47 +7,14 @@ import BotonCompartir from './BotonCompartir';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { traerPorLotes, traerTodas } from './consultas';
 import { Boton, Cabecera, Campo, Esqueleto, Etiqueta, Modal, Pantalla, Tarjeta, Vacio } from './ui';
+import FilaAlumno from './FilaAlumno';
+import { cargarHorarios, filasDe, horaDeHoy, resumenHorario, tramo, type FilaHorario } from './horario';
 
 // Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
 const SEGUNDOS_QR = 5;
 
 interface Props {
   onVolver: () => void;
-}
-
-const ESTILO_ESTADO: Record<string, string> = {
-  PRESENTE: 'bg-emerald-50 text-emerald-600 border-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.35)]',
-  RETRASO: 'bg-amber-50 text-amber-600 border-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.35)]',
-  SE_FUE_A_MITAD: 'bg-purple-50 text-purple-600 border-purple-300 shadow-[0_0_14px_rgba(192,132,252,0.35)]',
-  FALTA_JUSTIFICADA: 'bg-sky-50 text-azul border-azul/40 shadow-[0_0_14px_rgba(0,144,208,0.3)]',
-  FALTA_INJUSTIFICADA: 'bg-rose-50 text-rose-600 border-rose-300 shadow-[0_0_14px_rgba(251,113,133,0.35)]',
-};
-
-// Una fila de la lista del aula: nombre del alumno y selector de estado
-function FilaAlumno({ item, onCambiar }: { item: Asistencia; onCambiar: (id: string, estado: EstadoAsistencia) => void }) {
-  const nombre = item.perfiles?.nombre_completo || 'Alumno registrado';
-  return (
-    <div className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 animate-[fade-in-down_0.4s_ease-out]">
-      <div className="flex flex-col overflow-hidden min-w-0">
-        <p className="font-bold text-marino text-xs tracking-tight truncate" title={nombre}>{nombre}</p>
-        {(item.perfiles as any)?.pendiente && (
-          <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
-        )}
-      </div>
-      <select
-        value={item.estado}
-        onChange={(e) => onCambiar(item.id, e.target.value as EstadoAsistencia)}
-        style={{ textAlignLast: 'center' }}
-        className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center border-2 flex-shrink-0 w-[84px] hover:scale-105 ${ESTILO_ESTADO[item.estado] || ESTILO_ESTADO.FALTA_INJUSTIFICADA}`}
-      >
-        <option value="PRESENTE">Presente</option>
-        <option value="RETRASO">Retraso</option>
-        <option value="SE_FUE_A_MITAD">Abandono</option>
-        <option value="FALTA_JUSTIFICADA">Justificado</option>
-        <option value="FALTA_INJUSTIFICADA">Ausente</option>
-      </select>
-    </div>
-  );
 }
 
 export default function PantallaProfesor({ onVolver }: Props) {
@@ -69,6 +36,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
   const [diccionarioAlumnos, setDiccionarioAlumnos] = useState<Record<string, any>>({});
   const [sesionesActivasPorAsig, setSesionesActivasPorAsig] = useState<Record<string, any>>({});
+  const [horarios, setHorarios] = useState<FilaHorario[]>([]);
 
 
 
@@ -102,17 +70,20 @@ export default function PantallaProfesor({ onVolver }: Props) {
             }
           }
 
-          const hoy = new Date().getDay();
+          const filasHorario = await cargarHorarios(asigIds);
+          setHorarios(filasHorario);
           const sorted = [...data].sort((a, b) => {
-            // Priority 1: Active sessions first
+            // Primero, las clases que están abiertas ahora mismo
             const aActiva = asigIds.length > 0 && sAbiertas?.find(s => s.asignatura_id === a.id) ? 1 : 0;
             const bActiva = asigIds.length > 0 && sAbiertas?.find(s => s.asignatura_id === b.id) ? 1 : 0;
             if (aActiva !== bActiva) return bActiva - aActiva;
 
-            // Priority 2: Today's classes
-            const aHoy = (a.dias_semana || []).includes(hoy) ? 1 : 0;
-            const bHoy = (b.dias_semana || []).includes(hoy) ? 1 : 0;
-            return bHoy - aHoy;
+            // Después, las que tienen clase hoy, ordenadas por la hora de hoy
+            const aHoy = horaDeHoy(filasHorario, a.id);
+            const bHoy = horaDeHoy(filasHorario, b.id);
+            if (!!aHoy !== !!bHoy) return aHoy ? -1 : 1;
+            if (aHoy && bHoy) return aHoy.hora_inicio.localeCompare(bHoy.hora_inicio);
+            return 0;
           });
           setClasesHoy(sorted);
         }
@@ -405,7 +376,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
   return (
-    <Pantalla ancho={sesionId ? 'amplio' : 'normal'}>
+    <Pantalla ancho={sesionId ? 'amplio' : 'normal'} esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       <Cabecera
@@ -435,7 +406,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {clasesHoy.map((clase, i) => {
-              const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
+              const hoyHay = horaDeHoy(horarios, clase.id);
+              const esHoy = !!hoyHay;
               const claseActiva = sesionesActivasPorAsig[clase.id];
               return (
                 <Tarjeta
@@ -453,7 +425,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                         {!claseActiva && esHoy && <Etiqueta tono="exito" className="animate-pulse">Hoy</Etiqueta>}
                         <Etiqueta>{clase.aula}</Etiqueta>
                       </div>
-                      <span className="text-slate-400 text-[11px] font-bold tracking-wider uppercase">{clase.horario}</span>
+                      <span className={`text-[11px] font-bold tracking-wider text-right ${esHoy ? 'text-emerald-600' : 'text-slate-400'}`}>{hoyHay ? tramo(hoyHay) : resumenHorario(filasDe(horarios, clase.id), clase.horario)}</span>
                     </div>
                     <h3 className="text-2xl font-black text-marino mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
                   </div>
@@ -597,8 +569,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
           </div>
         </Modal>
       )}
-
-      <BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />
     </Pantalla>
   );
 }

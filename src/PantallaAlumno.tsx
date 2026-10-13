@@ -5,6 +5,8 @@ import { supabase } from './supabase';
 import type { Asignatura } from './types';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { traerPorLotes, traerTodas } from './consultas';
+import TarjetaRacha from './Racha';
+import { cargarHorarios, filasDe, horaDeHoy, resumenHorario, tramo, type FilaHorario } from './horario';
 import { Boton, Cabecera, Esqueleto, Etiqueta, Modal, Pantalla, Pestanas, Tarjeta, TituloSeccion, Vacio, retraso } from './ui';
 
 interface Props {
@@ -36,6 +38,30 @@ const mensajeEscaneo = (codigo: string) => {
   return 'No se pudo registrar la asistencia. Vuelve a intentarlo.';
 };
 
+// Racha: clases cerradas seguidas a las que ha asistido (presente o retraso), de la más antigua a la
+// más reciente. Una falta justificada no la rompe ni la suma; faltar o irse a mitad la reinicia.
+function calcularRacha(
+  sesiones: { id: string; fase: string; hora_apertura: string }[],
+  asistencias: { sesion_id: string; estado: string }[],
+) {
+  const estadoPorSesion = new Map(asistencias.map(a => [a.sesion_id, a.estado]));
+  const cerradas = sesiones
+    .filter(s => s.fase === 'CERRADA' && estadoPorSesion.has(s.id))
+    .sort((a, b) => a.hora_apertura.localeCompare(b.hora_apertura));
+  let actual = 0;
+  let record = 0;
+  for (const s of cerradas) {
+    const estado = estadoPorSesion.get(s.id);
+    if (estado === 'PRESENTE' || estado === 'RETRASO') {
+      actual++;
+      record = Math.max(record, actual);
+    } else if (estado !== 'FALTA_JUSTIFICADA') {
+      actual = 0;
+    }
+  }
+  return { actual, record };
+}
+
 export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
   const [nombre] = useState<string>(() => localStorage.getItem('checker_nombre') || 'Estudiante');
   const [alumnoId] = useState<string>(() => localStorage.getItem('checker_alumno_id') || '');
@@ -48,6 +74,8 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
   const { aviso, avisar: mostrarNotificacion, cerrar: cerrarAviso } = useAviso();
   const [sesionPerdida, setSesionPerdida] = useState(false);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
+  const [horarios, setHorarios] = useState<FilaHorario[]>([]);
+  const [racha, setRacha] = useState({ actual: 0, record: 0 });
   const [cargandoClases, setCargandoClases] = useState(true);
 
 
@@ -76,9 +104,10 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       if (misAsistencias.length === 0) return setClasesHoy([]);
       
       const sesionIdsAlumno = [...new Set(misAsistencias.map(a => a.sesion_id))];
-      const sesiones = await traerTodas<{ id: string; asignatura_id: string; fase: string }>(() =>
-        supabase.from('sesiones').select('id, asignatura_id, fase').order('id'));
+      const sesiones = await traerTodas<{ id: string; asignatura_id: string; fase: string; hora_apertura: string }>(() =>
+        supabase.from('sesiones').select('id, asignatura_id, fase, hora_apertura').order('id'));
       if (sesiones.length === 0) return;
+      setRacha(calcularRacha(sesiones, misAsistencias));
       
       const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))].filter(Boolean);
       let asignaturas: any[] = [];
@@ -112,11 +141,15 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
            }
         });
         
-        const hoy = new Date().getDay();
+        const filasHorario = await cargarHorarios(asignaturas.map(a => a.id));
+        setHorarios(filasHorario);
         const sorted = (asigsConStats as Asignatura[]).sort((a, b) => {
-          const aHoy = (a.dias_semana || []).includes(hoy) ? 1 : 0;
-          const bHoy = (b.dias_semana || []).includes(hoy) ? 1 : 0;
-          return bHoy - aHoy;
+          // Después, las que tienen clase hoy, ordenadas por la hora de hoy
+          const aHoy = horaDeHoy(filasHorario, a.id);
+          const bHoy = horaDeHoy(filasHorario, b.id);
+          if (!!aHoy !== !!bHoy) return aHoy ? -1 : 1;
+          if (aHoy && bHoy) return aHoy.hora_inicio.localeCompare(bHoy.hora_inicio);
+          return 0;
         });
 
         setClasesHoy(sorted);
@@ -515,8 +548,9 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                 </div>
               </button>
 
-              {/* Resumen de asistencia */}
-              <Tarjeta indice={2} className="md:col-span-2 p-6 flex items-center justify-between gap-4">
+              {/* Resumen: asistencia y racha */}
+              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <Tarjeta indice={2} className="p-6 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Tu asistencia</p>
                   <p className="text-sm font-semibold text-slate-500 mt-1">
@@ -527,6 +561,8 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                   {porcentajeAsistencia === null ? '—' : `${porcentajeAsistencia}%`}
                 </p>
               </Tarjeta>
+              <TarjetaRacha racha={racha.actual} record={racha.record} indice={3} />
+              </div>
 
               {/* Mis asignaturas */}
               <Tarjeta indice={3} className="md:col-span-2 p-6 sm:p-8 flex flex-col">
@@ -542,7 +578,8 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                 ) : (
                   <div className="space-y-3">
                     {clasesHoy.map((clase: any, i: number) => {
-                      const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
+                      const hoyHay = horaDeHoy(horarios, clase.id);
+                      const esHoy = !!hoyHay;
                       return (
                         <div key={clase.id} style={retraso(i + 4)} className={`bento-entrada p-5 flex items-center justify-between gap-4 border rounded-control transition-all duration-300 hover:-translate-y-0.5 ${esHoy ? 'bg-emerald-50/80 border-emerald-200 shadow-[0_4px_20px_rgba(52,211,153,0.12)]' : 'bg-white/70 border-white hover:bg-white'}`}>
                           <div className="min-w-0">
@@ -553,7 +590,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                             <div className="flex flex-wrap items-center gap-2">
                               <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${esHoy ? 'text-emerald-700' : 'text-azul/80'}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                                {clase.horario}
+                                {hoyHay ? tramo(hoyHay) : resumenHorario(filasDe(horarios, clase.id), clase.horario)}
                               </span>
                               {clase.statsFaltas && clase.statsFaltas.total > 0 && (
                                 <Etiqueta tono={clase.statsFaltas.porcentaje >= 30 ? 'peligro' : clase.statsFaltas.porcentaje >= 15 ? 'aviso' : 'exito'}>

@@ -5,6 +5,7 @@ import PantallaRegistro from './PantallaRegistro.tsx';
 import PantallaGestionDocente from './PantallaGestionDocente.tsx';
 import BotonCompartir from './BotonCompartir.tsx';
 import AvisoVersionNueva from './VersionNueva.tsx';
+import SesionDocente from './SesionDocente.tsx';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { supabase, hashInicial } from './supabase';
 import { Boton, BotonVolver, Campo, Pantalla, Tarjeta, retraso } from './ui';
@@ -397,9 +398,22 @@ export default function App() {
     const tieneCuenta = alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor';
 
     return (
-      <Pantalla centrada>
+      <Pantalla
+        centrada
+        esquinas={
+          <>
+            <BotonCompartir mostrarNotificacion={avisar} />
+            {docente && (
+              <SesionDocente
+                nombre={docente.nombre}
+                onCambiarCuenta={cambiarDeCuenta}
+                onCerrarSesion={() => cerrarSesionDocente()}
+              />
+            )}
+          </>
+        }
+      >
         <AvisoFlotante aviso={aviso} onCerrar={cerrar} />
-        {vista === 'INICIO' && <BotonCompartir mostrarNotificacion={avisar} />}
 
         <div className="w-full max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-5 px-1 bento-entrada" style={retraso(0)}>
@@ -454,16 +468,6 @@ export default function App() {
             />
           </div>
 
-          {docente && (
-            <Tarjeta indice={5} className="mt-4 sm:mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 px-5 py-3.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-              <span className="text-xs font-bold text-marino">Docente: {docente.nombre}</span>
-              <span className="text-slate-300">·</span>
-              <button onClick={cambiarDeCuenta} className="text-xs font-black text-azul hover:text-marino transition-colors cursor-pointer">Cambiar de cuenta</button>
-              <span className="text-slate-300">·</span>
-              <button onClick={() => cerrarSesionDocente()} className="text-xs font-black text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">Cerrar sesión</button>
-            </Tarjeta>
-          )}
         </div>
       </Pantalla>
     );
