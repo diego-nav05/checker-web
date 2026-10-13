@@ -36,18 +36,38 @@ export default function PantallaRegistro({ onVolver }: Props) {
     setEmail(conservarEmail);
   };
 
+  // Reenvía el correo de activación (también si el alumno vuelve otro día con el navegador cerrado)
   const reenviarConfirmacion = async () => {
-    if (!emailSinConfirmar) return;
-    setCargando(true);
-    const { error } = await supabase.auth.resend({ type: 'signup', email: emailSinConfirmar });
-    setCargando(false);
-    if (error) {
-      avisar(error.message.toLowerCase().includes('rate limit') || error.message.includes('seconds')
-        ? 'Espera un minuto antes de pedir otro correo.'
-        : 'No se pudo reenviar el correo. Inténtalo de nuevo en unos minutos.', 'error');
+    const destino = (emailSinConfirmar || email).trim().toLowerCase();
+    if (!destino) {
+      avisar('Escribe tu correo arriba y vuelve a pulsar para reenviarte el correo de activación.', 'info');
       return;
     }
-    avisar(`Correo reenviado a ${emailSinConfirmar}. Revisa también la carpeta de spam.`, 'exito', { fijo: true });
+    setCargando(true);
+    const estado = await estadoCuenta(destino);
+    if (estado === 'EXISTE') {
+      setCargando(false);
+      setEmailSinConfirmar(null);
+      avisar('Tu cuenta ya está activada. Inicia sesión con tu contraseña.', 'info');
+      return;
+    }
+    if (estado === 'LIBRE') {
+      setCargando(false);
+      avisar('No hay ninguna cuenta con este correo. Pulsa "Regístrate aquí" para crearla.', 'error');
+      return;
+    }
+    const { error } = await supabase.auth.resend({ type: 'signup', email: destino, options: { emailRedirectTo: window.location.origin } });
+    setCargando(false);
+    if (error) {
+      // Supabase dice cuántos segundos faltan: "...only request this after 23 seconds"
+      const segundos = error.message.match(/(\d+)\s*second/)?.[1];
+      avisar(segundos
+        ? `Acabamos de enviarte uno. Podrás pedir otro dentro de ${segundos} segundos.`
+        : 'No se pudo reenviar el correo. Inténtalo de nuevo en unos segundos.', 'error');
+      return;
+    }
+    setEmailSinConfirmar(destino);
+    avisar(`Correo de activación enviado a ${destino}. Revisa también la carpeta de spam.`, 'exito', { fijo: true });
   };
 
   // Mensaje tras activar una cuenta que había creado un profesor
@@ -219,7 +239,10 @@ export default function PantallaRegistro({ onVolver }: Props) {
       else if (msgLower.includes('already registered')) mensaje = 'Este correo ya tiene una cuenta. Inicia sesión.';
       else if (msgLower.includes('password should be at least')) mensaje = 'La contraseña debe tener al menos 6 caracteres.';
       else if (msgLower.includes('unable to validate email address') || msgLower.includes('invalid format')) mensaje = 'El formato del correo electrónico es inválido.';
-      else if (msgLower.includes('rate limit') || msgLower.includes('security purposes')) mensaje = 'Demasiados intentos seguidos. Espera un minuto y vuelve a probar.';
+      else if (msgLower.includes('rate limit') || msgLower.includes('security purposes')) {
+        const segundos = msgLower.match(/(\d+)\s*second/)?.[1];
+        mensaje = segundos ? `Demasiados intentos seguidos. Vuelve a probar dentro de ${segundos} segundos.` : 'Demasiados intentos seguidos. Espera unos segundos y vuelve a probar.';
+      }
       else if (msgLower.includes('email link is invalid')) mensaje = 'El enlace ha caducado o no es válido.';
       else if (msgLower.includes('missing email')) mensaje = 'Por favor, introduce tu correo electrónico.';
       else if (msgLower.includes('database error saving new user')) mensaje = `No se pudo crear la cuenta. Si eres docente, usa tu correo ${DOMINIO_DOCENTE}.`;
@@ -347,6 +370,11 @@ export default function PantallaRegistro({ onVolver }: Props) {
                 <Boton variante="texto" onClick={() => { setEsRecuperarPass(true); cerrar(); setPassword(''); }}>
                   ¿Has olvidado tu contraseña?
                 </Boton>
+                {!emailSinConfirmar && (
+                  <Boton variante="texto" onClick={reenviarConfirmacion} disabled={cargando}>
+                    ¿No te llegó el correo de activación?
+                  </Boton>
+                )}
               </>
             )}
           </div>
