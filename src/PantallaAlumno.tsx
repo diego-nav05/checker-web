@@ -1,17 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import CryptoJS from 'crypto-js';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 import type { Asignatura } from './types';
+import { AvisoFlotante, useAviso } from './Aviso';
 
 interface Props {
   onVolver: () => void;
+  onIrARegistro: () => void;
 }
 
 type TabAlumno = 'HORARIO' | 'CALENDARIO';
 
-export default function PantallaAlumno({ onVolver }: Props) {
+// Traduce los errores del servidor al escanear a mensajes claros
+const mensajeEscaneo = (codigo: string) => {
+  if (codigo.includes('NO_SESION') || codigo.toLowerCase().includes('jwt')) return 'SESION_PERDIDA';
+  if (codigo.includes('SIN_PERFIL')) return 'SESION_PERDIDA';
+  if (codigo.includes('AULA_CERRADA')) return 'El aula ya no admite entradas: el profesor ha cerrado la clase.';
+  if (codigo.includes('QR_CADUCADO')) return 'Código caducado. Vuelve a enfocar el QR de la pantalla.';
+  if (codigo.includes('QR_FALSO')) return 'Este QR no es auténtico. Escanea el de la pantalla del profesor.';
+  if (codigo.includes('FASE_CAMBIADA')) return 'El profesor acaba de cambiar de fase. Vuelve a escanear el QR.';
+  if (codigo.includes('BLOQUEADO')) return 'El docente ha bloqueado o modificado tu registro para esta sesión. Habla con él si crees que es un error.';
+  if (codigo.includes('NO_ALUMNO')) return 'Esta cuenta es de docente: no puede registrar asistencia.';
+  if (codigo.toLowerCase().includes('failed to fetch') || codigo.toLowerCase().includes('network')) return 'Sin conexión a internet. Revisa tu conexión y vuelve a escanear.';
+  return 'No se pudo registrar la asistencia. Vuelve a intentarlo.';
+};
+
+export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
   const [nombre] = useState<string>(() => localStorage.getItem('checker_nombre') || 'Estudiante');
   const [alumnoId] = useState<string>(() => localStorage.getItem('checker_alumno_id') || '');
   
@@ -20,7 +35,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [procesandoQr, setProcesandoQr] = useState(false);
   const [zoomActual, setZoomActual] = useState<number | string>(1);
   
-  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
+  const { aviso, avisar: mostrarNotificacion, cerrar: cerrarAviso } = useAviso();
+  const [sesionPerdida, setSesionPerdida] = useState(false);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
 
@@ -30,10 +46,16 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
-  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
-    setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 4000);
-  };
+  // Con la seguridad activada, el móvil necesita su sesión de Supabase además del id guardado
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) return; // sin conexión: no echamos a nadie por eso
+      if (!data.session || data.session.user.id !== alumnoId) {
+        localStorage.removeItem('checker_alumno_id');
+        setSesionPerdida(true);
+      }
+    });
+  }, [alumnoId]);
 
   const cargarAsignaturas = async () => {
     if (!alumnoId) return;
@@ -43,7 +65,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
       if (!misAsistencias || misAsistencias.length === 0) return setClasesHoy([]);
       
       const sesionIdsAlumno = [...new Set(misAsistencias.map(a => a.sesion_id))];
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id');
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id, fase');
       if (!sesiones || sesiones.length === 0) return;
       
       const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))].filter(Boolean);
@@ -56,9 +78,10 @@ export default function PantallaAlumno({ onVolver }: Props) {
       if (asignaturas) {
         const asigsConStats = asignaturas.map(asig => {
            const sesionesDeAsig = sesiones.filter(s => s.asignatura_id === asig.id);
-           const totalSesionesPosibles = sesionesDeAsig.length;
-           
-           const asistsDeEstaAsig = misAsistencias.filter(a => sesionesDeAsig.some(s => s.id === a.sesion_id));
+           // Las clases aún abiertas no cuentan: todavía puede escanear
+           const asistsDeEstaAsig = misAsistencias.filter(a => sesionesDeAsig.some(s => s.id === a.sesion_id && s.fase === 'CERRADA'));
+           // Solo cuentan las clases en las que el alumno ya estaba en la lista (no las anteriores a su alta)
+           const totalSesionesPosibles = asistsDeEstaAsig.length;
            const asistenciasValidas = asistsDeEstaAsig.filter(a => {
               const st = a.estado?.toUpperCase() || '';
               return !(st.includes('AUSENTE') || st.includes('INJUSTIFICADA') || st === 'FALTA');
@@ -154,7 +177,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
         stream.getTracks().forEach(track => track.stop());
       } catch {
         if (isMounted) {
-          mostrarNotificacion('Activa la cámara en los ajustes de tu móvil.', 'error');
+          mostrarNotificacion('Necesitamos la cámara para escanear el QR. Dale permiso en los ajustes del navegador.', 'error');
           setCamaraActiva(false);
         }
         return;
@@ -175,65 +198,18 @@ export default function PantallaAlumno({ onVolver }: Props) {
             setProcesandoQr(true);
 
             try {
-              const payload = JSON.parse(decodedText);
-              const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload;
+              let payload: any = null;
+              try { payload = JSON.parse(decodedText); } catch { /* no es JSON */ }
+              const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload ?? {};
+              if (!sesionId || !fase || !bloqueTiempo || !token) throw new Error('Ese código QR no es de Checker. Escanea el de la pantalla del profesor.');
 
-              const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
-              if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
-              
-              if (Math.abs(Math.floor(Date.now() / 1000) - bloqueTiempo) > 4) throw new Error('Código caducado. Vuelve a enfocar.');
-              
-              const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
-              if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
+              // El servidor comprueba el QR y guarda la asistencia (la clave del QR nunca llega al móvil)
+              const { data: resultado, error: errorRegistro } = await supabase.rpc('registrar_asistencia', {
+                p_sesion: sesionId, p_fase: fase, p_t: bloqueTiempo, p_token: token,
+              });
+              if (errorRegistro) throw new Error(mensajeEscaneo(errorRegistro.message));
 
-              const ahora = new Date().toISOString();
-              
-              const { data: existe } = await supabase.from('asistencias').select('*').eq('sesion_id', sesionId).eq('alumno_id', alumnoId).maybeSingle();
-
-              if (existe && existe.manual) {
-                throw new Error('El docente ha bloqueado o modificado tu registro para esta sesión.');
-              }
-
-              if (fase === 'ENTRADA') {
-                if (existe) {
-                  const { error } = await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                } else {
-                  const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                }
-                mostrarNotificacion('¡Entrada registrada!', 'exito');
-              } else {
-                if (existe) {
-                  const nuevoEstado = existe.hora_entrada ? existe.estado : 'RETRASO';
-                  const { error } = await supabase.from('asistencias').update({ hora_salida: ahora, estado: nuevoEstado }).eq('id', existe.id);
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                } else {
-                  const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'RETRASO', hora_salida: ahora });
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                }
-                mostrarNotificacion('¡Salida completada!', 'exito');
-              }
+              mostrarNotificacion(resultado === 'SALIDA_OK' ? '¡Salida completada!' : '¡Entrada registrada!', 'exito');
 
               try {
                 const pingChannel = supabase.channel('aula-realtime');
@@ -253,14 +229,14 @@ export default function PantallaAlumno({ onVolver }: Props) {
               setCamaraActiva(false);
               
             } catch (e: any) {
-              if (e.message && e.message.includes('Cuenta eliminada o desvinculada')) {
+              if (e.message === 'SESION_PERDIDA') {
                 localStorage.removeItem('checker_alumno_id');
-                mostrarNotificacion('Tu sesión expiró o fue eliminada. Vincula tu móvil de nuevo.', 'error');
-                setTimeout(() => {
-                  window.location.reload();
-                }, 2000);
+                if (html5QrCode.getState() !== 1) await html5QrCode.stop().catch(() => {});
+                setCamaraActiva(false);
+                setSesionPerdida(true);
+                return;
               } else {
-                mostrarNotificacion(e.message || 'Error procesando código.', 'error');
+                mostrarNotificacion(e.message || 'No se pudo leer el código. Vuelve a intentarlo.', 'error');
               }
               setProcesandoQr(false);
               isProcessingLocally = false;
@@ -275,13 +251,13 @@ export default function PantallaAlumno({ onVolver }: Props) {
             () => {}
           ).catch(() => {
             if (isMounted) {
-              mostrarNotificacion('Error conectando con la cámara.', 'error');
+              mostrarNotificacion('No se pudo abrir la cámara. Comprueba que el navegador tiene permiso para usarla.', 'error');
               setCamaraActiva(false);
             }
           });
         } catch {
           if (isMounted) {
-            mostrarNotificacion('Error conectando con la cámara.', 'error');
+            mostrarNotificacion('No se pudo abrir la cámara. Comprueba que el navegador tiene permiso para usarla.', 'error');
             setCamaraActiva(false);
           }
         }
@@ -353,7 +329,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
 
   const exportarHistorialAlumno = () => {
-    if (historial.length === 0) return mostrarNotificacion('No hay datos.', 'info');
+    if (historial.length === 0) return mostrarNotificacion('Aún no tienes asistencias para descargar.', 'info');
     
     // Obtener nombres de asignaturas únicas
     const asignaturasUnicas = Array.from(new Set(historial.map(reg => reg.asignatura_nombre)));
@@ -374,7 +350,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
     const fechasOrdenadas: string[] = [];
 
     historial.forEach(reg => {
-      const fechaStr = new Date(reg.fecha).toLocaleDateString();
+      const fechaStr = new Date(reg.fecha).toLocaleDateString('es-ES');
       if (!registrosPorFecha[fechaStr]) {
         registrosPorFecha[fechaStr] = { Fecha: fechaStr };
         fechasOrdenadas.push(fechaStr); // Como el historial viene ordenado desc, esto mantiene el orden
@@ -382,8 +358,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
       
       const estadoLimpio = reg.estado.replace(/_/g, ' ');
       const horaStr = reg.hora_entrada 
-        ? new Date(reg.hora_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
-        : (reg.hora_salida ? new Date(reg.hora_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '');
+        ? new Date(reg.hora_entrada).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}) 
+        : (reg.hora_salida ? new Date(reg.hora_salida).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}) : '');
       
       const valor = horaStr ? `${estadoLimpio} (${horaStr})` : estadoLimpio;
       
@@ -401,21 +377,26 @@ export default function PantallaAlumno({ onVolver }: Props) {
     const hoja = XLSX.utils.json_to_sheet(filasFinales);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Mi_Asistencia');
-    XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+    XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString('es-ES').replace(/\//g, '-')}.xlsx`);
   };
 
   return (
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
       
-      {/* NOTIFICACIONES */}
-      {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-          'bg-[#002b5c]/95 border-white/10 text-white'
-        }`}>
-          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
+      <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
+
+      {sesionPerdida && (
+        <div className="fixed inset-0 z-[250] bg-[#002b5c]/40 backdrop-blur-md flex items-center justify-center p-4 modal-fondo">
+          <div className="glass-container bg-white/90 rounded-[2.5rem] p-8 max-w-sm w-full text-center flex flex-col gap-4">
+            <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Vuelve a iniciar sesión</h3>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">
+              Por seguridad necesitamos que vuelvas a entrar con tu correo y contraseña. Tu móvil sigue vinculado y no pierdes ninguna asistencia.
+            </p>
+            <button onClick={onIrARegistro} className="w-full py-4 bg-gradient-to-br from-[#0090d0] to-[#007fb8] text-white font-bold rounded-[1.5rem] text-sm tracking-wide cursor-pointer active:scale-[0.97] shadow-[0_8px_20px_rgba(0,144,208,0.3)]">
+              Iniciar sesión
+            </button>
+          </div>
         </div>
       )}
 
@@ -467,7 +448,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}
           <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
-            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Zoom</p>
             <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
               {[1, 2, 3, 5, 'MAX'].map((nivel) => (
                 <button
@@ -498,7 +479,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
             </div>
           </div>
           <button onClick={() => setTabActual(tabActual === 'HORARIO' ? 'CALENDARIO' : 'HORARIO')} className={`px-6 py-3 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border ${tabActual === 'CALENDARIO' ? 'bg-[#002b5c] text-white shadow-md border-transparent' : 'glass-button text-[#002b5c] hover:text-[#0090d0] hover:bg-white/40'}`}>
-            {tabActual === 'HORARIO' ? 'Ver Historial' : 'Volver a Clases'}
+            {tabActual === 'HORARIO' ? 'Ver historial' : 'Volver a clases'}
           </button>
         </div>
       )}
@@ -506,7 +487,7 @@ export default function PantallaAlumno({ onVolver }: Props) {
       {/* DASHBOARD PRINCIPAL */}
       <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col">
         {tabActual === 'HORARIO' && !camaraActiva && (
-          <div className="flex flex-col md:flex-row gap-6 animate-[fade-in_0.4s_ease-out]">
+          <div className="flex flex-col md:flex-row gap-6 contenido-pestana">
             
             {/* Columna Izquierda: Escanear */}
             <button onClick={() => setCamaraActiva(true)} className="w-full md:w-1/3 aspect-square sm:aspect-auto sm:min-h-[380px] bg-gradient-to-br from-[#0090d0]/90 to-[#002b5c]/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,144,208,0.2)] rounded-[3rem] p-6 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden group">
@@ -546,17 +527,17 @@ export default function PantallaAlumno({ onVolver }: Props) {
                 </h3>
                 
                 {cargandoClases ? (
-                  <div className="flex-1 flex justify-center items-center py-10 text-[#0090d0]/60 font-semibold tracking-wide animate-pulse relative z-10">Sincronizando clases...</div>
+                  <div className="flex-1 flex justify-center items-center py-10 text-[#0090d0]/60 font-semibold tracking-wide animate-pulse relative z-10">Cargando tus asignaturas...</div>
                 ) : clasesHoy.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white/40 backdrop-blur-sm rounded-[2rem] border border-[#0090d0]/20 border-dashed relative z-10">
-                    <p className="text-sm font-medium text-[#002b5c]/50">Escanea un QR por primera vez para enlazar materias.</p>
+                    <p className="text-sm font-medium text-[#002b5c]/50">Tus asignaturas aparecerán aquí cuando escanees el QR de tu primera clase.</p>
                   </div>
                 ) : (
                   <div className="space-y-4 relative z-10">
-                    {clasesHoy.map((clase: any) => {
+                    {clasesHoy.map((clase: any, i: number) => {
                       const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
                       return (
-                      <div key={clase.id} className={`p-5 flex items-center justify-between gap-4 backdrop-blur-lg border hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default ${esHoy ? 'bg-emerald-50/80 border-emerald-300/60 shadow-[0_4px_20px_rgba(52,211,153,0.15)]' : 'bg-white/60 border-white hover:bg-white'}`}>
+                      <div key={clase.id} style={{ '--i': i } as React.CSSProperties} className={`bento-entrada p-5 flex items-center justify-between gap-4 backdrop-blur-lg border hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default ${esHoy ? 'bg-emerald-50/80 border-emerald-300/60 shadow-[0_4px_20px_rgba(52,211,153,0.15)]' : 'bg-white/60 border-white hover:bg-white'}`}>
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2 mb-1.5">
                             {esHoy && (
@@ -596,28 +577,28 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
         {/* HISTORIAL */}
         {tabActual === 'CALENDARIO' && (
-          <div className="glass-container rounded-[2.5rem] p-8 animate-[fade-in_0.4s_ease-out]">
+          <div className="glass-container rounded-[2.5rem] p-8 contenido-pestana">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
               <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial</h3>
               <button onClick={exportarHistorialAlumno} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                Descargar Reporte
+                Descargar informe
               </button>
             </div>
             
             {cargandoHistorial ? (
-              <div className="py-16 flex justify-center text-slate-400 font-semibold tracking-wide animate-pulse">Cargando registros...</div>
+              <div className="py-16 flex justify-center text-slate-400 font-semibold tracking-wide animate-pulse">Cargando tu historial...</div>
             ) : historial.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 text-sm font-medium bg-slate-50/50 rounded-[2rem] border border-slate-100 border-dashed">No hay registros de asistencia previos.</div>
+              <div className="py-16 text-center text-slate-400 text-sm font-medium bg-slate-50/50 rounded-[2rem] border border-slate-100 border-dashed">Aún no tienes asistencias registradas.</div>
             ) : (
               <div className="space-y-4 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
                 {historial.map((registro, idx) => (
-                  <div key={idx} className="bento-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
+                  <div key={idx} style={{ '--i': Math.min(idx, 10) } as React.CSSProperties} className="bento-card bento-entrada p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
                     <div>
                       <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight mb-2">{registro.asignatura_nombre}</h4>
                       <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString()}</span>
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">In: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Out: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString('es-ES')}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Entrada: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Salida: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
                       </div>
                     </div>
                     <span className={`px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-center shadow-sm border transition-transform duration-300 group-hover:scale-105

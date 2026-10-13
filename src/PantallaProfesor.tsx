@@ -4,6 +4,10 @@ import CryptoJS from 'crypto-js';
 import { supabase } from './supabase';
 import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
 import BotonCompartir from './BotonCompartir';
+import { AvisoFlotante, useAviso } from './Aviso';
+
+// Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
+const SEGUNDOS_QR = 5;
 
 interface Props {
   onVolver: () => void;
@@ -31,22 +35,15 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
 
-  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
-
-  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
-    setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 5000);
-  };
+  const { aviso, avisar: mostrarNotificacion, cerrar: cerrarAviso } = useAviso();
+  // Diferencia entre el reloj de este ordenador y el del servidor (el QR usa la hora del servidor)
+  const desfaseRelojRef = useRef(0);
 
   useEffect(() => {
     const arrancarDatos = async () => {
       setCargandoClases(true);
-      const { data: perfilesData } = await supabase.from('perfiles').select('id, nombre_completo, email');
-      if (perfilesData) {
-        const dict: Record<string, any> = {};
-        perfilesData.forEach(p => dict[p.id] = p);
-        setDiccionarioAlumnos(dict);
-      }
+      const { data: horaServidor } = await supabase.rpc('hora_servidor');
+      if (typeof horaServidor === 'number') desfaseRelojRef.current = horaServidor * 1000 - Date.now();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('horario', { ascending: true });
@@ -56,7 +53,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           let sAbiertas: any[] | null = null;
           if (asigIds.length > 0) {
             const { data: sesiones } = await supabase.from('sesiones')
-              .select('*')
+              .select('id, asignatura_id, fase')
               .in('asignatura_id', asigIds)
               .in('fase', ['ENTRADA', 'SALIDA']);
             
@@ -91,45 +88,50 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const iniciarClase = async (idAsignatura: string) => {
     if (sesionesActivasPorAsig[idAsignatura]) {
       const sesionData = sesionesActivasPorAsig[idAsignatura];
+      const { data: secreto, error: errorSecreto } = await supabase.rpc('secreto_sesion', { p_sesion: sesionData.id });
+      if (errorSecreto || !secreto) return mostrarNotificacion('No se pudo reanudar el aula. Recarga la página e inténtalo de nuevo.', 'error');
       setSesionId(sesionData.id);
       setFase(sesionData.fase);
-      setSecretTotp(sesionData.secret_totp);
+      setSecretTotp(secreto);
       cargarAsistencias(sesionData.id, diccionarioAlumnos);
-      mostrarNotificacion('Aula reanudada. Puedes continuar gestionando la clase.', 'info');
+      mostrarNotificacion('Aula reanudada: sigues donde lo dejaste.', 'info');
       return;
     }
 
-    const nuevoSecret = Math.random().toString(36).substring(2, 10);
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const nuevoSecret = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
     setSecretTotp(nuevoSecret);
 
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
       .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura })
-      .select()
+      .select('id')
       .single();
 
-    if (sesionError || !sesionData) return mostrarNotificacion(`Error BD: ${sesionError?.message || 'Fallo al abrir'}`, 'error');
+    if (sesionError || !sesionData) return mostrarNotificacion('No se pudo abrir el aula. Revisa tu conexión e inténtalo de nuevo.', 'error');
     setSesionId(sesionData.id);
 
+    // Lista inicial: alumnos matriculados (incluye los dados de alta por el profe) y los de clases anteriores
+    const { data: matriculados } = await supabase.from('matriculas').select('alumno_id').eq('asignatura_id', idAsignatura);
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
+    let pastAsistencias: { alumno_id: string }[] = [];
     if (pastSesiones && pastSesiones.length > 0) {
-      const sesionIds = pastSesiones.map(s => s.id);
-      const { data: pastAsistencias } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', sesionIds);
-      
-      if (pastAsistencias && pastAsistencias.length > 0) {
-        const uniqueIds = Array.from(new Set(pastAsistencias.map(a => a.alumno_id)));
-        const asistenciasIniciales = uniqueIds.map((aluId) => ({
-          sesion_id: sesionData.id,
-          alumno_id: aluId,
-          estado: 'FALTA_INJUSTIFICADA' as EstadoAsistencia,
-          manual: false
-        }));
-        await supabase.from('asistencias').insert(asistenciasIniciales);
-      }
+      const { data } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', pastSesiones.map(s => s.id));
+      pastAsistencias = data || [];
+    }
+    const uniqueIds = Array.from(new Set([...(matriculados || []), ...pastAsistencias].map(a => a.alumno_id)));
+    if (uniqueIds.length > 0) {
+      const asistenciasIniciales = uniqueIds.map((aluId) => ({
+        sesion_id: sesionData.id,
+        alumno_id: aluId,
+        estado: 'FALTA_INJUSTIFICADA' as EstadoAsistencia,
+        manual: false
+      }));
+      await supabase.from('asistencias').insert(asistenciasIniciales);
     }
 
     cargarAsistencias(sesionData.id, diccionarioAlumnos);
-    mostrarNotificacion('Aula iniciada correctamente.', 'exito');
+    mostrarNotificacion('Aula abierta: los alumnos ya pueden escanear el QR.', 'exito');
   };
 
   const cargarAsistencias = async (idSesion: string, dict = diccionarioAlumnos) => {
@@ -139,7 +141,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       let dictActualizado = { ...dict };
 
       if (idsFaltantes.length > 0) {
-        const { data: perfilesNuevos } = await supabase.from('perfiles').select('id, nombre_completo, email').in('id', idsFaltantes);
+        const { data: perfilesNuevos } = await supabase.from('perfiles').select('id, nombre_completo, email, pendiente').in('id', idsFaltantes);
         if (perfilesNuevos) {
           perfilesNuevos.forEach(p => { dictActualizado[p.id] = p; });
           setDiccionarioAlumnos(dictActualizado);
@@ -166,7 +168,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => cargarAsistencias(sesionId, diccionarioAlumnos))
       .subscribe();
 
-    const intervaloRespaldo = setInterval(() => cargarAsistencias(sesionId, diccionarioAlumnos), 2000);
+    // Respaldo por si se pierde el tiempo real. Cada 15 s basta y gasta mucho menos del plan gratuito.
+    const intervaloRespaldo = setInterval(() => cargarAsistencias(sesionId, diccionarioAlumnos), 15000);
 
     return () => { 
       supabase.removeChannel(instantChannel);
@@ -178,13 +181,13 @@ export default function PantallaProfesor({ onVolver }: Props) {
   useEffect(() => {
     if (!sesionId || !secretTotp || fase === 'CERRADA') return;
     const actualizarQR = async () => {
-      const bloqueTiempo = Math.floor(Date.now() / 1000);
+      const bloqueTiempo = Math.floor((Date.now() + desfaseRelojRef.current) / 1000);
       const payload = `${sesionId}|${fase}|${bloqueTiempo}`;
       const token = CryptoJS.HmacSHA256(payload, secretTotp).toString();
       const qrPayload = JSON.stringify({ s: sesionId, f: fase, t: bloqueTiempo, token });
       
       // Renderizamos el QR a alta resolución (width 500) para máxima nitidez
-      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 500, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
+      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 1000, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
       setQrSrc(dataUrl);
 
       // Sincronizar con la ventana emergente si existe y no se ha cerrado
@@ -202,7 +205,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     };
     
     actualizarQR();
-    timerRef.current = setInterval(actualizarQR, 1000);
+    timerRef.current = setInterval(actualizarQR, SEGUNDOS_QR * 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [sesionId, secretTotp, fase]);
 
@@ -257,7 +260,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       `);
       popUpRef.current = win;
     } else {
-      mostrarNotificacion('Tu navegador bloqueó la ventana emergente. Permite los pop-ups.', 'error');
+      mostrarNotificacion('El navegador ha bloqueado la ventana del QR. Permite las ventanas emergentes para esta web.', 'error');
     }
   };
 
@@ -265,14 +268,10 @@ export default function PantallaProfesor({ onVolver }: Props) {
     if (!sesionId) return;
     await supabase.from('sesiones').update({ fase: 'SALIDA' }).eq('id', sesionId);
     setFase('SALIDA');
-    mostrarNotificacion('Fase de salida activada.', 'info');
+    mostrarNotificacion('Salida activada: los alumnos ya pueden escanear para salir.', 'info');
   };
 
   const intentarCerrarAula = () => {
-    if (fase === 'ENTRADA') {
-      const confirmar = window.confirm('Aviso: No activaste la salida.\nSi cierras ahora, se validará automáticamente la salida a los alumnos que ya estaban en clase.\nLos alumnos que no entraron a tiempo ya no podrán escanear y quedarán como pendientes/ausentes.\n\n¿Cerrar clase de todos modos?');
-      if (!confirmar) return;
-    }
     setMostrarModalCierre(true);
   };
 
@@ -281,7 +280,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoCierre(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
+      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
       if (authError) throw new Error("Contraseña incorrecta.");
 
@@ -304,7 +303,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setMostrarModalCierre(false);
       setPassInput('');
       cargarAsistencias(sesionId, diccionarioAlumnos);
-      mostrarNotificacion('Clase archivada.', 'exito');
+      mostrarNotificacion('Clase cerrada y guardada.', 'exito');
       
       // Cerramos automáticamente el pop-up al acabar la clase
       if (popUpRef.current && !popUpRef.current.closed) {
@@ -323,7 +322,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoCierre(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
+      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
       if (authError) throw new Error("Contraseña incorrecta.");
 
@@ -337,7 +336,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setAsistencias([]);
       setMostrarModalCierre(false);
       setPassInput('');
-      mostrarNotificacion('Clase descartada.', 'exito');
+      mostrarNotificacion('Clase eliminada sin guardar.', 'exito');
       
       if (popUpRef.current && !popUpRef.current.closed) {
         popUpRef.current.close();
@@ -351,7 +350,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   const cambiarEstadoManual = async (asistenciaId: string, nuevoEstado: EstadoAsistencia) => {
-    await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
+    const { error } = await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
+    if (error) mostrarNotificacion('No se pudo cambiar el estado. Revisa tu conexión.', 'error');
     cargarAsistencias(sesionId!, diccionarioAlumnos); 
   };
 
@@ -361,21 +361,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
 
-      {/* NOTIFICACIONES PREMIUM */}
-      {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-          'bg-[#002b5c]/95 border-white/10 text-white'
-        }`}>
-          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
-        </div>
-      )}
+      <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       {/* MAIN CONTENT WRAPPER */}
       <div className="w-full flex-1 flex flex-col anim-suave relative z-10">
         {/* CABECERA FLOTANTE (Glassmorphism auténtico) */}
-        <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-7xl mx-auto w-full transition-all">
+        <div className={`flex flex-wrap items-center justify-between gap-3 glass-container px-4 sm:px-6 py-4 rounded-[2rem] sm:rounded-[2.5rem] mb-6 mx-auto w-full transition-all ${sesionId ? 'max-w-[1700px]' : 'max-w-7xl'}`}>
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
@@ -385,7 +376,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-0.5">
               {sesionId ? (
                 <span className="flex items-center gap-1.5">Fase: <span className={`font-bold ${fase === 'ENTRADA' ? 'text-amber-500' : fase === 'SALIDA' ? 'text-[#0090d0]' : 'text-slate-400'}`}>{fase}</span></span>
-              ) : 'Selección de Aula'}
+              ) : 'Elige una asignatura'}
             </p>
           </div>
         </div>
@@ -394,12 +385,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
           {sesionId && fase !== 'CERRADA' && (
             <>
               {fase === 'ENTRADA' && (
-                <button onClick={pasarASalida} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                  Activar Salida
+                <button onClick={pasarASalida} className="px-4 sm:px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
+                  Activar salida
                 </button>
               )}
-              <button onClick={intentarCerrarAula} className="px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
-                Cerrar Clase
+              <button onClick={intentarCerrarAula} className="px-4 sm:px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
+                Cerrar clase
               </button>
             </>
           )}
@@ -410,20 +401,20 @@ export default function PantallaProfesor({ onVolver }: Props) {
         // VISTA: SELECCIÓN DE CLASE (Bento UI)
         <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full">
           {cargandoClases ? (
-            <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando materias del servidor...</div>
+            <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando tus asignaturas...</div>
           ) : clasesHoy.length === 0 ? (
             <div className="glass-container rounded-[2.5rem] p-16 text-center max-w-2xl mx-auto w-full mt-10">
               <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6"><span className="text-3xl">📚</span></div>
-              <p className="text-[#002b5c] font-black text-2xl tracking-tight">Cero asignaturas</p>
-              <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">No tienes asignaturas dadas de alta. Ve a "Gestión Docente" en el menú principal para configurarlas.</p>
+              <p className="text-[#002b5c] font-black text-2xl tracking-tight">Aún no tienes asignaturas</p>
+              <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">Créalas en Gestión → Asignaturas y aparecerán aquí.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clasesHoy.map((clase) => {
+              {clasesHoy.map((clase, i) => {
                 const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
                 const claseActiva = sesionesActivasPorAsig[clase.id];
                 return (
-                <div key={clase.id} className={`glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:-translate-y-1 transition-all duration-500 group ${claseActiva ? 'border-2 border-[#0090d0]/50 shadow-[0_20px_40px_-12px_rgba(0,144,208,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.4)]' : esHoy ? 'border-2 border-emerald-400/50 shadow-[0_20px_40px_-12px_rgba(52,211,153,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(52,211,153,0.4)]' : 'hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)]'}`}>
+                <div key={clase.id} style={{ '--i': i } as React.CSSProperties} className={`glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:-translate-y-1 transition-all duration-500 group bento-entrada ${claseActiva ? 'border-2 border-[#0090d0]/50 shadow-[0_20px_40px_-12px_rgba(0,144,208,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.4)]' : esHoy ? 'border-2 border-emerald-400/50 shadow-[0_20px_40px_-12px_rgba(52,211,153,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(52,211,153,0.4)]' : 'hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)]'}`}>
                   <div>
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-2">
@@ -440,7 +431,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     <h3 className="text-2xl font-black text-[#002b5c] mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
                   </div>
                   <button onClick={() => iniciarClase(clase.id)} className={`w-full py-4 text-sm font-bold rounded-[1.5rem] transition-all duration-300 shadow-sm active:scale-95 cursor-pointer border ${claseActiva ? 'bg-[#0090d0] text-white hover:bg-[#0070a0] border-transparent shadow-[0_10px_20px_rgba(0,144,208,0.3)]' : esHoy ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:text-white border-emerald-100 hover:shadow-[0_10px_20px_rgba(52,211,153,0.2)]' : 'bg-slate-50 text-[#002b5c] hover:bg-[#002b5c] hover:text-white border-slate-100 hover:shadow-[0_10px_20px_rgba(0,43,92,0.15)]'}`}>
-                    {claseActiva ? 'Reanudar Aula' : 'Iniciar Aula'}
+                    {claseActiva ? 'Reanudar aula' : 'Iniciar aula'}
                   </button>
                 </div>
               )})}
@@ -449,59 +440,61 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       ) : (
         // VISTA: AULA ACTIVA
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 max-w-[1700px] mx-auto w-full">
           
-          {/* PANEL IZQUIERDO: Escáner QR */}
-          <div className="xl:col-span-5 glass-container rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+          {/* PANEL IZQUIERDO: QR lo más grande posible dentro de su tarjeta */}
+          <div className="xl:col-span-6 glass-container rounded-[2.5rem] p-4 sm:p-6 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
             
             {/* Orbe de luz de fondo */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.03] blur-[60px] pointer-events-none"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.04] blur-[60px] pointer-events-none"></div>
 
             {fase !== 'CERRADA' ? (
-              <div className="relative z-10 w-full flex flex-col items-center">
-                <div className="mb-8 flex items-center justify-between w-full max-w-[320px]">
-                  <span className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/10'}`}>
-                    {fase === 'ENTRADA' ? '📍 Modo Entrada' : '🚪 Modo Salida'}
+              <div className="relative z-10 w-full flex flex-col items-center gap-4">
+                <div className="flex items-center justify-between w-full gap-2">
+                  <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/10'}`}>
+                    {fase === 'ENTRADA' ? '📍 Modo entrada' : '🚪 Modo salida'}
                   </span>
-                  
-                  {/* BOTÓN MÁGICO: POP-UP */}
-                  <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-[#0090d0] text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en ventana flotante">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                  </button>
-                </div>
 
-                {/* Tarjeta del QR (Más grande: w-80 h-80 = 320px) */}
-                <div className="p-4 bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100 group relative">
-                  {/* Brillo dinámico en hover */}
-                  <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(0,144,208,0.1)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                  {qrSrc && <img src={qrSrc} alt="QR Dinámico" className="w-72 h-72 sm:w-80 sm:h-80 rounded-[1.5rem] object-contain select-none pointer-events-none" draggable="false" />}
-                </div>
-
-                <div className="mt-10 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
-                  <div className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 px-3.5 py-2 rounded-full border border-slate-100" title="El código cambia cada pocos segundos">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      En vivo
+                    </span>
+                    {/* Proyectar el QR en una ventana aparte */}
+                    <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-[#0090d0] text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en una ventana aparte">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </button>
                   </div>
-                  Sincronizado en vivo
+                </div>
+
+                {/* El QR ocupa todo el ancho de la tarjeta, sin pasarse del alto de la pantalla */}
+                <div
+                  className="w-full aspect-square p-3 sm:p-4 bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,43,92,0.15)] border border-slate-100"
+                  style={{ maxWidth: 'min(100%, calc(100dvh - 11rem))' }}
+                >
+                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-[1.25rem] object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-20 relative z-10">
+              <div className="text-center py-20 relative z-10 bento-entrada">
                 <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><span className="text-4xl">✓</span></div>
-                <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase Archivada</h3>
+                <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase cerrada</h3>
                 <p className="text-sm text-slate-400 font-medium">Los datos ya se han guardado de forma segura.</p>
               </div>
             )}
           </div>
 
           {/* PANEL DERECHO: Lista de Alumnos */}
-          <div className="xl:col-span-7 glass-container rounded-[2.5rem] p-8 flex flex-col relative overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Gestión del Aula</h2>
+          <div className="xl:col-span-6 glass-container rounded-[2.5rem] p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6 sm:mb-8">
+              <h2 className="text-lg sm:text-xl font-black text-[#002b5c] tracking-tight">Alumnos de la clase</h2>
               <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Alumnos</span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-hidden relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden relative z-10">
               
               {/* COLUMNA IZQUIERDA: COMPLETADOS */}
               <div className="flex flex-col h-full">
@@ -511,23 +504,26 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2 space-y-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-1 py-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card p-3 flex items-center justify-between gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                      <div key={item.id} className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
                         <div className="flex flex-col overflow-hidden min-w-0">
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
+                          {(item.perfiles as any)?.pendiente && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+                          )}
 
                         </div>
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
                           style={{ textAlignLast: 'center' }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[90px] sm:min-w-[100px] hover:scale-105 ${
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 w-[84px] hover:scale-105 ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
@@ -547,30 +543,33 @@ export default function PantallaProfesor({ onVolver }: Props) {
               </div>
 
               {/* COLUMNA DERECHA: PENDIENTES */}
-              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-6">
+              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-4">
                 <h3 className="text-sm font-bold text-rose-500 mb-4 flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-rose-400 rounded-full shadow-[0_0_8px_rgba(251,113,133,0.6)]"></span>
                   Pendientes ({
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2 space-y-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-1 py-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card p-3 flex items-center justify-between gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                      <div key={item.id} className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
                         <div className="flex flex-col overflow-hidden min-w-0">
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
+                          {(item.perfiles as any)?.pendiente && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+                          )}
 
                         </div>
                         <select
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
                           style={{ textAlignLast: 'center' }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[90px] sm:min-w-[100px] hover:scale-105 ${
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 w-[84px] hover:scale-105 ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
@@ -597,21 +596,29 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
       {/* --- MODALES --- */}
       {mostrarModalCierre && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
           <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
-            <p className="text-xs text-slate-500 font-medium mb-8">Confirma tu identidad docente.</p>
-            <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Cerrar la clase</h3>
+            {fase === 'ENTRADA' && (
+              <div className="text-left bg-amber-50 border border-amber-100 rounded-2xl p-4 mt-4 mb-4">
+                <p className="text-xs font-black text-amber-700 uppercase tracking-wider mb-1">No has activado la salida</p>
+                <p className="text-xs text-amber-700/90 font-medium leading-relaxed">
+                  Si cierras ahora, se dará por buena la salida de quienes ya entraron. Quien no haya escaneado quedará como ausente.
+                </p>
+              </div>
+            )}
+            <p className="text-xs text-slate-500 font-medium mb-8">Escribe tu contraseña para confirmar.</p>
+            <input type="password" placeholder="Contraseña" value={passInput} autoFocus onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
             <div className="flex flex-col gap-3">
-              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y Guardar</button>
+              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y guardar</button>
               <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="w-full py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Volver</button>
-              <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="w-full py-3 mt-2 rounded-2xl bg-transparent text-slate-400 text-xs font-bold hover:text-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">No registrar la clase (Eliminar)</button>
+              <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="w-full py-3 mt-2 rounded-2xl bg-transparent text-slate-400 text-xs font-bold hover:text-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Eliminar la clase sin guardarla</button>
             </div>
           </div>
         </div>
       )}
 
-      <BotonCompartir mostrarNotificacion={mostrarNotificacion} />
+      <BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />
     </div>
   );
 }
