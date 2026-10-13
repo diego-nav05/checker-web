@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { Boton } from './ui';
+
+// Siempre la dirección principal de la web (sin restos de la pantalla en la que estés)
+const enlace = window.location.origin;
+const puedeCompartir = typeof navigator.share === 'function';
 
 interface Props {
   mostrarNotificacion: (texto: string, tipo: 'exito' | 'error' | 'info') => void;
@@ -52,53 +57,63 @@ export default function BotonCompartir({ mostrarNotificacion, lado = 'izquierda'
       </button>
 
       {mostrarQR && (
-        <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-marino-oscuro/80 backdrop-blur-xl p-4 sm:p-8 overflow-y-auto select-none transition-all duration-500 ${isClosing ? 'opacity-0' : 'opacity-100 animate-[fade-in_0.4s_ease-out]'}`}>
-          
-          {/* Botón Cerrar (Fuera de la tarjeta) */}
-          <button 
-            onClick={handleClose} 
-            className={`absolute top-6 right-6 sm:top-10 sm:right-10 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-full backdrop-blur-md shadow-lg transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer z-10 ${isClosing ? 'scale-75 opacity-0' : 'scale-100 opacity-100'}`}
-          >
-            <svg className="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+          className={`fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/25 backdrop-blur-sm p-4 overflow-y-auto select-none modal-fondo transition-opacity duration-300 ${isClosing ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <div className="glass-container rounded-bento p-6 sm:p-8 w-full max-w-md shadow-2xl relative">
+            <button
+              onClick={handleClose}
+              aria-label="Cerrar"
+              className="absolute top-5 right-5 w-9 h-9 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95"
+            >
+              ✕
+            </button>
 
-          {/* Modal Container */}
-          <div className={`flex flex-col items-center justify-center w-full max-w-[90vh] bg-white/95 backdrop-blur-3xl rounded-bento shadow-[0_20px_60px_-10px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.4)] p-8 sm:p-12 relative overflow-hidden transition-all duration-500 transform ${isClosing ? 'scale-95 opacity-0 translate-y-8' : 'scale-100 opacity-100 translate-y-0 anim-suave'}`}>
-            
-            {/* Cabecera / Título */}
-            <div className="mb-8 text-center space-y-2">
-              <h2 className="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-marino to-azul tracking-tight leading-tight pb-1">
-                Escanea para unirte
-              </h2>
-              <p className="text-slate-500 font-medium tracking-wide">Abre la cámara de tu dispositivo y apunta al código</p>
+            <div className="flex items-center gap-3 mb-6 pr-12">
+              <div className="w-11 h-11 shrink-0 rounded-control bg-marino flex items-center justify-center shadow-[0_8px_20px_rgba(0,43,92,0.3)]">
+                <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M8 8h3v3H8zM13 13h3v3h-3zM13 8h3M8 13v3" /></svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-marino tracking-tight">Escanea para entrar en Checker</h2>
+                <p className="text-sm text-slate-500 font-medium mt-0.5">Apunta con la cámara del móvil al código</p>
+              </div>
             </div>
-            
-            {/* Contenedor del QR (Efecto integrado) */}
-            <div className="bg-white p-6 sm:p-10 rounded-bento shadow-[inset_0_4px_24px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)] mb-8 aspect-square w-full flex items-center justify-center relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-tr from-blue-50 to-transparent opacity-50 pointer-events-none"></div>
-              <QRCodeSVG 
-                value={window.location.href} 
-                size={2048} // Render a large size, CSS scales it down to fit perfectly
-                className="w-full h-full pointer-events-none relative z-10 transition-transform duration-700 group-hover:scale-[1.02]"
-                level="H" 
+
+            <div className="bg-white p-5 sm:p-6 rounded-bento border border-slate-100 shadow-[0_20px_50px_-12px_rgba(0,43,92,0.15)] aspect-square w-full flex items-center justify-center mb-6">
+              <QRCodeSVG
+                value={enlace}
+                size={1024}
+                className="w-full h-full pointer-events-none"
+                level="H"
                 fgColor="#002b5c"
                 includeMargin={false}
               />
             </div>
-            
-            {/* Botón de acción */}
-            <button 
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                mostrarNotificacion('¡Enlace copiado al portapapeles!', 'exito');
-              }}
-              className="primary-glow-btn text-white px-8 py-4 rounded-full font-bold tracking-widest uppercase text-sm flex items-center gap-3 cursor-pointer select-none mx-auto w-full max-w-sm justify-center"
-            >
-              <svg className="w-5 h-5 pointer-events-none opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
-              Copiar enlace
-            </button>
+
+            <p className="text-center text-xs font-bold text-slate-400 mb-4 truncate">{enlace.replace(/^https?:\/\//, '')}</p>
+
+            <div className={`grid gap-3 ${puedeCompartir ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <Boton
+                ancho
+                variante={puedeCompartir ? 'secundario' : 'principal'}
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(enlace);
+                    mostrarNotificacion('¡Enlace copiado!', 'exito');
+                  } catch {
+                    mostrarNotificacion(`Copia este enlace: ${enlace}`, 'info');
+                  }
+                }}
+              >
+                Copiar enlace
+              </Boton>
+              {puedeCompartir && (
+                <Boton ancho onClick={() => navigator.share({ title: 'Checker', text: 'Entra en Checker para pasar lista en clase', url: enlace }).catch(() => {})}>
+                  Compartir
+                </Boton>
+              )}
+            </div>
           </div>
         </div>
       )}

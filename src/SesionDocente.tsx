@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
-
 interface Props {
   nombre: string;
   onCambiarCuenta: () => void;
@@ -7,42 +5,27 @@ interface Props {
 }
 
 // Pastilla del docente conectado, abajo a la derecha (como el botón de compartir a la izquierda).
-// Al pulsarla se despliegan las opciones de la cuenta.
+// "Cerrar sesión" siempre a la vista para que nadie se deje la sesión abierta en un ordenador del aula.
 export default function SesionDocente({ nombre, onCambiarCuenta, onCerrarSesion }: Props) {
-  const [abierta, setAbierta] = useState(false);
-  const contenedor = useRef<HTMLDivElement>(null);
-
-  // Se cierra al pulsar fuera o con Escape
-  useEffect(() => {
-    if (!abierta) return;
-    const fuera = (e: MouseEvent) => { if (!contenedor.current?.contains(e.target as Node)) setAbierta(false); };
-    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierta(false); };
-    document.addEventListener('mousedown', fuera);
-    document.addEventListener('keydown', tecla);
-    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', tecla); };
-  }, [abierta]);
-
   return (
-    <div ref={contenedor} className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 flex flex-col items-end">
-      {abierta && (
-        <div className="mb-2 w-52 p-1.5 bg-white/90 backdrop-blur-xl border border-white rounded-control shadow-[0_16px_40px_-12px_rgba(0,43,92,0.25)] flex flex-col contenido-pestana">
-          <button onClick={() => { setAbierta(false); onCambiarCuenta(); }} className="text-left px-4 py-3 rounded-xl text-xs font-bold text-marino hover:bg-azul/10 hover:text-azul transition-colors cursor-pointer">
-            Cambiar de cuenta
-          </button>
-          <button onClick={() => { setAbierta(false); onCerrarSesion(); }} className="text-left px-4 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-rose-50 hover:text-rose-500 transition-colors cursor-pointer">
-            Cerrar sesión
-          </button>
-        </div>
-      )}
+    <div className="absolute bottom-4 right-4 sm:bottom-6 sm:right-6 z-20 h-12 pl-4 pr-1.5 flex items-center gap-2 sm:gap-3 bg-white/80 border border-slate-200/60 rounded-full shadow-[0_8px_24px_-8px_rgba(0,43,92,0.18)] backdrop-blur-md select-none bento-entrada">
+      <span className="w-2 h-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" title="Sesión de docente abierta"></span>
+      <span className="hidden sm:block text-xs font-bold text-marino truncate max-w-[200px]">{nombre}</span>
+      <span className="hidden sm:block w-px h-5 bg-slate-200"></span>
       <button
-        onClick={() => setAbierta(!abierta)}
-        aria-expanded={abierta}
-        title="Opciones de la cuenta de docente"
-        className="h-12 pl-4 pr-3 flex items-center gap-2.5 bg-white/60 hover:bg-white border border-slate-200/50 rounded-full text-marino shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:scale-95 cursor-pointer backdrop-blur-md select-none"
+        onClick={onCambiarCuenta}
+        title="Cambiar de cuenta"
+        className="h-9 px-2 sm:px-3 flex items-center gap-1.5 rounded-full text-xs font-bold text-azul hover:bg-azul/10 transition-colors cursor-pointer active:scale-95"
       >
-        <span className="w-2 h-2 shrink-0 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
-        <span className="text-xs font-bold truncate max-w-[130px] sm:max-w-[220px]">{nombre}</span>
-        <svg className={`w-4 h-4 shrink-0 text-slate-400 transition-transform duration-300 ${abierta ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+        <span className="hidden sm:inline">Cambiar de cuenta</span>
+      </button>
+      <button
+        onClick={onCerrarSesion}
+        className="h-9 px-4 flex items-center gap-1.5 rounded-full text-xs font-black bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-colors cursor-pointer active:scale-95"
+      >
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2"><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+        Cerrar sesión
       </button>
     </div>
   );

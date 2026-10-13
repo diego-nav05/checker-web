@@ -5,7 +5,7 @@ interface Props {
   onCambiar: (nuevo: HorarioEditable) => void;
 }
 
-const claseHora = 'w-full min-w-0 px-3 py-2.5 bg-white/80 rounded-xl border border-white focus:border-azul/30 focus:ring-4 focus:ring-azul/10 focus:outline-none text-marino text-sm font-bold text-center transition-all';
+const claseHora = 'w-full min-w-0 px-1.5 sm:px-3 py-2.5 bg-white/80 rounded-xl border border-white focus:border-azul/30 focus:ring-4 focus:ring-azul/10 focus:outline-none text-marino text-sm font-bold text-center transition-all';
 
 // Elige los días de clase y la hora de cada uno. Al escribir la hora de un día, se copia sola
 // a los demás días marcados que aún no la tengan (lo normal es que sea la misma hora).
@@ -35,7 +35,7 @@ export default function EditorHorario({ valor, onCambiar }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-1.5 justify-center">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center py-1">
         {DIAS.map(dia => {
           const marcado = !!valor[dia.id];
           return (
@@ -44,7 +44,7 @@ export default function EditorHorario({ valor, onCambiar }: Props) {
               type="button"
               onClick={() => alternarDia(dia.id)}
               title={dia.largo}
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300 cursor-pointer active:scale-90 ${marcado ? 'bg-azul text-white shadow-md shadow-azul/30 scale-110' : 'bg-white/70 text-slate-400 hover:bg-white hover:text-marino'}`}
+              className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs font-black border transition-all duration-300 cursor-pointer active:scale-90 ${marcado ? 'bg-azul border-azul text-white shadow-[0_6px_16px_-4px_rgba(0,144,208,0.6)] ring-4 ring-azul/15' : 'bg-white border-slate-200 text-slate-500 hover:border-azul/40 hover:text-azul'}`}
             >
               {dia.corto}
             </button>
@@ -57,8 +57,8 @@ export default function EditorHorario({ valor, onCambiar }: Props) {
       ) : (
         <div className="flex flex-col gap-2">
           {diasMarcados.map(dia => (
-            <div key={dia} className="grid grid-cols-[5.5rem_1fr_auto_1fr] items-center gap-2 bg-white/50 border border-white rounded-control px-3 py-2 contenido-pestana">
-              <span className="text-xs font-black text-marino">{DIAS[dia - 1].largo}</span>
+            <div key={dia} className="grid grid-cols-[2.75rem_1fr_auto_1fr] sm:grid-cols-[5.5rem_1fr_auto_1fr] items-center gap-1.5 sm:gap-2 bg-white/50 border border-white rounded-control px-2.5 sm:px-3 py-2 contenido-pestana">
+              <span className="text-xs font-black text-marino"><span className="sm:hidden">{DIAS[dia - 1].medio}</span><span className="hidden sm:inline">{DIAS[dia - 1].largo}</span></span>
               <input
                 type="time"
                 aria-label={`Hora de inicio del ${DIAS[dia - 1].largo.toLowerCase()}`}

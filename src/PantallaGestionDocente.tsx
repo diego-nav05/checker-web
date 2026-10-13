@@ -1161,7 +1161,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           <EditorHorario valor={editandoHorario.valor} onCambiar={(valor) => setEditandoHorario({ ...editandoHorario, valor })} />
           <div className="grid grid-cols-2 gap-3 mt-6">
             <Boton variante="secundario" onClick={() => setEditandoHorario(null)}>Cancelar</Boton>
-            <Boton onClick={guardarHorarioEditado} disabled={guardandoHorario || horarioIncompleto(editandoHorario.valor)}>{guardandoHorario ? 'Guardando...' : 'Guardar horario'}</Boton>
+            <Boton onClick={guardarHorarioEditado} disabled={guardandoHorario || horarioIncompleto(editandoHorario.valor)}>{guardandoHorario ? 'Guardando...' : 'Guardar'}</Boton>
           </div>
         </Modal>
       )}

@@ -248,7 +248,8 @@ export function Modal({ titulo, descripcion, children, onCerrar, ancho = 'sm', c
             <button type="button" onClick={onCerrar} aria-label="Cerrar" className="w-9 h-9 shrink-0 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
           )}
         </div>
-        <div className="overflow-y-auto -mx-1 px-1">{children}</div>
+        {/* Margen extra para que las sombras de botones y tarjetas no se corten al desplazar */}
+        <div className="overflow-y-auto -mx-3 px-3 -mb-4 pb-4 -mt-2 pt-2">{children}</div>
       </div>
     </div>
   );
