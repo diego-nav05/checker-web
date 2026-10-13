@@ -45,7 +45,7 @@ export function AvisoFlotante({ aviso, onCerrar }: { aviso: Aviso | null; onCerr
   const colores =
     aviso.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50' :
     aviso.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50' :
-    'bg-[#002b5c]/95 border-white/20';
+    'bg-marino/95 border-white/20';
 
   return (
     <div className="fixed top-6 inset-x-0 z-[300] flex justify-center px-4 pointer-events-none">

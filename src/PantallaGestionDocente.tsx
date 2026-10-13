@@ -2,8 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import * as XLSX from 'xlsx';
 import BotonCompartir from './BotonCompartir';
+import { Boton, Cabecera, Campo, Esqueleto, Modal, Pantalla, Pestanas, TituloSeccion, Vacio } from './ui';
+import EditorHorario from './EditorHorario';
+import ClasesPasadas from './ClasesPasadas';
+import { DIAS, aEditable, cargarHorarios, filasDe, guardarHorario, tramo, type FilaHorario, type HorarioEditable } from './horario';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { altaAlumno, mensajeError, tieneCorreoReal, type ResultadoAlta } from './cuentas';
+import { borrarPorLotes, traerPorLotes, traerTodas } from './consultas';
 
 const COLUMNAS_SESION = 'id, asignatura_id, fecha, fase, hora_apertura, hora_cierre';
 const estaVinculado = (alumno: any) => !!(alumno?.dispositivo_hash || alumno?.dispositivo_id || alumno?.vinculado);
@@ -38,7 +43,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [alumnos, setAlumnos] = useState<any[]>([]);
   const [asignaturas, setAsignaturas] = useState<any[]>([]);
   const [modalAsignatura, setModalAsignatura] = useState(false);
-  const [formAsignatura, setFormAsignatura] = useState({ nombre: '', aula: '', horario: '', dias_semana: [] as number[] });
+  const [formAsignatura, setFormAsignatura] = useState({ nombre: '', aula: '' });
+  const [horarioNuevo, setHorarioNuevo] = useState<HorarioEditable>({});
+  const [horarios, setHorarios] = useState<FilaHorario[]>([]);
+  // Editar el horario de una asignatura ya creada
+  const [editandoHorario, setEditandoHorario] = useState<{ asig: any; valor: HorarioEditable } | null>(null);
+  const [guardandoHorario, setGuardandoHorario] = useState(false);
+  // Corregir la asistencia de clases pasadas
+  const [clasesPasadasDe, setClasesPasadasDe] = useState<{ id: string; nombre: string } | null>(null);
   const [guardandoAsig, setGuardandoAsig] = useState(false);
 
   const [modalEliminarAsig, setModalEliminarAsig] = useState<string | null>(null);
@@ -91,27 +103,29 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       // Alumnos de mis clases = matriculados + los que tienen alguna asistencia
       const asigIds = asigs.map(a => a.id);
-      const { data: matriculas } = await supabase.from('matriculas').select('alumno_id, asignatura_id').in('asignatura_id', asigIds);
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id, fase').in('asignatura_id', asigIds);
-      const sesionIds = (sesiones || []).map(s => s.id);
-      const sesionesCerradas = new Set((sesiones || []).filter(s => s.fase === 'CERRADA').map(s => s.id));
-      const { data: asistencias } = sesionIds.length > 0
-        ? await supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', sesionIds)
-        : { data: [] as { alumno_id: string; sesion_id: string; estado: string }[] };
+      const matriculas = await traerTodas<{ alumno_id: string; asignatura_id: string }>(() =>
+        supabase.from('matriculas').select('alumno_id, asignatura_id').in('asignatura_id', asigIds).order('id'));
+      const sesiones = await traerTodas<{ id: string; asignatura_id: string; fase: string }>(() =>
+        supabase.from('sesiones').select('id, asignatura_id, fase').in('asignatura_id', asigIds).order('id'));
+      const sesionIds = sesiones.map(s => s.id);
+      const sesionesCerradas = new Set(sesiones.filter(s => s.fase === 'CERRADA').map(s => s.id));
+      const asistencias = await traerPorLotes<{ alumno_id: string; sesion_id: string; estado: string }>(sesionIds, (lote) =>
+        supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', lote).order('id'));
 
-      const aluIds = [...new Set([...(matriculas || []), ...(asistencias || [])].map(a => a.alumno_id))];
+      const aluIds = [...new Set([...matriculas, ...asistencias].map(a => a.alumno_id))];
       if (aluIds.length === 0) return setAlumnos([]);
 
-      const { data: perfiles } = await supabase
+      const perfiles = (await traerPorLotes<any>(aluIds, (lote) => supabase
         .from('perfiles')
         .select('id, nombre_completo, email, rol, dispositivo_hash, dispositivo_id, pendiente, codigo_alta')
-        .in('id', aluIds)
+        .in('id', lote)
         .eq('rol', 'alumno')
-        .order('nombre_completo', { ascending: true });
+        .order('id')))
+        .sort((a, b) => (a.nombre_completo || '').localeCompare(b.nombre_completo || '', 'es'));
       if (perfiles) {
         const perfilesConStats = perfiles.map(perfil => {
           // Las clases aún abiertas no cuentan: el alumno todavía puede escanear
-          const asistsAlumno = (asistencias || []).filter(a => a.alumno_id === perfil.id && sesionesCerradas.has(a.sesion_id));
+          const asistsAlumno = asistencias.filter(a => a.alumno_id === perfil.id && sesionesCerradas.has(a.sesion_id));
           // Solo cuentan las clases en las que el alumno ya estaba en la lista (no las anteriores a su alta)
           const totalSesionesPosibles = asistsAlumno.length;
           
@@ -134,6 +148,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         });
         setAlumnos(perfilesConStats);
       }
+    } catch {
+      mostrarNotificacion('No se pudieron cargar los alumnos. Revisa tu conexión y vuelve a intentarlo.', 'error');
     } finally {
       setCargando(false);
     }
@@ -198,7 +214,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('nombre', { ascending: true });
-      if (data) setAsignaturas(data);
+      if (data) {
+        setAsignaturas(data);
+        setHorarios(await cargarHorarios(data.map(a => a.id)));
+      }
     }
     setCargando(false);
   };
@@ -218,13 +237,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     if (asigs && asigs.length > 0) {
       const asigIds = asigs.map((a: any) => a.id);
       const { data: matriculas } = await supabase.from('matriculas').select('asignatura_id').eq('alumno_id', alumno.id).in('asignatura_id', asigIds);
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
-      let asigIdsAsistidas: string[] = [];
-      if (sesiones && sesiones.length > 0) {
-        const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesiones.map((s: any) => s.id));
-        const attendedSesionIds = (asists || []).map((a: any) => a.sesion_id);
-        asigIdsAsistidas = sesiones.filter((s: any) => attendedSesionIds.includes(s.id)).map((s: any) => s.asignatura_id);
-      }
+      const sesiones = await traerTodas<{ id: string; asignatura_id: string }>(() =>
+        supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds).order('id'));
+      const asists = await traerPorLotes<{ sesion_id: string }>(sesiones.map(s => s.id), (lote) =>
+        supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', lote).order('id'));
+      const sesionesAsistidas = new Set(asists.map(a => a.sesion_id));
+      const asigIdsAsistidas = sesiones.filter(s => sesionesAsistidas.has(s.id)).map(s => s.asignatura_id);
       const asigIdsAlumno = new Set([...(matriculas || []).map(m => m.asignatura_id), ...asigIdsAsistidas]);
       setAsignaturasAlumno(asigs.filter((a: any) => asigIdsAlumno.has(a.id)));
     } else {
@@ -260,69 +278,83 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const ejecutarExpulsion = async () => {
     if (!modalExpulsion) return;
     const { tipo, aluId, asigId } = modalExpulsion;
-    
-    if (tipo === 'UNA' && asigId) {
-      const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
-      if (sesiones && sesiones.length > 0) {
-        const sIds = sesiones.map((s: any) => s.id);
-        await supabase.from('asistencias')
-          .delete()
-          .eq('alumno_id', aluId)
-          .in('sesion_id', sIds);
-      }
-      await supabase.from('matriculas').delete().eq('alumno_id', aluId).eq('asignatura_id', asigId);
-      mostrarNotificacion('Alumno quitado de la asignatura.', 'exito');
-      setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
-      if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
-    } else if (tipo === 'TODAS') {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
-      if (asigs && asigs.length > 0) {
-        const asigIds = asigs.map((a: any) => a.id);
-        const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
-        if (sesiones && sesiones.length > 0) {
-          const sIds = sesiones.map((s: any) => s.id);
-          await supabase.from('asistencias')
-            .delete()
-            .eq('alumno_id', aluId)
-            .in('sesion_id', sIds);
+
+    try {
+      if (tipo === 'UNA' && asigId) {
+        const sesiones = await traerTodas<{ id: string }>(() =>
+          supabase.from('sesiones').select('id').eq('asignatura_id', asigId).order('id'));
+        await borrarPorLotes(sesiones.map(s => s.id), (lote) =>
+          supabase.from('asistencias').delete().eq('alumno_id', aluId).in('sesion_id', lote));
+        await supabase.from('matriculas').delete().eq('alumno_id', aluId).eq('asignatura_id', asigId);
+        mostrarNotificacion('Alumno quitado de la asignatura.', 'exito');
+        setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
+        if (asignaturasAlumno.length <= 1) setAlumnoGestion(null);
+      } else if (tipo === 'TODAS') {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
+        if (asigs && asigs.length > 0) {
+          const asigIds = asigs.map((a: any) => a.id);
+          const sesiones = await traerTodas<{ id: string }>(() =>
+            supabase.from('sesiones').select('id').in('asignatura_id', asigIds).order('id'));
+          await borrarPorLotes(sesiones.map(s => s.id), (lote) =>
+            supabase.from('asistencias').delete().eq('alumno_id', aluId).in('sesion_id', lote));
+          await supabase.from('matriculas').delete().eq('alumno_id', aluId).in('asignatura_id', asigIds);
         }
-        await supabase.from('matriculas').delete().eq('alumno_id', aluId).in('asignatura_id', asigIds);
+        mostrarNotificacion('Alumno quitado de todas tus asignaturas.', 'exito');
+        setAlumnoGestion(null);
       }
-      mostrarNotificacion('Alumno quitado de todas tus asignaturas.', 'exito');
-      setAlumnoGestion(null);
+    } catch {
+      mostrarNotificacion('No se pudo quitar al alumno. Revisa tu conexión e inténtalo de nuevo.', 'error');
     }
     cargarAlumnos();
     setModalExpulsion(null);
   };
 
-  const toggleDiaSemana = (dia: number) => {
-    setFormAsignatura(prev => {
-      const dias = prev.dias_semana.includes(dia) 
-        ? prev.dias_semana.filter(d => d !== dia) 
-        : [...prev.dias_semana, dia];
-      return { ...prev, dias_semana: dias };
-    });
-  };
+  // Comprueba que todos los días marcados tengan hora de inicio
+  const horarioIncompleto = (horario: HorarioEditable) =>
+    Object.keys(horario).length === 0 || Object.values(horario).some(h => !h.inicio);
 
   const guardarNuevaAsignatura = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (horarioIncompleto(horarioNuevo)) return mostrarNotificacion('Marca al menos un día y escribe la hora de cada día.', 'error');
     setGuardandoAsig(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('asignaturas').insert([{ 
-      nombre: formAsignatura.nombre, 
-      aula: formAsignatura.aula, 
-      horario: formAsignatura.horario, 
-      profesor_id: user?.id,
-      dias_semana: formAsignatura.dias_semana
-    }]);
-    setGuardandoAsig(false);
-    if (error) mostrarNotificacion('No se pudo crear la asignatura. Inténtalo de nuevo.', 'error');
-    else { 
-      setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); 
-      setModalAsignatura(false); 
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from('asignaturas').insert([{
+        nombre: formAsignatura.nombre.trim(),
+        aula: formAsignatura.aula.trim(),
+        profesor_id: user?.id,
+      }]).select('id').single();
+      if (error || !data) throw error;
+      await guardarHorario(data.id, horarioNuevo, formAsignatura.aula.trim());
+      setFormAsignatura({ nombre: '', aula: '' });
+      setHorarioNuevo({});
+      setModalAsignatura(false);
       mostrarNotificacion('Asignatura creada.', 'exito');
-      cargarAsignaturas(); 
+      cargarAsignaturas();
+    } catch {
+      mostrarNotificacion('No se pudo crear la asignatura. Inténtalo de nuevo.', 'error');
+    } finally {
+      setGuardandoAsig(false);
+    }
+  };
+
+  const abrirEditorHorario = (asig: any) =>
+    setEditandoHorario({ asig, valor: aEditable(filasDe(horarios, asig.id)) });
+
+  const guardarHorarioEditado = async () => {
+    if (!editandoHorario) return;
+    if (horarioIncompleto(editandoHorario.valor)) return mostrarNotificacion('Marca al menos un día y escribe la hora de cada día.', 'error');
+    setGuardandoHorario(true);
+    try {
+      await guardarHorario(editandoHorario.asig.id, editandoHorario.valor, editandoHorario.asig.aula);
+      mostrarNotificacion('Horario guardado.', 'exito');
+      setEditandoHorario(null);
+      cargarAsignaturas();
+    } catch {
+      mostrarNotificacion('No se pudo guardar el horario. Inténtalo de nuevo.', 'error');
+    } finally {
+      setGuardandoHorario(false);
     }
   };
 
@@ -331,17 +363,15 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setCargandoPass(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
+      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passConfirm });
       if (authError) throw new Error("Contraseña incorrecta.");
 
-      const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', modalEliminarAsig);
-      if (sesiones && sesiones.length > 0) {
-        const sesionIds = sesiones.map((s) => s.id);
-        await supabase.from('asistencias').delete().in('sesion_id', sesionIds);
-        await supabase.from('sesiones').delete().eq('asignatura_id', modalEliminarAsig);
-      }
-      await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
+      // Al borrar las clases, la base de datos borra sola sus asistencias (y al borrar la asignatura, sus matrículas)
+      const { error: errorSesiones } = await supabase.from('sesiones').delete().eq('asignatura_id', modalEliminarAsig);
+      if (errorSesiones) throw new Error('No se pudo eliminar la asignatura. Inténtalo de nuevo.');
+      const { error: errorAsig } = await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
+      if (errorAsig) throw new Error('No se pudo eliminar la asignatura. Inténtalo de nuevo.');
       
       setModalEliminarAsig(null); 
       setPassConfirm(''); 
@@ -393,23 +423,26 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
-    const { data: sesionesDataRaw } = await supabase.from('sesiones').select(COLUMNAS_SESION).eq('asignatura_id', asignaturaSeleccionada.id);
-    if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
+    const sesionesDataRaw = await traerTodas<any>(() =>
+      supabase.from('sesiones').select(COLUMNAS_SESION).eq('asignatura_id', asignaturaSeleccionada.id).order('id'));
+    if (sesionesDataRaw.length === 0) {
       mostrarNotificacion("Esta asignatura aún no tiene clases registradas.", 'info');
       return null;
     }
     const sesionIds = sesionesDataRaw.map(s => s.id);
 
-    const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-    if (!asistData || asistData.length === 0) {
+    const asistData = await traerPorLotes<any>(sesionIds, (lote) =>
+      supabase.from('asistencias').select('*').in('sesion_id', lote).order('id'));
+    if (asistData.length === 0) {
       mostrarNotificacion("Todavía no hay asistencias registradas.", 'info');
       return null;
     }
 
     const aluIds = [...new Set(asistData.map(a => a.alumno_id))];
-    const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+    const perfiles = await traerPorLotes<{ id: string; nombre_completo: string }>(aluIds, (lote) =>
+      supabase.from('perfiles').select('id, nombre_completo').in('id', lote).order('id'));
     const mapPerfiles: Record<string, string> = {};
-    perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
+    perfiles.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
     const sesionesConFecha = procesarFechasSesiones(sesionesDataRaw, asistData);
 
@@ -560,23 +593,26 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
 
     const asigIds = asigs.map(a => a.id);
-    const { data: sesiones } = await supabase.from('sesiones').select(COLUMNAS_SESION).in('asignatura_id', asigIds);
-    if (!sesiones || sesiones.length === 0) {
+    const sesiones = await traerTodas<any>(() =>
+      supabase.from('sesiones').select(COLUMNAS_SESION).in('asignatura_id', asigIds).order('id'));
+    if (sesiones.length === 0) {
       mostrarNotificacion('Todavía no hay clases registradas.', 'info');
       return null;
     }
 
     const sesionIds = sesiones.map(s => s.id);
-    const { data: asistencias } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-    if (!asistencias || asistencias.length === 0) {
+    const asistencias = await traerPorLotes<any>(sesionIds, (lote) =>
+      supabase.from('asistencias').select('*').in('sesion_id', lote).order('id'));
+    if (asistencias.length === 0) {
       mostrarNotificacion('No hay asistencias registradas.', 'info');
       return null;
     }
 
     const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
-    const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+    const perfiles = await traerPorLotes<{ id: string; nombre_completo: string }>(aluIds, (lote) =>
+      supabase.from('perfiles').select('id, nombre_completo').in('id', lote).order('id'));
     const mapPerfiles: Record<string, string> = {};
-    perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
+    perfiles.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
     const resultadosGlobales: { nombre: string, filas: any[] }[] = [];
 
@@ -759,69 +795,40 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     else if (e.key === 'Escape') setEditandoAulaId(null);
   };
 
-  const toggleDiaDirecto = async (asig: any, diaId: number) => {
-    const diasActuales = asig.dias_semana || [];
-    const nuevosDias = diasActuales.includes(diaId)
-      ? diasActuales.filter((d: number) => d !== diaId)
-      : [...diasActuales, diaId];
-
-    setAsignaturas(prev => prev.map(a => a.id === asig.id ? { ...a, dias_semana: nuevosDias } : a));
-
-    const { error } = await supabase.from('asignaturas').update({ dias_semana: nuevosDias }).eq('id', asig.id);
-    if (error) {
-      mostrarNotificacion('No se pudieron guardar los días.', 'error');
-      cargarAsignaturas();
-    }
-  };
-
   return (
-    <div className="min-h-[100dvh] bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      <div className="glow-blob"></div>
-
+    <Pantalla esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} />}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
-      <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
-        <div className="flex items-center gap-4">
-          <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Gestión</h1>
-            <p className="text-xs font-semibold text-slate-400">Tus alumnos y asignaturas</p>
-          </div>
-        </div>
-      </div>
+      <Cabecera titulo="Gestión" subtitulo="Tus alumnos y asignaturas" onVolver={onVolver} />
 
-      <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col gap-6 animate-[fade-in_0.4s_ease-out]">
-        
-        <div className="pestanas glass-container p-1.5 rounded-full max-w-xs mx-auto w-full" style={{ '--total': 2, '--activa': tabActual === 'ALUMNOS' ? 0 : 1 } as React.CSSProperties}>
-          <span className="pestanas-indicador rounded-full"></span>
-          <button onClick={() => setTabActual('ALUMNOS')} className={`py-3 text-xs font-bold rounded-full cursor-pointer ${tabActual === 'ALUMNOS' ? 'text-white' : 'text-slate-500 hover:text-[#002b5c]'}`}>Alumnado</button>
-          <button onClick={() => setTabActual('ASIGNATURAS')} className={`py-3 text-xs font-bold rounded-full cursor-pointer ${tabActual === 'ASIGNATURAS' ? 'text-white' : 'text-slate-500 hover:text-[#002b5c]'}`}>Asignaturas</button>
-        </div>
+      <div className="flex-1 flex flex-col gap-6">
+        <Pestanas<TabGestion>
+          className="max-w-xs mx-auto w-full bento-entrada"
+          opciones={[{ valor: 'ALUMNOS', texto: 'Alumnado' }, { valor: 'ASIGNATURAS', texto: 'Asignaturas' }]}
+          valor={tabActual}
+          onCambiar={setTabActual}
+        />
 
         {tabActual === 'ALUMNOS' && (
-          <div className="glass-container rounded-[2.5rem] p-8 flex-1 contenido-pestana">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
+          <div className="glass-container rounded-bento p-5 sm:p-8 flex-1 contenido-pestana">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-1 gap-4">
               <div>
-                <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Estudiantes Inscritos</h2>
+                <TituloSeccion>Estudiantes inscritos</TituloSeccion>
                 <p className="text-xs font-semibold text-slate-400 mt-1">{alumnos.length} en tus clases</p>
               </div>
-              <button onClick={abrirModalAlta} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95 self-start sm:self-auto">
-                Añadir alumno +
-              </button>
+              <Boton tamano="pequeno" onClick={abrirModalAlta} className="self-start sm:self-auto">Añadir alumno +</Boton>
             </div>
 
             {cargando ? (
-              <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Sincronizando...</div>
+              <Esqueleto filas={4} alto="h-[104px]" columnas={2} />
             ) : alumnos.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm font-medium">No hay alumnos en tus clases todavía.</div>
+              <Vacio icono="🎓" titulo="Aún no hay alumnos en tus clases" texto="Aparecerán aquí cuando escaneen el QR de tu clase, o puedes añadirlos con «Añadir alumno»." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {alumnos.map((alumno, i) => (
-                  <div key={alumno.id} style={{ '--i': i } as React.CSSProperties} className="p-5 glass-container hover:bg-white/40 hover:-translate-y-1 rounded-[1.5rem] flex items-center justify-between transition-all duration-500 bento-entrada">
+                  <div key={alumno.id} style={{ '--i': i } as React.CSSProperties} className="p-5 glass-container hover:bg-white/40 hover:-translate-y-1 rounded-control flex items-center justify-between transition-all duration-500 bento-entrada">
                     <div className="overflow-hidden pr-4">
-                      <h3 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h3>
+                      <h3 className="font-bold text-marino text-sm truncate">{alumno.nombre_completo}</h3>
                       <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{tieneCorreoReal(alumno.email) ? alumno.email : 'Sin correo'}</p>
                       <div className="flex flex-wrap items-center gap-3 mt-2">
                         {alumno.pendiente ? (
@@ -846,7 +853,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         )}
                       </div>
                     </div>
-                    <button onClick={() => abrirGestionAlumno(alumno)} className="shrink-0 px-4 py-2.5 bg-slate-50 text-[#002b5c] hover:text-white hover:bg-[#0090d0] text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm">
+                    <button onClick={() => abrirGestionAlumno(alumno)} className="shrink-0 px-4 py-2.5 bg-slate-50 text-marino hover:text-white hover:bg-azul text-xs font-bold rounded-xl transition-all cursor-pointer active:scale-95 shadow-sm">
                       Gestionar
                     </button>
                   </div>
@@ -857,7 +864,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             {!cargando && alumnosSinClase.length > 0 && (
               <div className="mt-12 pt-8 border-t border-slate-200/60">
                 <div className="px-2 mb-6">
-                  <h3 className="text-lg font-black text-[#002b5c] tracking-tight flex items-center gap-2">
+                  <h3 className="text-lg font-black text-marino tracking-tight flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"></span>
                     Con cuenta pero sin ninguna clase ({alumnosSinClase.length})
                   </h3>
@@ -867,9 +874,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {alumnosSinClase.map((alumno, i) => (
-                    <div key={alumno.id} style={{ '--i': i } as React.CSSProperties} className="p-5 bg-amber-50/40 border border-amber-100/80 rounded-[1.5rem] flex flex-col gap-3 bento-entrada">
+                    <div key={alumno.id} style={{ '--i': i } as React.CSSProperties} className="p-5 bg-amber-50/40 border border-amber-100/80 rounded-control flex flex-col gap-3 bento-entrada">
                       <div className="overflow-hidden">
-                        <h4 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h4>
+                        <h4 className="font-bold text-marino text-sm truncate">{alumno.nombre_completo}</h4>
                         <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{tieneCorreoReal(alumno.email) ? alumno.email : 'Sin correo'}</p>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {!alumno.confirmado && !alumno.pendiente && (
@@ -892,7 +899,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         <button
                           onClick={() => setAsignandoClase({ alumno, asignatura_id: misAsignaturas[0]?.id || '' })}
                           disabled={misAsignaturas.length === 0}
-                          className="flex-1 px-3 py-2 bg-white text-[#002b5c] hover:bg-[#0090d0] hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                          className="flex-1 px-3 py-2 bg-white text-marino hover:bg-azul hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                         >
                           Añadir a una clase
                         </button>
@@ -906,87 +913,81 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         )}
 
         {tabActual === 'ASIGNATURAS' && (
-          <div className="glass-container rounded-[2.5rem] p-8 flex-1 contenido-pestana">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
-              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Asignaturas</h2>
+          <div className="glass-container rounded-bento p-5 sm:p-8 flex-1 contenido-pestana">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-1 gap-4">
+              <TituloSeccion>Asignaturas</TituloSeccion>
               <div className="flex gap-3">
-                <button 
+                <Boton
+                  variante="exito"
+                  tamano="pequeno"
                   onClick={() => {
                     setModalExportadorGlobal(true);
                     setFechaInicioGlobal('');
                     setFechaFinGlobal('');
-                  }} 
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95"
+                  }}
                 >
                   Exportar todo ↓
-                </button>
-                <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
-                  Nueva +
-                </button>
+                </Boton>
+                <Boton tamano="pequeno" onClick={() => setModalAsignatura(true)}>Nueva +</Boton>
               </div>
             </div>
 
             {cargando ? (
-              <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Cargando...</div>
+              <Esqueleto filas={3} alto="h-[230px]" columnas={3} />
             ) : asignaturas.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm font-medium">Aún no has creado asignaturas.</div>
+              <Vacio icono="📚" titulo="Aún no has creado asignaturas" texto="Pulsa «Nueva +» para crear la primera." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {asignaturas.map((asig, i) => (
-                  <div key={asig.id} style={{ '--i': i } as React.CSSProperties} className="p-6 glass-container rounded-[2rem] flex flex-col justify-between hover:shadow-[0_20px_40px_rgba(0,144,208,0.1)] hover:-translate-y-1 transition-all duration-500 relative group bento-entrada">
+                  <div key={asig.id} style={{ '--i': i } as React.CSSProperties} className="p-6 glass-container rounded-bento flex flex-col justify-between hover:shadow-[0_20px_40px_rgba(0,144,208,0.1)] hover:-translate-y-1 transition-all duration-500 relative group bento-entrada">
                     <button onClick={() => setModalEliminarAsig(asig.id)} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-400 hover:text-white hover:bg-rose-500 rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 cursor-pointer" title="Eliminar">✕</button>
                     <div>
-                      <h3 className="font-bold text-[#002b5c] text-lg pr-8">{asig.nombre}</h3>
-                      <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mt-3">
-                        <span>{asig.horario}</span>
-                        
+                      <h3 className="font-bold text-marino text-lg pr-8">{asig.nombre}</h3>
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 mt-3">
+                        <span>Aula</span>
                         {editandoAulaId === asig.id ? (
-                          <input 
+                          <input
                             autoFocus
-                            type="text" 
+                            type="text"
                             value={aulaTemp}
                             onChange={(e) => setAulaTemp(e.target.value)}
                             onBlur={() => guardarEdicionAula(asig.id)}
                             onKeyDown={(e) => handleKeyDownAula(e, asig.id)}
-                            className="bg-slate-50 w-20 px-3 py-1.5 rounded-full border-none focus:ring-2 focus:ring-[#0090d0]/20 text-[#002b5c] text-center font-bold outline-none"
+                            className="bg-slate-50 w-20 px-3 py-1.5 rounded-full border-none focus:ring-2 focus:ring-azul/20 text-marino text-center font-bold outline-none"
                           />
                         ) : (
-                          <span 
+                          <span
                             onClick={() => iniciarEdicionAula(asig.id, asig.aula)}
-                            className="bg-[#0090d0]/10 text-[#0090d0] px-3 py-1.5 rounded-full uppercase tracking-wider text-[10px] font-bold cursor-pointer hover:bg-[#0090d0]/20 transition-colors"
+                            title="Pulsa para cambiar el aula"
+                            className="bg-azul/10 text-azul px-3 py-1.5 rounded-full uppercase tracking-wider text-[10px] font-bold cursor-pointer hover:bg-azul/20 transition-colors"
                           >
                             {asig.aula}
                           </span>
                         )}
-                        
                       </div>
 
-                      <div className="mt-4 border-t border-slate-100 pt-4 flex flex-wrap gap-1.5 justify-center">
-                        {[
-                          { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
-                          { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                        ].map(dia => {
-                          const seleccionado = (asig.dias_semana || []).includes(dia.id);
-                          return (
-                            <button
-                              key={dia.id}
-                              onClick={() => toggleDiaDirecto(asig, dia.id)}
-                              className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all cursor-pointer ${
-                                seleccionado 
-                                  ? 'bg-[#0090d0] text-white shadow-md shadow-[#0090d0]/20 scale-110' 
-                                  : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
-                              }`}
-                            >
-                              {dia.label}
-                            </button>
-                          );
-                        })}
+                      <div className="mt-4 border-t border-slate-100 pt-4 space-y-1.5">
+                        {filasDe(horarios, asig.id).length === 0 ? (
+                          <p className="text-xs text-slate-400 font-semibold">{asig.horario || 'Sin horario'}</p>
+                        ) : filasDe(horarios, asig.id).map(f => (
+                          <div key={f.dia_semana} className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-marino">{DIAS[f.dia_semana - 1].largo}</span>
+                            <span className="font-semibold text-slate-500">{tramo(f)}</span>
+                          </div>
+                        ))}
+                        <button onClick={() => abrirEditorHorario(asig)} className="text-xs font-bold text-azul hover:text-marino transition-colors cursor-pointer pt-1">
+                          Editar horario
+                        </button>
                       </div>
-
                     </div>
-                    <button onClick={() => abrirDetallesAsignatura(asig)} className="mt-6 w-full py-3 bg-slate-50 hover:bg-[#0090d0] text-[#002b5c] hover:text-white text-xs font-bold rounded-[1rem] transition-all cursor-pointer active:scale-95">
-                      Exportar asistencia
-                    </button>
+                    <div className="mt-6 grid grid-cols-2 gap-2">
+                      <button onClick={() => setClasesPasadasDe({ id: asig.id, nombre: asig.nombre })} className="py-3 bg-marino/5 hover:bg-marino text-marino hover:text-white text-xs font-bold rounded-control transition-all cursor-pointer active:scale-95">
+                        Clases pasadas
+                      </button>
+                      <button onClick={() => abrirDetallesAsignatura(asig)} className="py-3 bg-slate-50 hover:bg-azul text-marino hover:text-white text-xs font-bold rounded-control transition-all cursor-pointer active:scale-95">
+                        Exportar
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -997,44 +998,44 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- MODAL: EXPORTADOR GLOBAL --- */}
       {modalExportadorGlobal && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-md w-full shadow-2xl max-h-[90dvh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Exportar todo</h3>
+                <h3 className="text-xl font-black text-marino tracking-tight">Exportar todo</h3>
                 <p className="text-xs text-slate-500 font-semibold mt-1">Descarga todas tus asignaturas</p>
               </div>
-              <button onClick={() => setModalExportadorGlobal(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+              <button onClick={() => setModalExportadorGlobal(false)} aria-label="Cerrar" className="w-9 h-9 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
             
-            <div className="bg-slate-50/80 rounded-[2rem] p-6">
-              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar por fechas (opcional)</h4>
+            <div className="bg-slate-50/80 rounded-bento p-6">
+              <h4 className="font-bold text-marino text-xs uppercase tracking-wider mb-4">Filtrar por fechas (opcional)</h4>
               
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <input type="date" value={fechaInicioGlobal} onChange={(e) => setFechaInicioGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                  <input type="date" value={fechaInicioGlobal} onChange={(e) => setFechaInicioGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-control text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-azul/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
                 <div>
-                  <input type="date" value={fechaFinGlobal} onChange={(e) => setFechaFinGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                  <input type="date" value={fechaFinGlobal} onChange={(e) => setFechaFinGlobal(e.target.value)} className="w-full bg-white px-4 py-3 rounded-control text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-azul/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
               </div>
 
               <div className="mb-6 flex flex-col gap-3">
-                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
-                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-control cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-azul border-azul' : 'border-slate-300 bg-slate-50'}`}>
                     {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Formato simplificado (1 = asistió, 0 = faltó)</p>
+                    <p className="text-sm font-bold text-marino">Formato simplificado (1 = asistió, 0 = faltó)</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setOrdenarPorApellido(!ordenarPorApellido)}>
-                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${ordenarPorApellido ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-control cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setOrdenarPorApellido(!ordenarPorApellido)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${ordenarPorApellido ? 'bg-azul border-azul' : 'border-slate-300 bg-slate-50'}`}>
                     {ordenarPorApellido && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por apellidos</p>
+                    <p className="text-sm font-bold text-marino">Ordenar alumnos por apellidos</p>
                   </div>
                 </div>
               </div>
@@ -1043,7 +1044,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 <button 
                   onClick={exportarGlobalSheets}
                   disabled={cargandoHistorialAsig}
-                  className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-4 bg-azul hover:bg-azul-oscuro text-white text-sm font-bold rounded-control transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {cargandoHistorialAsig ? 'Procesando...' : 'Copiar para Google Sheets'}
                 </button>
@@ -1051,7 +1052,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 <button 
                   onClick={exportarGlobalExcel}
                   disabled={cargandoHistorialAsig}
-                  className="w-full py-3.5 bg-white text-[#002b5c] border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 bg-white text-marino border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-control transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   {cargandoHistorialAsig ? 'Procesando...' : 'Descargar Excel (.xlsx)'}
                 </button>
@@ -1063,21 +1064,21 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- MODAL: GESTIÓN DE ALUMNO --- */}
       {alumnoGestion && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-md w-full shadow-2xl max-h-[90dvh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between mb-8">
               <div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight truncate pr-4">{alumnoGestion.nombre_completo}</h3>
+                <h3 className="text-xl font-black text-marino tracking-tight truncate pr-4">{alumnoGestion.nombre_completo}</h3>
                 <p className="text-xs text-slate-500 font-semibold mt-1">{tieneCorreoReal(alumnoGestion.email) ? alumnoGestion.email : 'Sin correo'}</p>
               </div>
-              <button onClick={() => setAlumnoGestion(null)} className="w-8 h-8 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+              <button onClick={() => setAlumnoGestion(null)} aria-label="Cerrar" className="w-9 h-9 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
 
             <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2">
               {alumnoGestion.pendiente && alumnoGestion.codigo_alta && (
-                <div className="bg-amber-50/80 border border-amber-100 rounded-[2rem] p-5">
+                <div className="bg-amber-50/80 border border-amber-100 rounded-bento p-5">
                   <h4 className="font-bold text-amber-700 text-xs uppercase tracking-wider mb-3">Cuenta pendiente de activar</h4>
-                  <button onClick={() => copiarCodigo(alumnoGestion.codigo_alta)} className="w-full py-3 bg-white rounded-2xl text-2xl font-black tracking-[0.3em] text-[#002b5c] border border-amber-100 cursor-pointer active:scale-95" title="Copiar código">
+                  <button onClick={() => copiarCodigo(alumnoGestion.codigo_alta)} className="w-full py-3 bg-white rounded-control text-2xl font-black tracking-[0.3em] text-marino border border-amber-100 cursor-pointer active:scale-95" title="Copiar código">
                     {alumnoGestion.codigo_alta}
                   </button>
                   <p className="text-[11px] text-amber-700/80 font-semibold mt-3 leading-snug">
@@ -1087,8 +1088,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   </p>
                 </div>
               )}
-              <div className="bg-slate-50/80 rounded-[2rem] p-5">
-                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Móvil del alumno</h4>
+              <div className="bg-slate-50/80 rounded-bento p-5">
+                <h4 className="font-bold text-marino text-xs uppercase tracking-wider mb-4">Móvil del alumno</h4>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full ${estaVinculado(alumnoGestion) ? 'bg-emerald-400' : 'bg-slate-300'}`}></span>
@@ -1104,8 +1105,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 </div>
               </div>
 
-              <div className="bg-slate-50/80 rounded-[2rem] p-5">
-                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">En tus asignaturas</h4>
+              <div className="bg-slate-50/80 rounded-bento p-5">
+                <h4 className="font-bold text-marino text-xs uppercase tracking-wider mb-4">En tus asignaturas</h4>
                 {cargandoAlumno ? (
                   <div className="text-xs text-slate-400 animate-pulse">Buscando asignaturas...</div>
                 ) : asignaturasAlumno.length === 0 ? (
@@ -1114,7 +1115,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   <div className="space-y-3">
                     {asignaturasAlumno.map(asig => (
                       <div key={asig.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100">
-                        <span className="text-xs font-bold text-[#002b5c] truncate pr-2">{asig.nombre}</span>
+                        <span className="text-xs font-bold text-marino truncate pr-2">{asig.nombre}</span>
                         <button onClick={() => expulsarDeAsignatura(alumnoGestion.id, asig.id)} className="shrink-0 px-3 py-1.5 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors">
                           Quitar
                         </button>
@@ -1126,7 +1127,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
               <button 
                 onClick={() => expulsarDeTodas(alumnoGestion.id)}
-                className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95"
+                className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-control transition-all shadow-md active:scale-95"
               >
                 Quitar de todas mis asignaturas
               </button>
@@ -1138,100 +1139,90 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- OTROS MODALES (Crear, Eliminar, Exportar Individual) --- */}
       {modalAsignatura && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Nueva asignatura</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Rellena los datos y marca los días de clase.</p>
-            <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
-              <input type="text" placeholder="Nombre de la asignatura" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
-              <input type="text" placeholder="Aula" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({...formAsignatura, aula: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
-              <input type="text" placeholder="Horario (ej. 9:00 - 11:00)" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
-              
-              <div className="mt-2">
-                <p className="text-xs font-bold text-[#002b5c] uppercase tracking-wider mb-3">Días de la semana</p>
-                <div className="flex justify-between gap-1">
-                  {[
-                    { id: 1, label: 'L' }, { id: 2, label: 'M' }, { id: 3, label: 'X' },
-                    { id: 4, label: 'J' }, { id: 5, label: 'V' }, { id: 6, label: 'S' }, { id: 0, label: 'D' }
-                  ].map(dia => {
-                    const seleccionado = formAsignatura.dias_semana.includes(dia.id);
-                    return (
-                      <button
-                        key={dia.id}
-                        type="button"
-                        onClick={() => toggleDiaSemana(dia.id)}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                          seleccionado ? 'bg-[#0090d0] text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                        }`}
-                      >
-                        {dia.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+        <Modal ancho="md" titulo="Nueva asignatura" descripcion="Rellena los datos y marca los días y horas de clase." onCerrar={() => setModalAsignatura(false)}>
+          <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
+            <Campo type="text" placeholder="Nombre de la asignatura" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({ ...formAsignatura, nombre: e.target.value })} required />
+            <Campo type="text" placeholder="Aula" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({ ...formAsignatura, aula: e.target.value })} required />
+            <div className="mt-1">
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">Días y horas de clase</p>
+              <EditorHorario valor={horarioNuevo} onCambiar={setHorarioNuevo} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <Boton variante="secundario" onClick={() => { setModalAsignatura(false); setFormAsignatura({ nombre: '', aula: '' }); setHorarioNuevo({}); }}>Cancelar</Boton>
+              <Boton type="submit" disabled={guardandoAsig || horarioIncompleto(horarioNuevo)}>{guardandoAsig ? 'Guardando...' : 'Guardar'}</Boton>
+            </div>
+          </form>
+        </Modal>
+      )}
 
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <button type="button" onClick={() => { setModalAsignatura(false); setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
-                <button type="submit" disabled={guardandoAsig || formAsignatura.dias_semana.length === 0} className="py-3.5 rounded-2xl bg-[#002b5c] text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Guardar</button>
-              </div>
-            </form>
+      {/* --- MODAL: EDITAR HORARIO DE UNA ASIGNATURA --- */}
+      {editandoHorario && (
+        <Modal ancho="md" titulo="Horario" descripcion={editandoHorario.asig.nombre} onCerrar={() => setEditandoHorario(null)}>
+          <EditorHorario valor={editandoHorario.valor} onCambiar={(valor) => setEditandoHorario({ ...editandoHorario, valor })} />
+          <div className="grid grid-cols-2 gap-3 mt-6">
+            <Boton variante="secundario" onClick={() => setEditandoHorario(null)}>Cancelar</Boton>
+            <Boton onClick={guardarHorarioEditado} disabled={guardandoHorario || horarioIncompleto(editandoHorario.valor)}>{guardandoHorario ? 'Guardando...' : 'Guardar horario'}</Boton>
           </div>
-        </div>
+        </Modal>
+      )}
+
+      {/* --- MODAL: CLASES PASADAS (corregir asistencia) --- */}
+      {clasesPasadasDe && (
+        <ClasesPasadas asignatura={clasesPasadasDe} onCerrar={() => setClasesPasadasDe(null)} avisar={mostrarNotificacion} />
       )}
 
       {modalEliminarAsig && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Eliminar asignatura</h3>
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-sm w-full shadow-2xl max-h-[90dvh] overflow-y-auto text-center">
+            <h3 className="text-xl font-black text-marino tracking-tight mb-2">Eliminar asignatura</h3>
             <p className="text-xs text-slate-500 font-medium mb-6">Se borrarán todas sus clases y asistencias. Escribe tu contraseña para confirmar.</p>
-            <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-center text-sm font-semibold"/>
+            <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-control mb-6 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-center text-sm font-semibold"/>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setModalEliminarAsig(null); setPassConfirm(''); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
-              <button onClick={confirmarEliminarAsignatura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Eliminar</button>
+              <button onClick={() => { setModalEliminarAsig(null); setPassConfirm(''); }} className="py-3.5 rounded-control text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
+              <button onClick={confirmarEliminarAsignatura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-control bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Eliminar</button>
             </div>
           </div>
         </div>
       )}
 
       {asignaturaSeleccionada && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-md w-full shadow-2xl max-h-[90dvh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">{asignaturaSeleccionada.nombre}</h3>
+                <h3 className="text-xl font-black text-marino tracking-tight">{asignaturaSeleccionada.nombre}</h3>
               </div>
-              <button onClick={() => setAsignaturaSeleccionada(null)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+              <button onClick={() => setAsignaturaSeleccionada(null)} aria-label="Cerrar" className="w-9 h-9 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
             
-            <div className="bg-slate-50/80 rounded-[2rem] p-6">
-              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar por fechas (opcional)</h4>
+            <div className="bg-slate-50/80 rounded-bento p-6">
+              <h4 className="font-bold text-marino text-xs uppercase tracking-wider mb-4">Filtrar por fechas (opcional)</h4>
               
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
-                  <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                  <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className="w-full bg-white px-4 py-3 rounded-control text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-azul/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
                 <div>
-                  <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-white px-4 py-3 rounded-2xl text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 shadow-sm transition-all cursor-pointer"/>
+                  <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className="w-full bg-white px-4 py-3 rounded-control text-xs font-semibold text-slate-600 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-azul/20 shadow-sm transition-all cursor-pointer"/>
                 </div>
               </div>
 
               <div className="mb-6 flex flex-col gap-3">
-                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
-                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-control cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setExportacionBinaria(!exportacionBinaria)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${exportacionBinaria ? 'bg-azul border-azul' : 'border-slate-300 bg-slate-50'}`}>
                     {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Formato simplificado (1 = asistió, 0 = faltó)</p>
+                    <p className="text-sm font-bold text-marino">Formato simplificado (1 = asistió, 0 = faltó)</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-2xl cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setOrdenarPorApellido(!ordenarPorApellido)}>
-                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${ordenarPorApellido ? 'bg-[#0090d0] border-[#0090d0]' : 'border-slate-300 bg-slate-50'}`}>
+                <div className="flex items-center gap-3 bg-white border border-slate-100 p-4 rounded-control cursor-pointer shadow-sm hover:shadow-md transition-all active:scale-[0.98]" onClick={() => setOrdenarPorApellido(!ordenarPorApellido)}>
+                  <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${ordenarPorApellido ? 'bg-azul border-azul' : 'border-slate-300 bg-slate-50'}`}>
                     {ordenarPorApellido && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por apellidos</p>
+                    <p className="text-sm font-bold text-marino">Ordenar alumnos por apellidos</p>
                   </div>
                 </div>
               </div>
@@ -1240,7 +1231,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 <button 
                   onClick={exportarAGoogleSheets}
                   disabled={cargandoHistorialAsig}
-                  className="w-full py-4 bg-[#0090d0] hover:bg-[#007fb8] text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-4 bg-azul hover:bg-azul-oscuro text-white text-sm font-bold rounded-control transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   {cargandoHistorialAsig ? 'Procesando...' : 'Abrir en Google Sheets'}
                 </button>
@@ -1248,7 +1239,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 <button 
                   onClick={exportarAExcel}
                   disabled={cargandoHistorialAsig}
-                  className="w-full py-3.5 bg-white text-[#002b5c] border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-2xl transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3.5 bg-white text-marino border border-slate-100 hover:bg-slate-50 text-xs font-bold rounded-control transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   {cargandoHistorialAsig ? 'Procesando...' : 'Descargar Excel (.xlsx)'}
                 </button>
@@ -1260,14 +1251,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- MODAL: AÑADIR ALUMNO (ALTA FORZOSA) --- */}
       {modalAlta && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-md w-full shadow-2xl max-h-[90dvh] overflow-y-auto flex flex-col">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Añadir alumno</h3>
+                <h3 className="text-xl font-black text-marino tracking-tight">Añadir alumno</h3>
                 <p className="text-xs text-slate-500 font-semibold mt-1">Aunque todavía no tenga cuenta</p>
               </div>
-              <button onClick={() => setModalAlta(false)} className="w-8 h-8 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+              <button onClick={() => setModalAlta(false)} aria-label="Cerrar" className="w-9 h-9 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
 
             {resultadoAlta ? (
@@ -1275,19 +1266,19 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto"><span className="text-3xl">✓</span></div>
                 {resultadoAlta.tipo === 'EXISTENTE' && !resultadoAlta.pendiente ? (
                   <p className="text-sm text-slate-600 font-semibold leading-relaxed">
-                    <span className="text-[#002b5c] font-black">{resultadoAlta.nombre}</span> ya tenía cuenta con ese correo: lo hemos añadido a la asignatura.
+                    <span className="text-marino font-black">{resultadoAlta.nombre}</span> ya tenía cuenta con ese correo: lo hemos añadido a la asignatura.
                   </p>
                 ) : (
                   <>
                     <p className="text-sm text-slate-600 font-semibold leading-relaxed">
-                      Hemos creado la cuenta de <span className="text-[#002b5c] font-black">{resultadoAlta.nombre}</span>. Ya aparece en tu clase y puedes marcarle la asistencia.
+                      Hemos creado la cuenta de <span className="text-marino font-black">{resultadoAlta.nombre}</span>. Ya aparece en tu clase y puedes marcarle la asistencia.
                     </p>
                     {resultadoAlta.codigo && (
-                      <button onClick={() => copiarCodigo(resultadoAlta.codigo!)} className="w-full py-4 bg-white rounded-2xl text-3xl font-black tracking-[0.3em] text-[#002b5c] border border-slate-100 shadow-sm cursor-pointer active:scale-95" title="Copiar código">
+                      <button onClick={() => copiarCodigo(resultadoAlta.codigo!)} className="w-full py-4 bg-white rounded-control text-3xl font-black tracking-[0.3em] text-marino border border-slate-100 shadow-sm cursor-pointer active:scale-95" title="Copiar código">
                         {resultadoAlta.codigo}
                       </button>
                     )}
-                    <p className="text-xs text-slate-500 font-semibold leading-relaxed bg-slate-50/80 rounded-2xl p-4 text-left">
+                    <p className="text-xs text-slate-500 font-semibold leading-relaxed bg-slate-50/80 rounded-control p-4 text-left">
                       {resultadoAlta.email
                         ? `Cuando se registre o inicie sesión con ${resultadoAlta.email}, se le reconocerá automáticamente y conservará sus asistencias. Si se registra con otro correo, que use el código de arriba.`
                         : 'Dale este código al alumno. Al crear su cuenta, que pulse "¿Tu profesor te dio un código de alta?" y lo escriba: así conservará sus asistencias. Lo puedes volver a ver en "Gestionar".'}
@@ -1295,23 +1286,23 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   </>
                 )}
                 <div className="flex gap-3 mt-2">
-                  <button onClick={() => { setResultadoAlta(null); setFormAlta(f => ({ ...f, nombre: '', email: '' })); }} className="flex-1 py-3.5 rounded-2xl text-[#002b5c] text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Añadir otro</button>
-                  <button onClick={() => setModalAlta(false)} className="flex-1 py-3.5 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Listo</button>
+                  <button onClick={() => { setResultadoAlta(null); setFormAlta(f => ({ ...f, nombre: '', email: '' })); }} className="flex-1 py-3.5 rounded-control text-marino text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Añadir otro</button>
+                  <button onClick={() => setModalAlta(false)} className="flex-1 py-3.5 rounded-control bg-marino hover:bg-azul text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Listo</button>
                 </div>
               </div>
             ) : misAsignaturas.length === 0 ? (
               <p className="text-sm text-slate-500 font-semibold text-center py-6">Primero crea una asignatura en la pestaña "Asignaturas".</p>
             ) : (
               <form onSubmit={guardarAlta} className="flex flex-col gap-4">
-                <input type="text" placeholder="Nombre y apellidos *" value={formAlta.nombre} onChange={(e) => setFormAlta({ ...formAlta, nombre: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required minLength={3} autoFocus />
+                <input type="text" placeholder="Nombre y apellidos *" value={formAlta.nombre} onChange={(e) => setFormAlta({ ...formAlta, nombre: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino" required minLength={3} autoFocus />
                 <div>
-                  <input type="email" placeholder="Correo del alumno (opcional)" value={formAlta.email} onChange={(e) => setFormAlta({ ...formAlta, email: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" />
+                  <input type="email" placeholder="Correo del alumno (opcional)" value={formAlta.email} onChange={(e) => setFormAlta({ ...formAlta, email: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino" />
                   <p className="text-[11px] text-slate-400 font-semibold mt-2 px-2 leading-snug">Si lo pones, el alumno se reconocerá solo al registrarse con ese correo. Si no, te daremos un código para dárselo.</p>
                 </div>
-                <select value={formAlta.asignatura_id} onChange={(e) => setFormAlta({ ...formAlta, asignatura_id: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c] cursor-pointer">
+                <select value={formAlta.asignatura_id} onChange={(e) => setFormAlta({ ...formAlta, asignatura_id: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino cursor-pointer">
                   {misAsignaturas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                 </select>
-                <button type="submit" disabled={guardandoAlta} className="w-full mt-2 py-4 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all cursor-pointer">
+                <button type="submit" disabled={guardandoAlta} className="w-full mt-2 py-4 rounded-control bg-marino hover:bg-azul text-white text-sm font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all cursor-pointer">
                   {guardandoAlta ? 'Creando...' : 'Añadir a la clase'}
                 </button>
               </form>
@@ -1322,16 +1313,16 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- MODAL: AÑADIR A UNA CLASE (alumnos sin clase) --- */}
       {asignandoClase && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Añadir a una clase</h3>
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-sm w-full shadow-2xl max-h-[90dvh] overflow-y-auto flex flex-col gap-4">
+            <h3 className="text-xl font-black text-marino tracking-tight">Añadir a una clase</h3>
             <p className="text-sm text-slate-500 font-semibold">{asignandoClase.alumno.nombre_completo}</p>
-            <select value={asignandoClase.asignatura_id} onChange={(e) => setAsignandoClase({ ...asignandoClase, asignatura_id: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c] cursor-pointer">
+            <select value={asignandoClase.asignatura_id} onChange={(e) => setAsignandoClase({ ...asignandoClase, asignatura_id: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-control focus:outline-none focus:ring-2 focus:ring-azul/20 text-sm font-semibold text-marino cursor-pointer">
               {misAsignaturas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </select>
             <div className="flex gap-3 mt-2">
-              <button onClick={() => setAsignandoClase(null)} className="flex-1 py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
-              <button onClick={confirmarAsignarClase} className="flex-1 py-3.5 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Añadir</button>
+              <button onClick={() => setAsignandoClase(null)} className="flex-1 py-3.5 rounded-control text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
+              <button onClick={confirmarAsignarClase} className="flex-1 py-3.5 rounded-control bg-marino hover:bg-azul text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Añadir</button>
             </div>
           </div>
         </div>
@@ -1339,15 +1330,15 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- MODAL: CONFIRMAR LIBERAR MÓVIL --- */}
       {alumnoALiberar && (
-        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-[60] modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center flex flex-col gap-4">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight">¿Liberar el móvil?</h3>
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-[60] modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-sm w-full shadow-2xl max-h-[90dvh] overflow-y-auto text-center flex flex-col gap-4">
+            <h3 className="text-xl font-black text-marino tracking-tight">¿Liberar el móvil?</h3>
             <p className="text-sm text-slate-500 font-medium leading-relaxed">
-              <span className="font-bold text-[#002b5c]">{alumnoALiberar.nombre_completo}</span> podrá vincular su cuenta a otro móvil o navegador la próxima vez que inicie sesión.
+              <span className="font-bold text-marino">{alumnoALiberar.nombre_completo}</span> podrá vincular su cuenta a otro móvil o navegador la próxima vez que inicie sesión.
             </p>
             <div className="flex gap-3 mt-2">
-              <button onClick={() => setAlumnoALiberar(null)} className="flex-1 py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
-              <button onClick={confirmarLiberarMovil} className="flex-1 py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Liberar</button>
+              <button onClick={() => setAlumnoALiberar(null)} className="flex-1 py-3.5 rounded-control text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
+              <button onClick={confirmarLiberarMovil} className="flex-1 py-3.5 rounded-control bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Liberar</button>
             </div>
           </div>
         </div>
@@ -1355,27 +1346,25 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       {/* --- MODAL: CONFIRMAR EXPULSIÓN --- */}
       {modalExpulsion && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 z-[100] modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border border-rose-100">
+        <div className="fixed inset-0 bg-slate-900/25 backdrop-blur-sm flex items-center justify-center p-4 z-[100] modal-fondo">
+          <div className="glass-container rounded-bento p-7 sm:p-8 max-w-sm w-full shadow-2xl max-h-[90dvh] overflow-y-auto text-center border border-rose-100">
             <div className="w-16 h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </div>
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">
+            <h3 className="text-xl font-black text-marino tracking-tight mb-2">
               {modalExpulsion.tipo === 'UNA' ? 'Quitar de la asignatura' : 'Quitar de todas tus asignaturas'}
             </h3>
             <p className="text-sm text-slate-500 font-medium mb-6">
               Esta acción eliminará <strong className="text-rose-500">todos los registros de asistencia</strong> de este alumno en las asignaturas afectadas.<br/><br/>
-              Si quieres conservar los datos, por favor, cierra esta ventana y <strong className="text-[#002b5c]">descarga un informe</strong> (Excel o Sheets) antes de continuar.
+              Si quieres conservar los datos, por favor, cierra esta ventana y <strong className="text-marino">descarga un informe</strong> (Excel o Sheets) antes de continuar.
             </p>
             <div className="flex flex-col gap-3">
-              <button onClick={() => setModalExpulsion(null)} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 cursor-pointer transition-all">Cancelar y volver</button>
-              <button onClick={ejecutarExpulsion} className="py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-95 shadow-md shadow-rose-500/20 cursor-pointer transition-all">Lo entiendo, borrar datos</button>
+              <button onClick={() => setModalExpulsion(null)} className="py-3.5 rounded-control text-slate-500 text-sm font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 cursor-pointer transition-all">Cancelar y volver</button>
+              <button onClick={ejecutarExpulsion} className="py-3.5 rounded-control bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-95 shadow-md shadow-rose-500/20 cursor-pointer transition-all">Lo entiendo, borrar datos</button>
             </div>
           </div>
         </div>
       )}
-
-      <BotonCompartir mostrarNotificacion={mostrarNotificacion} />
-    </div>
+    </Pantalla>
   );
 }
