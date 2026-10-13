@@ -241,7 +241,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     if (!alumno) return;
     setAlumnoALiberar(null);
     const { error } = await supabase.rpc('desvincular_dispositivo', { p_alumno: alumno.id });
-    if (error) mostrarNotificacion('Error al desvincular. Inténtalo de nuevo.', 'error');
+    if (error) mostrarNotificacion('No se pudo liberar el móvil. Inténtalo de nuevo.', 'error');
     else {
       mostrarNotificacion(`Móvil liberado. ${alumno.nombre_completo} ya puede iniciar sesión desde su nuevo dispositivo.`, 'exito');
       cargarAlumnos();
@@ -271,7 +271,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           .in('sesion_id', sIds);
       }
       await supabase.from('matriculas').delete().eq('alumno_id', aluId).eq('asignatura_id', asigId);
-      mostrarNotificacion('Alumno eliminado de la materia.', 'exito');
+      mostrarNotificacion('Alumno quitado de la asignatura.', 'exito');
       setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
       if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
     } else if (tipo === 'TODAS') {
@@ -289,7 +289,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         }
         await supabase.from('matriculas').delete().eq('alumno_id', aluId).in('asignatura_id', asigIds);
       }
-      mostrarNotificacion('Alumno eliminado de todas tus materias.', 'exito');
+      mostrarNotificacion('Alumno quitado de todas tus asignaturas.', 'exito');
       setAlumnoGestion(null);
     }
     cargarAlumnos();
@@ -317,7 +317,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       dias_semana: formAsignatura.dias_semana
     }]);
     setGuardandoAsig(false);
-    if (error) mostrarNotificacion('Error al crear asignatura.', 'error');
+    if (error) mostrarNotificacion('No se pudo crear la asignatura. Inténtalo de nuevo.', 'error');
     else { 
       setFormAsignatura({ nombre: '', aula: '', horario: '', dias_semana: [] }); 
       setModalAsignatura(false); 
@@ -395,14 +395,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
     const { data: sesionesDataRaw } = await supabase.from('sesiones').select(COLUMNAS_SESION).eq('asignatura_id', asignaturaSeleccionada.id);
     if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
-      mostrarNotificacion("La materia no tiene clases registradas.", 'info');
+      mostrarNotificacion("Esta asignatura aún no tiene clases registradas.", 'info');
       return null;
     }
     const sesionIds = sesionesDataRaw.map(s => s.id);
 
     const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
     if (!asistData || asistData.length === 0) {
-      mostrarNotificacion("Ningún alumno ha registrado asistencia.", 'info');
+      mostrarNotificacion("Todavía no hay asistencias registradas.", 'info');
       return null;
     }
 
@@ -489,7 +489,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       
       mostrarNotificacion(`Excel de ${nombreClaseLimpiado} descargado.`, 'exito');
     } catch {
-      mostrarNotificacion('Error generando el archivo.', 'error');
+      mostrarNotificacion('No se pudo generar el archivo. Inténtalo de nuevo.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -534,16 +534,16 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       }
 
       if (exito) {
-        mostrarNotificacion('¡Datos en el portapapeles! Abriendo Sheets...', 'exito');
+        mostrarNotificacion('Datos copiados. Abriendo Google Sheets: pégalos con Ctrl+V (⌘+V en Mac).', 'exito');
         setTimeout(() => {
           window.open('https://sheets.new', '_blank');
         }, 1200);
       } else {
-        mostrarNotificacion('Tu navegador bloquea el portapapeles. Usa descargar Excel.', 'error');
+        mostrarNotificacion('Tu navegador no permite copiar. Usa "Descargar Excel".', 'error');
       }
 
     } catch (e) {
-      mostrarNotificacion('Error procesando los datos.', 'error');
+      mostrarNotificacion('No se pudieron preparar los datos. Inténtalo de nuevo.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -562,7 +562,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     const asigIds = asigs.map(a => a.id);
     const { data: sesiones } = await supabase.from('sesiones').select(COLUMNAS_SESION).in('asignatura_id', asigIds);
     if (!sesiones || sesiones.length === 0) {
-      mostrarNotificacion('Ninguna clase ha sido registrada aún.', 'info');
+      mostrarNotificacion('Todavía no hay clases registradas.', 'info');
       return null;
     }
 
@@ -651,7 +651,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     });
 
     if (resultadosGlobales.length === 0) {
-      mostrarNotificacion('No hay clases en ese rango de fechas para ninguna materia.', 'info');
+      mostrarNotificacion('No hay clases en esas fechas.', 'info');
       return null;
     }
 
@@ -671,10 +671,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       });
       
       XLSX.writeFile(libro, `Reporte_Global_${new Date().toLocaleDateString('es-ES').replace(/\//g, '-')}.xlsx`);
-      mostrarNotificacion('Descarga completada.', 'exito');
+      mostrarNotificacion('Excel descargado.', 'exito');
       setModalExportadorGlobal(false);
     } catch {
-      mostrarNotificacion('Error durante la exportación a Excel.', 'error');
+      mostrarNotificacion('No se pudo exportar a Excel. Inténtalo de nuevo.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -718,17 +718,17 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       }
 
       if (exito) {
-        mostrarNotificacion('¡Datos en el portapapeles! Abriendo Sheets...', 'exito');
+        mostrarNotificacion('Datos copiados. Abriendo Google Sheets: pégalos con Ctrl+V (⌘+V en Mac).', 'exito');
         setModalExportadorGlobal(false);
         setTimeout(() => {
           window.open('https://sheets.new', '_blank');
         }, 1200);
       } else {
-        mostrarNotificacion('Tu navegador bloquea el copiado. Usa descargar Excel.', 'error');
+        mostrarNotificacion('Tu navegador no permite copiar. Usa "Descargar Excel".', 'error');
       }
 
     } catch (e) {
-      mostrarNotificacion('Error procesando los datos.', 'error');
+      mostrarNotificacion('No se pudieron preparar los datos. Inténtalo de nuevo.', 'error');
     } finally {
       setCargandoHistorialAsig(false);
     }
@@ -747,7 +747,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
     const { error } = await supabase.from('asignaturas').update({ aula: aulaTemp }).eq('id', id);
     if (error) {
-      mostrarNotificacion('Error actualizando aula.', 'error');
+      mostrarNotificacion('No se pudo guardar el aula.', 'error');
       cargarAsignaturas();
     } else {
       mostrarNotificacion('Aula actualizada.', 'exito');
@@ -769,7 +769,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
     const { error } = await supabase.from('asignaturas').update({ dias_semana: nuevosDias }).eq('id', asig.id);
     if (error) {
-      mostrarNotificacion('Error actualizando días.', 'error');
+      mostrarNotificacion('No se pudieron guardar los días.', 'error');
       cargarAsignaturas();
     }
   };
@@ -786,8 +786,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
           <div>
-            <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Gestión Docente</h1>
-            <p className="text-xs font-semibold text-slate-400">Panel Global</p>
+            <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Gestión</h1>
+            <p className="text-xs font-semibold text-slate-400">Tus alumnos y asignaturas</p>
           </div>
         </div>
       </div>
@@ -831,7 +831,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         ) : (
                           <div className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full ${estaVinculado(alumno) ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{estaVinculado(alumno) ? 'Vinculado' : 'Sin Disp.'}</span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{estaVinculado(alumno) ? 'Vinculado' : 'Sin móvil'}</span>
                           </div>
                         )}
                         {alumno.statsFaltas && (
@@ -907,7 +907,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         {tabActual === 'ASIGNATURAS' && (
           <div className="glass-container rounded-[2.5rem] p-8 flex-1">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
-              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Materias</h2>
+              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Asignaturas</h2>
               <div className="flex gap-3">
                 <button 
                   onClick={() => {
@@ -917,7 +917,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   }} 
                   className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95"
                 >
-                  Exportador Global ↓
+                  Exportar todo ↓
                 </button>
                 <button onClick={() => setModalAsignatura(true)} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95">
                   Nueva +
@@ -984,7 +984,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
                     </div>
                     <button onClick={() => abrirDetallesAsignatura(asig)} className="mt-6 w-full py-3 bg-slate-50 hover:bg-[#0090d0] text-[#002b5c] hover:text-white text-xs font-bold rounded-[1rem] transition-all cursor-pointer active:scale-95">
-                      Exportar Matriz
+                      Exportar asistencia
                     </button>
                   </div>
                 ))}
@@ -1000,14 +1000,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
             <div className="flex items-center justify-between mb-8 shrink-0">
               <div>
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Exportación Global</h3>
+                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Exportar todo</h3>
                 <p className="text-xs text-slate-500 font-semibold mt-1">Descarga todas tus asignaturas</p>
               </div>
               <button onClick={() => setModalExportadorGlobal(false)} className="w-8 h-8 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
             
             <div className="bg-slate-50/80 rounded-[2rem] p-6">
-              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar Fechas (Opcional)</h4>
+              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar por fechas (opcional)</h4>
               
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
@@ -1024,7 +1024,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
+                    <p className="text-sm font-bold text-[#002b5c]">Formato simplificado (1 = asistió, 0 = faltó)</p>
                   </div>
                 </div>
 
@@ -1033,7 +1033,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     {ordenarPorApellido && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por Apellidos</p>
+                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por apellidos</p>
                   </div>
                 </div>
               </div>
@@ -1087,35 +1087,35 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 </div>
               )}
               <div className="bg-slate-50/80 rounded-[2rem] p-5">
-                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Dispositivo de Fichaje</h4>
+                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Móvil del alumno</h4>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`w-2.5 h-2.5 rounded-full ${estaVinculado(alumnoGestion) ? 'bg-emerald-400' : 'bg-slate-300'}`}></span>
-                    <span className="text-xs font-bold text-slate-600">{estaVinculado(alumnoGestion) ? 'Móvil Vinculado' : 'Sin Vincular'}</span>
+                    <span className="text-xs font-bold text-slate-600">{estaVinculado(alumnoGestion) ? 'Móvil vinculado' : 'Sin móvil vinculado'}</span>
                   </div>
                   <button 
                     onClick={() => desvincularDispositivo(alumnoGestion)} 
                     disabled={!estaVinculado(alumnoGestion)}
                     className="px-4 py-2 bg-white text-rose-500 hover:bg-rose-50 text-xs font-bold rounded-xl border border-slate-200 shadow-sm transition-all disabled:opacity-50"
                   >
-                    Desvincular
+                    Liberar móvil
                   </button>
                 </div>
               </div>
 
               <div className="bg-slate-50/80 rounded-[2rem] p-5">
-                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Matriculado en tus materias</h4>
+                <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">En tus asignaturas</h4>
                 {cargandoAlumno ? (
-                  <div className="text-xs text-slate-400 animate-pulse">Buscando materias...</div>
+                  <div className="text-xs text-slate-400 animate-pulse">Buscando asignaturas...</div>
                 ) : asignaturasAlumno.length === 0 ? (
-                  <div className="text-xs text-slate-400">No hay registros del alumno en tus clases.</div>
+                  <div className="text-xs text-slate-400">No está en ninguna de tus asignaturas.</div>
                 ) : (
                   <div className="space-y-3">
                     {asignaturasAlumno.map(asig => (
                       <div key={asig.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-100">
                         <span className="text-xs font-bold text-[#002b5c] truncate pr-2">{asig.nombre}</span>
                         <button onClick={() => expulsarDeAsignatura(alumnoGestion.id, asig.id)} className="shrink-0 px-3 py-1.5 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors">
-                          Expulsar
+                          Quitar
                         </button>
                       </div>
                     ))}
@@ -1127,7 +1127,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 onClick={() => expulsarDeTodas(alumnoGestion.id)}
                 className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold rounded-2xl transition-all shadow-md active:scale-95"
               >
-                Expulsar de TODAS mis materias
+                Quitar de todas mis asignaturas
               </button>
 
             </div>
@@ -1139,12 +1139,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       {modalAsignatura && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Crear Asignatura</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Completa los datos base y días de clase.</p>
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Nueva asignatura</h3>
+            <p className="text-xs text-slate-500 font-medium mb-6">Rellena los datos y marca los días de clase.</p>
             <form onSubmit={guardarNuevaAsignatura} className="flex flex-col gap-4">
-              <input type="text" placeholder="Materia" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
+              <input type="text" placeholder="Nombre de la asignatura" value={formAsignatura.nombre} onChange={(e) => setFormAsignatura({...formAsignatura, nombre: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
               <input type="text" placeholder="Aula" value={formAsignatura.aula} onChange={(e) => setFormAsignatura({...formAsignatura, aula: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
-              <input type="text" placeholder="Horario" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
+              <input type="text" placeholder="Horario (ej. 9:00 - 11:00)" value={formAsignatura.horario} onChange={(e) => setFormAsignatura({...formAsignatura, horario: e.target.value})} className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required/>
               
               <div className="mt-2">
                 <p className="text-xs font-bold text-[#002b5c] uppercase tracking-wider mb-3">Días de la semana</p>
@@ -1182,12 +1182,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       {modalEliminarAsig && (
         <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Eliminar Materia</h3>
-            <p className="text-xs text-slate-500 font-medium mb-6">Perderás todos los historiales. Confirma tu identidad.</p>
-            <input type="password" placeholder="Contraseña docente" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-center text-sm font-semibold"/>
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Eliminar asignatura</h3>
+            <p className="text-xs text-slate-500 font-medium mb-6">Se borrarán todas sus clases y asistencias. Escribe tu contraseña para confirmar.</p>
+            <input type="password" placeholder="Contraseña" value={passConfirm} onChange={(e) => setPassConfirm(e.target.value)} className="w-full p-4 bg-slate-50 rounded-2xl mb-6 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-center text-sm font-semibold"/>
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => { setModalEliminarAsig(null); setPassConfirm(''); }} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 active:scale-95 cursor-pointer">Cancelar</button>
-              <button onClick={confirmarEliminarAsignatura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Destruir</button>
+              <button onClick={confirmarEliminarAsignatura} disabled={cargandoPass || !passConfirm} className="py-3.5 rounded-2xl bg-rose-500 text-white text-sm font-bold active:scale-95 disabled:opacity-50 cursor-pointer">Eliminar</button>
             </div>
           </div>
         </div>
@@ -1204,7 +1204,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             </div>
             
             <div className="bg-slate-50/80 rounded-[2rem] p-6">
-              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar Fechas (Opcional)</h4>
+              <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Filtrar por fechas (opcional)</h4>
               
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
@@ -1221,7 +1221,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     {exportacionBinaria && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Exportar forma simplificada en binario</p>
+                    <p className="text-sm font-bold text-[#002b5c]">Formato simplificado (1 = asistió, 0 = faltó)</p>
                   </div>
                 </div>
 
@@ -1230,7 +1230,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     {ordenarPorApellido && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por Apellidos</p>
+                    <p className="text-sm font-bold text-[#002b5c]">Ordenar alumnos por apellidos</p>
                   </div>
                 </div>
               </div>
@@ -1360,11 +1360,11 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
               <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </div>
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">
-              {modalExpulsion.tipo === 'UNA' ? 'Expulsar de la materia' : 'Expulsar de todas las materias'}
+              {modalExpulsion.tipo === 'UNA' ? 'Quitar de la asignatura' : 'Quitar de todas tus asignaturas'}
             </h3>
             <p className="text-sm text-slate-500 font-medium mb-6">
               Esta acción eliminará <strong className="text-rose-500">todos los registros de asistencia</strong> de este alumno en las asignaturas afectadas.<br/><br/>
-              Si quieres conservar los datos, por favor, cierra esta ventana y <strong className="text-[#002b5c]">descarga un reporte</strong> (Excel o Sheets) antes de continuar.
+              Si quieres conservar los datos, por favor, cierra esta ventana y <strong className="text-[#002b5c]">descarga un informe</strong> (Excel o Sheets) antes de continuar.
             </p>
             <div className="flex flex-col gap-3">
               <button onClick={() => setModalExpulsion(null)} className="py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-100 hover:bg-slate-200 active:scale-95 cursor-pointer transition-all">Cancelar y volver</button>

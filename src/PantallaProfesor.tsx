@@ -94,7 +94,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setFase(sesionData.fase);
       setSecretTotp(secreto);
       cargarAsistencias(sesionData.id, diccionarioAlumnos);
-      mostrarNotificacion('Aula reanudada. Puedes continuar gestionando la clase.', 'info');
+      mostrarNotificacion('Aula reanudada: sigues donde lo dejaste.', 'info');
       return;
     }
 
@@ -108,7 +108,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       .select('id')
       .single();
 
-    if (sesionError || !sesionData) return mostrarNotificacion(`Error BD: ${sesionError?.message || 'Fallo al abrir'}`, 'error');
+    if (sesionError || !sesionData) return mostrarNotificacion('No se pudo abrir el aula. Revisa tu conexión e inténtalo de nuevo.', 'error');
     setSesionId(sesionData.id);
 
     // Lista inicial: alumnos matriculados (incluye los dados de alta por el profe) y los de clases anteriores
@@ -131,7 +131,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     }
 
     cargarAsistencias(sesionData.id, diccionarioAlumnos);
-    mostrarNotificacion('Aula iniciada correctamente.', 'exito');
+    mostrarNotificacion('Aula abierta: los alumnos ya pueden escanear el QR.', 'exito');
   };
 
   const cargarAsistencias = async (idSesion: string, dict = diccionarioAlumnos) => {
@@ -260,7 +260,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       `);
       popUpRef.current = win;
     } else {
-      mostrarNotificacion('Tu navegador bloqueó la ventana emergente. Permite los pop-ups.', 'error');
+      mostrarNotificacion('El navegador ha bloqueado la ventana del QR. Permite las ventanas emergentes para esta web.', 'error');
     }
   };
 
@@ -268,7 +268,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     if (!sesionId) return;
     await supabase.from('sesiones').update({ fase: 'SALIDA' }).eq('id', sesionId);
     setFase('SALIDA');
-    mostrarNotificacion('Fase de salida activada.', 'info');
+    mostrarNotificacion('Salida activada: los alumnos ya pueden escanear para salir.', 'info');
   };
 
   const intentarCerrarAula = () => {
@@ -280,7 +280,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoCierre(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
+      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
       if (authError) throw new Error("Contraseña incorrecta.");
 
@@ -303,7 +303,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setMostrarModalCierre(false);
       setPassInput('');
       cargarAsistencias(sesionId, diccionarioAlumnos);
-      mostrarNotificacion('Clase archivada.', 'exito');
+      mostrarNotificacion('Clase cerrada y guardada.', 'exito');
       
       // Cerramos automáticamente el pop-up al acabar la clase
       if (popUpRef.current && !popUpRef.current.closed) {
@@ -322,7 +322,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setCargandoCierre(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
+      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
       if (authError) throw new Error("Contraseña incorrecta.");
 
@@ -336,7 +336,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setAsistencias([]);
       setMostrarModalCierre(false);
       setPassInput('');
-      mostrarNotificacion('Clase descartada.', 'exito');
+      mostrarNotificacion('Clase eliminada sin guardar.', 'exito');
       
       if (popUpRef.current && !popUpRef.current.closed) {
         popUpRef.current.close();
@@ -376,7 +376,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-0.5">
               {sesionId ? (
                 <span className="flex items-center gap-1.5">Fase: <span className={`font-bold ${fase === 'ENTRADA' ? 'text-amber-500' : fase === 'SALIDA' ? 'text-[#0090d0]' : 'text-slate-400'}`}>{fase}</span></span>
-              ) : 'Selección de Aula'}
+              ) : 'Elige una asignatura'}
             </p>
           </div>
         </div>
@@ -386,11 +386,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <>
               {fase === 'ENTRADA' && (
                 <button onClick={pasarASalida} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                  Activar Salida
+                  Activar salida
                 </button>
               )}
               <button onClick={intentarCerrarAula} className="px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
-                Cerrar Clase
+                Cerrar clase
               </button>
             </>
           )}
@@ -401,12 +401,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
         // VISTA: SELECCIÓN DE CLASE (Bento UI)
         <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full">
           {cargandoClases ? (
-            <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando materias del servidor...</div>
+            <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando tus asignaturas...</div>
           ) : clasesHoy.length === 0 ? (
             <div className="glass-container rounded-[2.5rem] p-16 text-center max-w-2xl mx-auto w-full mt-10">
               <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6"><span className="text-3xl">📚</span></div>
-              <p className="text-[#002b5c] font-black text-2xl tracking-tight">Cero asignaturas</p>
-              <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">No tienes asignaturas dadas de alta. Ve a "Gestión Docente" en el menú principal para configurarlas.</p>
+              <p className="text-[#002b5c] font-black text-2xl tracking-tight">Aún no tienes asignaturas</p>
+              <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">Créalas en Gestión → Asignaturas y aparecerán aquí.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -431,7 +431,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     <h3 className="text-2xl font-black text-[#002b5c] mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
                   </div>
                   <button onClick={() => iniciarClase(clase.id)} className={`w-full py-4 text-sm font-bold rounded-[1.5rem] transition-all duration-300 shadow-sm active:scale-95 cursor-pointer border ${claseActiva ? 'bg-[#0090d0] text-white hover:bg-[#0070a0] border-transparent shadow-[0_10px_20px_rgba(0,144,208,0.3)]' : esHoy ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:text-white border-emerald-100 hover:shadow-[0_10px_20px_rgba(52,211,153,0.2)]' : 'bg-slate-50 text-[#002b5c] hover:bg-[#002b5c] hover:text-white border-slate-100 hover:shadow-[0_10px_20px_rgba(0,43,92,0.15)]'}`}>
-                    {claseActiva ? 'Reanudar Aula' : 'Iniciar Aula'}
+                    {claseActiva ? 'Reanudar aula' : 'Iniciar aula'}
                   </button>
                 </div>
               )})}
@@ -479,7 +479,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
             ) : (
               <div className="text-center py-20 relative z-10">
                 <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><span className="text-4xl">✓</span></div>
-                <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase Archivada</h3>
+                <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase cerrada</h3>
                 <p className="text-sm text-slate-400 font-medium">Los datos ya se han guardado de forma segura.</p>
               </div>
             )}
@@ -488,7 +488,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           {/* PANEL DERECHO: Lista de Alumnos */}
           <div className="xl:col-span-7 glass-container rounded-[2.5rem] p-8 flex flex-col relative overflow-hidden">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Gestión del Aula</h2>
+              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Alumnos de la clase</h2>
               <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Alumnos</span>
             </div>
             
@@ -596,7 +596,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       {mostrarModalCierre && (
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Cerrar la clase</h3>
             {fase === 'ENTRADA' && (
               <div className="text-left bg-amber-50 border border-amber-100 rounded-2xl p-4 mt-4 mb-4">
                 <p className="text-xs font-black text-amber-700 uppercase tracking-wider mb-1">No has activado la salida</p>
@@ -608,9 +608,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
             <p className="text-xs text-slate-500 font-medium mb-8">Escribe tu contraseña para confirmar.</p>
             <input type="password" placeholder="Contraseña" value={passInput} autoFocus onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
             <div className="flex flex-col gap-3">
-              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y Guardar</button>
+              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y guardar</button>
               <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="w-full py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Volver</button>
-              <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="w-full py-3 mt-2 rounded-2xl bg-transparent text-slate-400 text-xs font-bold hover:text-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">No registrar la clase (Eliminar)</button>
+              <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="w-full py-3 mt-2 rounded-2xl bg-transparent text-slate-400 text-xs font-bold hover:text-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Eliminar la clase sin guardarla</button>
             </div>
           </div>
         </div>

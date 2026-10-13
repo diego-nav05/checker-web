@@ -48,11 +48,11 @@ export default function App() {
     if (tipoEnlace === 'recovery') {
       setNuevaPassword('');
     } else if (errorEnlace) {
-      avisar('El enlace del correo ha caducado o ya se usó. Pide uno nuevo desde "Mi Cuenta" (o "Vincular" en el móvil).', 'error', { fijo: true });
+      avisar('El enlace del correo ha caducado o ya se usó. Pide uno nuevo desde "Vincular" (en el ordenador, "Mi cuenta").', 'error', { fijo: true });
     } else if (tipoEnlace === 'signup' || tipoEnlace === 'invite' || tipoEnlace === 'email') {
-      avisar('✅ ¡Correo confirmado! Tu cuenta ya está activa.\n\nAhora entra en "Vincular" (o "Mi Cuenta" en PC) e inicia sesión desde el navegador que vayas a usar en clase.', 'exito', { fijo: true });
+      avisar('✅ ¡Correo confirmado! Tu cuenta ya está activa.\n\nAhora entra en "Vincular" (en el ordenador, "Mi cuenta") e inicia sesión desde el navegador que vayas a usar en clase.', 'exito', { fijo: true });
     } else if (!localStorage.getItem('checker_alumno_id') && localStorage.getItem('checker_rol') !== 'profesor') {
-      avisar('👋 Si eres un nuevo alumno, ve al apartado "Vincular" (o "Mi Cuenta" en PC).', 'info');
+      avisar('👋 ¿Eres nuevo? Pulsa "Vincular" (en el ordenador, "Mi cuenta") para crear tu cuenta.', 'info');
     }
 
     const { data: escucha } = supabase.auth.onAuthStateChange((evento) => {
@@ -125,7 +125,7 @@ export default function App() {
     }
 
     if (!idGuardado) {
-      avisar('Primero vincula tu móvil: crea tu cuenta o inicia sesión aquí.', 'info');
+      avisar('Primero vincula tu móvil: crea tu cuenta o inicia sesión.', 'info');
       irAPanel('REGISTRO');
       return;
     }
@@ -138,7 +138,7 @@ export default function App() {
     const rolActual = localStorage.getItem('checker_rol');
 
     if (idGuardado && rolActual !== 'profesor') {
-      avisar('Solo acceso docente. Para desvincular tu móvil, debes pedírselo a un profesor.', 'error');
+      avisar('Esta zona es solo para docentes. Si necesitas cambiar de móvil, pídeselo a tu profesor.', 'error');
       return;
     }
 
@@ -363,10 +363,10 @@ export default function App() {
             </svg>
 
             <span className="text-[clamp(1.15rem,5vw,1.5rem)] font-black tracking-tight transition-colors duration-300 relative z-10 text-white">
-              {alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor' ? 'Mi Cuenta' : (
+              {alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor' ? 'Mi cuenta' : (
                 <>
                   <span className="sm:hidden">Vincular</span>
-                  <span className="hidden sm:inline">Mi Cuenta</span>
+                  <span className="hidden sm:inline">Mi cuenta</span>
                 </>
               )}
             </span>

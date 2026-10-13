@@ -76,7 +76,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
       localStorage.setItem('checker_rol', 'profesor');
       localStorage.setItem('checker_nombre', perfil.nombre_completo);
       localStorage.removeItem('checker_alumno_id');
-      avisar('Acceso autorizado como Docente.', 'exito');
+      avisar('Has entrado como docente.', 'exito');
       setTimeout(onVolver, 1200);
       return;
     }
@@ -96,7 +96,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
     localStorage.setItem('checker_nombre', perfil.nombre_completo);
     localStorage.setItem('checker_rol', 'alumno');
 
-    avisar('Acceso autorizado. Este móvil queda vinculado a tu cuenta.', 'exito');
+    avisar('¡Listo! Este móvil ha quedado vinculado a tu cuenta.', 'exito');
     setTimeout(onVolver, 1500);
   };
 
@@ -254,7 +254,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
         <div className="relative z-10">
           <h2 className="text-3xl font-black text-[#002b5c] tracking-tight leading-none mb-3">
-            {esRecuperarPass ? 'Recuperar Contraseña' : (esRegistro ? 'Nueva Cuenta' : 'Bienvenido')}
+            {esRecuperarPass ? 'Recuperar contraseña' : (esRegistro ? 'Nueva cuenta' : '¡Hola de nuevo!')}
           </h2>
           <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
             {esRecuperarPass ? 'Introduce tu correo y te enviaremos un enlace para cambiarla.' : (esRegistro ? 'Regístrate una sola vez para vincular tu dispositivo de forma segura.' : 'Introduce tu correo y contraseña para acceder.')}
@@ -272,7 +272,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
                   </button>
                 </div>
 
-                <input type="text" placeholder="Nombre y Apellidos" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
+                <input type="text" placeholder="Nombre y apellidos" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
               </div>
             )}
 
@@ -322,7 +322,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
             )}
 
             <button type="submit" disabled={cargando} className={`w-full mt-4 py-4 text-white font-bold rounded-[1.5rem] transition-all duration-300 shadow-[0_8px_20px_rgba(0,43,92,0.3)] hover:shadow-[0_12px_25px_rgba(0,144,208,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide border ${esRegistro || esRecuperarPass ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] border-[#0090d0]/50 shadow-[0_8px_20px_rgba(0,144,208,0.3)]' : 'bg-gradient-to-br from-[#002b5c] to-[#001a38] border-[#002b5c]/50'}`}>
-              {cargando ? 'Procesando...' : (esRecuperarPass ? 'Enviar correo de recuperación' : (esRegistro ? 'Crear mi Cuenta' : 'Iniciar Sesión'))}
+              {cargando ? 'Procesando...' : (esRecuperarPass ? 'Enviar correo de recuperación' : (esRegistro ? 'Crear mi cuenta' : 'Iniciar sesión'))}
             </button>
 
             {emailSinConfirmar && !esRegistro && !esRecuperarPass && (
@@ -336,7 +336,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
             <div className="w-16 h-[1px] bg-slate-200/60 mb-1"></div>
             {esRecuperarPass ? (
               <button type="button" onClick={() => setEsRecuperarPass(false)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">Volver a <span className="text-[#0090d0]">Iniciar Sesión</span></span>
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">Volver a <span className="text-[#0090d0]">iniciar sesión</span></span>
               </button>
             ) : esRegistro ? (
               <button type="button" onClick={() => cambiarModo(false)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">

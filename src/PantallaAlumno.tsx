@@ -177,7 +177,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
         stream.getTracks().forEach(track => track.stop());
       } catch {
         if (isMounted) {
-          mostrarNotificacion('Activa la cámara en los ajustes de tu móvil.', 'error');
+          mostrarNotificacion('Necesitamos la cámara para escanear el QR. Dale permiso en los ajustes del navegador.', 'error');
           setCamaraActiva(false);
         }
         return;
@@ -236,7 +236,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                 setSesionPerdida(true);
                 return;
               } else {
-                mostrarNotificacion(e.message || 'Error procesando código.', 'error');
+                mostrarNotificacion(e.message || 'No se pudo leer el código. Vuelve a intentarlo.', 'error');
               }
               setProcesandoQr(false);
               isProcessingLocally = false;
@@ -251,13 +251,13 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
             () => {}
           ).catch(() => {
             if (isMounted) {
-              mostrarNotificacion('Error conectando con la cámara.', 'error');
+              mostrarNotificacion('No se pudo abrir la cámara. Comprueba que el navegador tiene permiso para usarla.', 'error');
               setCamaraActiva(false);
             }
           });
         } catch {
           if (isMounted) {
-            mostrarNotificacion('Error conectando con la cámara.', 'error');
+            mostrarNotificacion('No se pudo abrir la cámara. Comprueba que el navegador tiene permiso para usarla.', 'error');
             setCamaraActiva(false);
           }
         }
@@ -329,7 +329,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
 
 
   const exportarHistorialAlumno = () => {
-    if (historial.length === 0) return mostrarNotificacion('No hay datos.', 'info');
+    if (historial.length === 0) return mostrarNotificacion('Aún no tienes asistencias para descargar.', 'info');
     
     // Obtener nombres de asignaturas únicas
     const asignaturasUnicas = Array.from(new Set(historial.map(reg => reg.asignatura_nombre)));
@@ -448,7 +448,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}
           <div className="absolute bottom-0 left-0 right-0 p-8 pb-16 flex flex-col items-center justify-center z-50 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
-            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Ajuste de Lente</p>
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-4">Zoom</p>
             <div className="flex items-center gap-2 bg-black/50 backdrop-blur-xl p-1.5 rounded-full border border-white/10">
               {[1, 2, 3, 5, 'MAX'].map((nivel) => (
                 <button
@@ -479,7 +479,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
             </div>
           </div>
           <button onClick={() => setTabActual(tabActual === 'HORARIO' ? 'CALENDARIO' : 'HORARIO')} className={`px-6 py-3 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border ${tabActual === 'CALENDARIO' ? 'bg-[#002b5c] text-white shadow-md border-transparent' : 'glass-button text-[#002b5c] hover:text-[#0090d0] hover:bg-white/40'}`}>
-            {tabActual === 'HORARIO' ? 'Ver Historial' : 'Volver a Clases'}
+            {tabActual === 'HORARIO' ? 'Ver historial' : 'Volver a clases'}
           </button>
         </div>
       )}
@@ -527,10 +527,10 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                 </h3>
                 
                 {cargandoClases ? (
-                  <div className="flex-1 flex justify-center items-center py-10 text-[#0090d0]/60 font-semibold tracking-wide animate-pulse relative z-10">Sincronizando clases...</div>
+                  <div className="flex-1 flex justify-center items-center py-10 text-[#0090d0]/60 font-semibold tracking-wide animate-pulse relative z-10">Cargando tus asignaturas...</div>
                 ) : clasesHoy.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white/40 backdrop-blur-sm rounded-[2rem] border border-[#0090d0]/20 border-dashed relative z-10">
-                    <p className="text-sm font-medium text-[#002b5c]/50">Escanea un QR por primera vez para enlazar materias.</p>
+                    <p className="text-sm font-medium text-[#002b5c]/50">Tus asignaturas aparecerán aquí cuando escanees el QR de tu primera clase.</p>
                   </div>
                 ) : (
                   <div className="space-y-4 relative z-10">
@@ -581,14 +581,14 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
               <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial</h3>
               <button onClick={exportarHistorialAlumno} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                Descargar Reporte
+                Descargar informe
               </button>
             </div>
             
             {cargandoHistorial ? (
-              <div className="py-16 flex justify-center text-slate-400 font-semibold tracking-wide animate-pulse">Cargando registros...</div>
+              <div className="py-16 flex justify-center text-slate-400 font-semibold tracking-wide animate-pulse">Cargando tu historial...</div>
             ) : historial.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 text-sm font-medium bg-slate-50/50 rounded-[2rem] border border-slate-100 border-dashed">No hay registros de asistencia previos.</div>
+              <div className="py-16 text-center text-slate-400 text-sm font-medium bg-slate-50/50 rounded-[2rem] border border-slate-100 border-dashed">Aún no tienes asistencias registradas.</div>
             ) : (
               <div className="space-y-4 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
                 {historial.map((registro, idx) => (
