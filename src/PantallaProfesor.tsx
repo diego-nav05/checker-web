@@ -376,7 +376,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
   return (
-    <Pantalla ancho={sesionId ? 'amplio' : 'normal'} esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />}>
+    <Pantalla ancho="normal" esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       <Cabecera
@@ -446,40 +446,31 @@ export default function PantallaProfesor({ onVolver }: Props) {
         // VISTA: AULA ACTIVA
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 flex-1">
           
-          {/* PANEL IZQUIERDO: QR lo más grande posible dentro de su tarjeta */}
-          <div className="xl:col-span-6 glass-container rounded-bento p-4 sm:p-6 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
-            
-            {/* Orbe de luz de fondo */}
+          {/* PANEL IZQUIERDO: QR */}
+          <div className="xl:col-span-5 glass-container rounded-bento p-6 sm:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-azul rounded-full opacity-[0.04] blur-[60px] pointer-events-none"></div>
 
             {fase !== 'CERRADA' ? (
-              <div className="relative z-10 w-full flex flex-col items-center gap-4">
-                <div className="flex items-center justify-between w-full gap-2">
+              <div className="relative z-10 w-full flex flex-col items-center">
+                <div className="mb-6 flex items-center justify-between w-full max-w-[25rem]">
                   <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-azul/5 text-azul border-azul/10'}`}>
                     {fase === 'ENTRADA' ? '📍 Modo entrada' : '🚪 Modo salida'}
                   </span>
-
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 px-3.5 py-2 rounded-full border border-slate-100" title="El código cambia cada pocos segundos">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
-                      En vivo
-                    </span>
-                    {/* Proyectar el QR en una ventana aparte */}
-                    <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-azul text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en una ventana aparte">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                    </button>
-                  </div>
+                  <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-azul text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en una ventana aparte">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </button>
                 </div>
 
-                {/* El QR ocupa todo el ancho de la tarjeta, sin pasarse del alto de la pantalla */}
-                <div
-                  className="w-full aspect-square p-3 sm:p-4 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,43,92,0.15)] border border-slate-100"
-                  style={{ maxWidth: 'min(100%, calc(100dvh - 11rem))' }}
-                >
-                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-control object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
+                <div className="p-4 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100">
+                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-72 h-72 sm:w-[25rem] sm:h-[25rem] rounded-control object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
+                </div>
+
+                <div className="mt-8 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  Sincronizado en vivo
                 </div>
               </div>
             ) : (
@@ -492,7 +483,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           </div>
 
           {/* PANEL DERECHO: Lista de Alumnos */}
-          <div className="xl:col-span-6 glass-container rounded-bento p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
+          <div className="xl:col-span-7 glass-container rounded-bento p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6 sm:mb-8">
               <h2 className="text-lg sm:text-xl font-black text-marino tracking-tight">Alumnos de la clase</h2>
               <Etiqueta tono="oscuro" className="px-4 py-1.5">{asistencias.length} {asistencias.length === 1 ? 'alumno' : 'alumnos'}</Etiqueta>
