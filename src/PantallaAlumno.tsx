@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 import type { Asignatura } from './types';
 import { AvisoFlotante, useAviso } from './Aviso';
+import { traerPorLotes, traerTodas } from './consultas';
 
 interface Props {
   onVolver: () => void;
@@ -61,12 +62,14 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
     if (!alumnoId) return;
     setCargandoClases(true);
     try {
-      const { data: misAsistencias } = await supabase.from('asistencias').select('sesion_id, estado').eq('alumno_id', alumnoId);
-      if (!misAsistencias || misAsistencias.length === 0) return setClasesHoy([]);
+      const misAsistencias = await traerTodas<{ sesion_id: string; estado: string }>(() =>
+        supabase.from('asistencias').select('sesion_id, estado').eq('alumno_id', alumnoId).order('id'));
+      if (misAsistencias.length === 0) return setClasesHoy([]);
       
       const sesionIdsAlumno = [...new Set(misAsistencias.map(a => a.sesion_id))];
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id, fase');
-      if (!sesiones || sesiones.length === 0) return;
+      const sesiones = await traerTodas<{ id: string; asignatura_id: string; fase: string }>(() =>
+        supabase.from('sesiones').select('id, asignatura_id, fase').order('id'));
+      if (sesiones.length === 0) return;
       
       const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))].filter(Boolean);
       let asignaturas: any[] = [];
@@ -109,6 +112,8 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
 
         setClasesHoy(sorted);
       }
+    } catch {
+      mostrarNotificacion('No se pudieron cargar tus asignaturas. Revisa tu conexión.', 'error');
     } finally {
       setCargandoClases(false);
     }
@@ -123,16 +128,13 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       if (!alumnoId || tabActual !== 'CALENDARIO') return;
       setCargandoHistorial(true);
       try {
-        const { data: asistData } = await supabase.from('asistencias').select('*').eq('alumno_id', alumnoId);
-        if (asistData && asistData.length > 0) {
+        const asistData = await traerTodas<any>(() =>
+          supabase.from('asistencias').select('*').eq('alumno_id', alumnoId).order('id'));
+        if (asistData.length > 0) {
           const sesionIds = [...new Set(asistData.map(a => a.sesion_id))].filter(Boolean);
           
-          let sesionesData: any[] = [];
-          if (sesionIds.length > 0) {
-            const { data, error } = await supabase.from('sesiones').select('id, fecha, asignatura_id').in('id', sesionIds);
-            if (error) console.error("Error cargando sesiones:", error);
-            if (data) sesionesData = data;
-          }
+          const sesionesData = await traerPorLotes<{ id: string; fecha: string; asignatura_id: string }>(sesionIds, (lote) =>
+            supabase.from('sesiones').select('id, fecha, asignatura_id').in('id', lote).order('id'));
           
           const asigIds = [...new Set(sesionesData.map(s => s.asignatura_id))].filter(Boolean);
           
@@ -156,6 +158,8 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
         } else {
           setHistorial([]);
         }
+      } catch {
+        mostrarNotificacion('No se pudo cargar tu historial. Revisa tu conexión.', 'error');
       } finally {
         setCargandoHistorial(false);
       }

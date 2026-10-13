@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
 import BotonCompartir from './BotonCompartir';
 import { AvisoFlotante, useAviso } from './Aviso';
+import { traerPorLotes, traerTodas } from './consultas';
 
 // Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
 const SEGUNDOS_QR = 5;
@@ -112,14 +113,20 @@ export default function PantallaProfesor({ onVolver }: Props) {
     setSesionId(sesionData.id);
 
     // Lista inicial: alumnos matriculados (incluye los dados de alta por el profe) y los de clases anteriores
-    const { data: matriculados } = await supabase.from('matriculas').select('alumno_id').eq('asignatura_id', idAsignatura);
-    const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
-    let pastAsistencias: { alumno_id: string }[] = [];
-    if (pastSesiones && pastSesiones.length > 0) {
-      const { data } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', pastSesiones.map(s => s.id));
-      pastAsistencias = data || [];
+    let alumnosDeLaAsignatura: { alumno_id: string }[] = [];
+    let listaIncompleta = false;
+    try {
+      const matriculados = await traerTodas<{ alumno_id: string }>(() =>
+        supabase.from('matriculas').select('alumno_id').eq('asignatura_id', idAsignatura).order('id'));
+      const pastSesiones = await traerTodas<{ id: string }>(() =>
+        supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id).order('id'));
+      const pastAsistencias = await traerPorLotes<{ alumno_id: string }>(pastSesiones.map(s => s.id), (lote) =>
+        supabase.from('asistencias').select('alumno_id').in('sesion_id', lote).order('id'));
+      alumnosDeLaAsignatura = [...matriculados, ...pastAsistencias];
+    } catch {
+      listaIncompleta = true;
     }
-    const uniqueIds = Array.from(new Set([...(matriculados || []), ...pastAsistencias].map(a => a.alumno_id)));
+    const uniqueIds = Array.from(new Set(alumnosDeLaAsignatura.map(a => a.alumno_id)));
     if (uniqueIds.length > 0) {
       const asistenciasIniciales = uniqueIds.map((aluId) => ({
         sesion_id: sesionData.id,
@@ -131,7 +138,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
     }
 
     cargarAsistencias(sesionData.id, diccionarioAlumnos);
-    mostrarNotificacion('Aula abierta: los alumnos ya pueden escanear el QR.', 'exito');
+    if (listaIncompleta) {
+      mostrarNotificacion('El aula está abierta, pero no se pudo cargar la lista completa. Quien escanee aparecerá igualmente.', 'error');
+    } else {
+      mostrarNotificacion('Aula abierta: los alumnos ya pueden escanear el QR.', 'exito');
+    }
   };
 
   const cargarAsistencias = async (idSesion: string, dict = diccionarioAlumnos) => {

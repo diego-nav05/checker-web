@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import BotonCompartir from './BotonCompartir';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { altaAlumno, mensajeError, tieneCorreoReal, type ResultadoAlta } from './cuentas';
+import { borrarPorLotes, traerPorLotes, traerTodas } from './consultas';
 
 const COLUMNAS_SESION = 'id, asignatura_id, fecha, fase, hora_apertura, hora_cierre';
 const estaVinculado = (alumno: any) => !!(alumno?.dispositivo_hash || alumno?.dispositivo_id || alumno?.vinculado);
@@ -91,27 +92,29 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       // Alumnos de mis clases = matriculados + los que tienen alguna asistencia
       const asigIds = asigs.map(a => a.id);
-      const { data: matriculas } = await supabase.from('matriculas').select('alumno_id, asignatura_id').in('asignatura_id', asigIds);
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id, fase').in('asignatura_id', asigIds);
-      const sesionIds = (sesiones || []).map(s => s.id);
-      const sesionesCerradas = new Set((sesiones || []).filter(s => s.fase === 'CERRADA').map(s => s.id));
-      const { data: asistencias } = sesionIds.length > 0
-        ? await supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', sesionIds)
-        : { data: [] as { alumno_id: string; sesion_id: string; estado: string }[] };
+      const matriculas = await traerTodas<{ alumno_id: string; asignatura_id: string }>(() =>
+        supabase.from('matriculas').select('alumno_id, asignatura_id').in('asignatura_id', asigIds).order('id'));
+      const sesiones = await traerTodas<{ id: string; asignatura_id: string; fase: string }>(() =>
+        supabase.from('sesiones').select('id, asignatura_id, fase').in('asignatura_id', asigIds).order('id'));
+      const sesionIds = sesiones.map(s => s.id);
+      const sesionesCerradas = new Set(sesiones.filter(s => s.fase === 'CERRADA').map(s => s.id));
+      const asistencias = await traerPorLotes<{ alumno_id: string; sesion_id: string; estado: string }>(sesionIds, (lote) =>
+        supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', lote).order('id'));
 
-      const aluIds = [...new Set([...(matriculas || []), ...(asistencias || [])].map(a => a.alumno_id))];
+      const aluIds = [...new Set([...matriculas, ...asistencias].map(a => a.alumno_id))];
       if (aluIds.length === 0) return setAlumnos([]);
 
-      const { data: perfiles } = await supabase
+      const perfiles = (await traerPorLotes<any>(aluIds, (lote) => supabase
         .from('perfiles')
         .select('id, nombre_completo, email, rol, dispositivo_hash, dispositivo_id, pendiente, codigo_alta')
-        .in('id', aluIds)
+        .in('id', lote)
         .eq('rol', 'alumno')
-        .order('nombre_completo', { ascending: true });
+        .order('id')))
+        .sort((a, b) => (a.nombre_completo || '').localeCompare(b.nombre_completo || '', 'es'));
       if (perfiles) {
         const perfilesConStats = perfiles.map(perfil => {
           // Las clases aún abiertas no cuentan: el alumno todavía puede escanear
-          const asistsAlumno = (asistencias || []).filter(a => a.alumno_id === perfil.id && sesionesCerradas.has(a.sesion_id));
+          const asistsAlumno = asistencias.filter(a => a.alumno_id === perfil.id && sesionesCerradas.has(a.sesion_id));
           // Solo cuentan las clases en las que el alumno ya estaba en la lista (no las anteriores a su alta)
           const totalSesionesPosibles = asistsAlumno.length;
           
@@ -134,6 +137,8 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         });
         setAlumnos(perfilesConStats);
       }
+    } catch {
+      mostrarNotificacion('No se pudieron cargar los alumnos. Revisa tu conexión y vuelve a intentarlo.', 'error');
     } finally {
       setCargando(false);
     }
@@ -218,13 +223,12 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     if (asigs && asigs.length > 0) {
       const asigIds = asigs.map((a: any) => a.id);
       const { data: matriculas } = await supabase.from('matriculas').select('asignatura_id').eq('alumno_id', alumno.id).in('asignatura_id', asigIds);
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
-      let asigIdsAsistidas: string[] = [];
-      if (sesiones && sesiones.length > 0) {
-        const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesiones.map((s: any) => s.id));
-        const attendedSesionIds = (asists || []).map((a: any) => a.sesion_id);
-        asigIdsAsistidas = sesiones.filter((s: any) => attendedSesionIds.includes(s.id)).map((s: any) => s.asignatura_id);
-      }
+      const sesiones = await traerTodas<{ id: string; asignatura_id: string }>(() =>
+        supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds).order('id'));
+      const asists = await traerPorLotes<{ sesion_id: string }>(sesiones.map(s => s.id), (lote) =>
+        supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', lote).order('id'));
+      const sesionesAsistidas = new Set(asists.map(a => a.sesion_id));
+      const asigIdsAsistidas = sesiones.filter(s => sesionesAsistidas.has(s.id)).map(s => s.asignatura_id);
       const asigIdsAlumno = new Set([...(matriculas || []).map(m => m.asignatura_id), ...asigIdsAsistidas]);
       setAsignaturasAlumno(asigs.filter((a: any) => asigIdsAlumno.has(a.id)));
     } else {
@@ -260,37 +264,33 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const ejecutarExpulsion = async () => {
     if (!modalExpulsion) return;
     const { tipo, aluId, asigId } = modalExpulsion;
-    
-    if (tipo === 'UNA' && asigId) {
-      const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', asigId);
-      if (sesiones && sesiones.length > 0) {
-        const sIds = sesiones.map((s: any) => s.id);
-        await supabase.from('asistencias')
-          .delete()
-          .eq('alumno_id', aluId)
-          .in('sesion_id', sIds);
-      }
-      await supabase.from('matriculas').delete().eq('alumno_id', aluId).eq('asignatura_id', asigId);
-      mostrarNotificacion('Alumno quitado de la asignatura.', 'exito');
-      setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
-      if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
-    } else if (tipo === 'TODAS') {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
-      if (asigs && asigs.length > 0) {
-        const asigIds = asigs.map((a: any) => a.id);
-        const { data: sesiones } = await supabase.from('sesiones').select('id').in('asignatura_id', asigIds);
-        if (sesiones && sesiones.length > 0) {
-          const sIds = sesiones.map((s: any) => s.id);
-          await supabase.from('asistencias')
-            .delete()
-            .eq('alumno_id', aluId)
-            .in('sesion_id', sIds);
+
+    try {
+      if (tipo === 'UNA' && asigId) {
+        const sesiones = await traerTodas<{ id: string }>(() =>
+          supabase.from('sesiones').select('id').eq('asignatura_id', asigId).order('id'));
+        await borrarPorLotes(sesiones.map(s => s.id), (lote) =>
+          supabase.from('asistencias').delete().eq('alumno_id', aluId).in('sesion_id', lote));
+        await supabase.from('matriculas').delete().eq('alumno_id', aluId).eq('asignatura_id', asigId);
+        mostrarNotificacion('Alumno quitado de la asignatura.', 'exito');
+        setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
+        if (asignaturasAlumno.length <= 1) setAlumnoGestion(null);
+      } else if (tipo === 'TODAS') {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user?.id);
+        if (asigs && asigs.length > 0) {
+          const asigIds = asigs.map((a: any) => a.id);
+          const sesiones = await traerTodas<{ id: string }>(() =>
+            supabase.from('sesiones').select('id').in('asignatura_id', asigIds).order('id'));
+          await borrarPorLotes(sesiones.map(s => s.id), (lote) =>
+            supabase.from('asistencias').delete().eq('alumno_id', aluId).in('sesion_id', lote));
+          await supabase.from('matriculas').delete().eq('alumno_id', aluId).in('asignatura_id', asigIds);
         }
-        await supabase.from('matriculas').delete().eq('alumno_id', aluId).in('asignatura_id', asigIds);
+        mostrarNotificacion('Alumno quitado de todas tus asignaturas.', 'exito');
+        setAlumnoGestion(null);
       }
-      mostrarNotificacion('Alumno quitado de todas tus asignaturas.', 'exito');
-      setAlumnoGestion(null);
+    } catch {
+      mostrarNotificacion('No se pudo quitar al alumno. Revisa tu conexión e inténtalo de nuevo.', 'error');
     }
     cargarAlumnos();
     setModalExpulsion(null);
@@ -331,17 +331,15 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setCargandoPass(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Sin sesión activa.");
+      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
       const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passConfirm });
       if (authError) throw new Error("Contraseña incorrecta.");
 
-      const { data: sesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', modalEliminarAsig);
-      if (sesiones && sesiones.length > 0) {
-        const sesionIds = sesiones.map((s) => s.id);
-        await supabase.from('asistencias').delete().in('sesion_id', sesionIds);
-        await supabase.from('sesiones').delete().eq('asignatura_id', modalEliminarAsig);
-      }
-      await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
+      // Al borrar las clases, la base de datos borra sola sus asistencias (y al borrar la asignatura, sus matrículas)
+      const { error: errorSesiones } = await supabase.from('sesiones').delete().eq('asignatura_id', modalEliminarAsig);
+      if (errorSesiones) throw new Error('No se pudo eliminar la asignatura. Inténtalo de nuevo.');
+      const { error: errorAsig } = await supabase.from('asignaturas').delete().eq('id', modalEliminarAsig);
+      if (errorAsig) throw new Error('No se pudo eliminar la asignatura. Inténtalo de nuevo.');
       
       setModalEliminarAsig(null); 
       setPassConfirm(''); 
@@ -393,23 +391,26 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
-    const { data: sesionesDataRaw } = await supabase.from('sesiones').select(COLUMNAS_SESION).eq('asignatura_id', asignaturaSeleccionada.id);
-    if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
+    const sesionesDataRaw = await traerTodas<any>(() =>
+      supabase.from('sesiones').select(COLUMNAS_SESION).eq('asignatura_id', asignaturaSeleccionada.id).order('id'));
+    if (sesionesDataRaw.length === 0) {
       mostrarNotificacion("Esta asignatura aún no tiene clases registradas.", 'info');
       return null;
     }
     const sesionIds = sesionesDataRaw.map(s => s.id);
 
-    const { data: asistData } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-    if (!asistData || asistData.length === 0) {
+    const asistData = await traerPorLotes<any>(sesionIds, (lote) =>
+      supabase.from('asistencias').select('*').in('sesion_id', lote).order('id'));
+    if (asistData.length === 0) {
       mostrarNotificacion("Todavía no hay asistencias registradas.", 'info');
       return null;
     }
 
     const aluIds = [...new Set(asistData.map(a => a.alumno_id))];
-    const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+    const perfiles = await traerPorLotes<{ id: string; nombre_completo: string }>(aluIds, (lote) =>
+      supabase.from('perfiles').select('id, nombre_completo').in('id', lote).order('id'));
     const mapPerfiles: Record<string, string> = {};
-    perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
+    perfiles.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
     const sesionesConFecha = procesarFechasSesiones(sesionesDataRaw, asistData);
 
@@ -560,23 +561,26 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
 
     const asigIds = asigs.map(a => a.id);
-    const { data: sesiones } = await supabase.from('sesiones').select(COLUMNAS_SESION).in('asignatura_id', asigIds);
-    if (!sesiones || sesiones.length === 0) {
+    const sesiones = await traerTodas<any>(() =>
+      supabase.from('sesiones').select(COLUMNAS_SESION).in('asignatura_id', asigIds).order('id'));
+    if (sesiones.length === 0) {
       mostrarNotificacion('Todavía no hay clases registradas.', 'info');
       return null;
     }
 
     const sesionIds = sesiones.map(s => s.id);
-    const { data: asistencias } = await supabase.from('asistencias').select('*').in('sesion_id', sesionIds);
-    if (!asistencias || asistencias.length === 0) {
+    const asistencias = await traerPorLotes<any>(sesionIds, (lote) =>
+      supabase.from('asistencias').select('*').in('sesion_id', lote).order('id'));
+    if (asistencias.length === 0) {
       mostrarNotificacion('No hay asistencias registradas.', 'info');
       return null;
     }
 
     const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
-    const { data: perfiles } = await supabase.from('perfiles').select('id, nombre_completo').in('id', aluIds);
+    const perfiles = await traerPorLotes<{ id: string; nombre_completo: string }>(aluIds, (lote) =>
+      supabase.from('perfiles').select('id, nombre_completo').in('id', lote).order('id'));
     const mapPerfiles: Record<string, string> = {};
-    perfiles?.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
+    perfiles.forEach(p => mapPerfiles[p.id] = p.nombre_completo);
 
     const resultadosGlobales: { nombre: string, filas: any[] }[] = [];
 
