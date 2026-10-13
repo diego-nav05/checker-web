@@ -2,14 +2,14 @@ import { useId } from 'react';
 import type { CSSProperties } from 'react';
 import { Tarjeta } from './ui';
 
-// Cuanta más racha, más espectacular el fuego
+// Cuanta más racha, más grande y espectacular el fuego (cambia de color, brilla y suelta chispas)
 const NIVELES = [
-  { desde: 0, nombre: 'Sin racha', colores: ['#e2e8f0', '#cbd5e1', '#f1f5f9'], tamano: 54, chispas: 0, brillo: 0 },
-  { desde: 1, nombre: 'Chispa', colores: ['#fdba74', '#f97316', '#fef3c7'], tamano: 58, chispas: 0, brillo: 0.25 },
-  { desde: 3, nombre: 'Llama', colores: ['#fb923c', '#ea580c', '#fde047'], tamano: 66, chispas: 2, brillo: 0.4 },
-  { desde: 5, nombre: 'Hoguera', colores: ['#f97316', '#dc2626', '#fde047'], tamano: 74, chispas: 4, brillo: 0.55 },
-  { desde: 10, nombre: 'Fuego azul', colores: ['#38bdf8', '#2563eb', '#e0f2fe'], tamano: 82, chispas: 6, brillo: 0.7 },
-  { desde: 20, nombre: 'Leyenda', colores: ['#e879f9', '#9333ea', '#fef9c3'], tamano: 90, chispas: 8, brillo: 0.85 },
+  { desde: 0, colores: ['#e2e8f0', '#cbd5e1', '#f1f5f9'], tamano: 54, chispas: 0, brillo: 0 },
+  { desde: 1, colores: ['#fdba74', '#f97316', '#fef3c7'], tamano: 58, chispas: 0, brillo: 0.25 },
+  { desde: 3, colores: ['#fb923c', '#ea580c', '#fde047'], tamano: 66, chispas: 2, brillo: 0.4 },
+  { desde: 5, colores: ['#f97316', '#dc2626', '#fde047'], tamano: 74, chispas: 4, brillo: 0.55 },
+  { desde: 10, colores: ['#38bdf8', '#2563eb', '#e0f2fe'], tamano: 82, chispas: 6, brillo: 0.7 },
+  { desde: 20, colores: ['#e879f9', '#9333ea', '#fef9c3'], tamano: 90, chispas: 8, brillo: 0.85 },
 ];
 
 // Posición, desvío y retraso de cada chispa (fijos para que no salten al volver a pintar)
@@ -72,21 +72,20 @@ export function Llama({ racha }: { racha: number }) {
 
 // Tarjeta de la racha para la pantalla del alumno
 export default function TarjetaRacha({ racha, record, indice }: { racha: number; record: number; indice: number }) {
-  const n = nivelDeRacha(racha);
-  const leyenda = racha >= 20;
+  const fondoArcoiris = racha >= 20;
   return (
-    <Tarjeta indice={indice} className={`p-5 flex items-center gap-3 overflow-hidden ${leyenda ? 'fondo-leyenda' : ''}`}>
+    <Tarjeta indice={indice} className={`p-5 flex items-center gap-3 overflow-hidden ${fondoArcoiris ? 'fondo-leyenda' : ''}`}>
       <Llama racha={racha} />
       <div className="min-w-0">
         <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Tu racha</p>
-        <p className="flex items-baseline gap-1.5 mt-0.5">
-          <span className="text-4xl font-black tracking-tighter text-marino">{racha}</span>
-          <span className="text-xs font-bold text-slate-500">{racha === 1 ? 'clase seguida' : 'clases seguidas'}</span>
+        <p className="flex flex-wrap items-baseline gap-x-1.5 mt-0.5">
+          <span className="text-4xl font-black tracking-tighter text-marino tabular-nums">{racha}</span>
+          <span className="text-xs font-bold text-slate-500 whitespace-nowrap">{racha === 1 ? 'clase seguida' : 'clases seguidas'}</span>
         </p>
         <p className="text-[11px] font-semibold text-slate-400 mt-1 leading-snug">
           {racha === 0
             ? (record > 0 ? `Tu récord: ${record}. ¡Ve a clase para volver a encenderla!` : 'Ve a clase para encender tu racha.')
-            : <><span className="font-black" style={{ color: n.colores[1] }}>{n.nombre}</span>{record > racha ? ` · Récord: ${record}` : ' · ¡Es tu récord!'}</>}
+            : record > racha ? `Tu récord: ${record}` : '¡Es tu récord!'}
         </p>
       </div>
     </Tarjeta>
