@@ -4,6 +4,7 @@ import PantallaAlumno from './PantallaAlumno.tsx';
 import PantallaRegistro from './PantallaRegistro.tsx';
 import PantallaGestionDocente from './PantallaGestionDocente.tsx';
 import BotonCompartir from './BotonCompartir.tsx';
+import AvisoVersionNueva from './VersionNueva.tsx';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { supabase, hashInicial } from './supabase';
 
@@ -57,8 +58,21 @@ export default function App() {
       avisar('👋 ¿Eres nuevo? Pulsa "Vincular" (en el ordenador, "Mi cuenta") para crear tu cuenta.', 'info');
     }
 
-    const { data: escucha } = supabase.auth.onAuthStateChange((evento) => {
+    const { data: escucha } = supabase.auth.onAuthStateChange((evento, sesion) => {
       if (evento === 'PASSWORD_RECOVERY') setNuevaPassword('');
+      if (evento === 'SIGNED_OUT') setDocente(null);
+      // Un docente puede iniciar sesión también desde "Mi cuenta": así la app se entera sin recargar.
+      // Supabase recomienda no llamar a sus métodos dentro de este aviso, por eso lo dejamos para justo después.
+      if (evento === 'SIGNED_IN' && sesion) {
+        setTimeout(async () => {
+          const datos = await cargarDocente(sesion.user.id, sesion.user.email ?? '');
+          if (!datos) return;
+          localStorage.setItem('checker_rol', 'profesor');
+          // Si ya había un día guardado no lo renovamos: una pestaña olvidada de ayer debe caducar
+          if (!localStorage.getItem('checker_docente_dia')) localStorage.setItem('checker_docente_dia', hoy());
+          setDocente(datos);
+        }, 0);
+      }
     });
 
     (async () => {
@@ -84,6 +98,17 @@ export default function App() {
 
     return () => escucha.subscription.unsubscribe();
   }, []);
+
+  // La sesión del docente caduca al cambiar de día, aunque la pestaña se haya quedado abierta
+  useEffect(() => {
+    if (!docente) return;
+    const intervalo = setInterval(() => {
+      if (localStorage.getItem('checker_docente_dia') !== hoy()) {
+        cerrarSesionDocente('Tu sesión de docente ha caducado (dura hasta el final del día). Vuelve a entrar.');
+      }
+    }, 60_000);
+    return () => clearInterval(intervalo);
+  }, [docente]);
 
   useEffect(() => {
     if (!window.history.state || !window.history.state.panel) {
@@ -396,8 +421,11 @@ export default function App() {
   };
 
   return (
-    <div key={nuevaPassword !== null ? 'NUEVA_PASSWORD' : vista} className={direccion === 'adelante' ? 'pantalla-adelante' : 'pantalla-atras'}>
-      {pintarPantalla()}
-    </div>
+    <>
+      <AvisoVersionNueva />
+      <div key={nuevaPassword !== null ? 'NUEVA_PASSWORD' : vista} className={direccion === 'adelante' ? 'pantalla-adelante' : 'pantalla-atras'}>
+        {pintarPantalla()}
+      </div>
+    </>
   );
 }

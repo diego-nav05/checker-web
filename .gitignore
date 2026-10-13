@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Copias de seguridad de la base de datos (contienen datos personales: nunca a GitHub)
+supabase/copias/

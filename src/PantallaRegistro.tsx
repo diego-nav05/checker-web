@@ -74,6 +74,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
     if (perfil.rol === 'profesor') {
       localStorage.setItem('checker_rol', 'profesor');
+      localStorage.setItem('checker_docente_dia', new Date().toDateString());
       localStorage.setItem('checker_nombre', perfil.nombre_completo);
       localStorage.removeItem('checker_alumno_id');
       avisar('Has entrado como docente.', 'exito');
