@@ -323,7 +323,7 @@ export default function App() {
               {cargandoProfesor ? 'Verificando...' : 'Entrar en Gestión'}
             </Boton>
             <Boton variante="texto" onClick={cambiarDeCuenta} className="mt-2">
-              ¿No eres tú? Cambiar de cuenta
+              ¿No eres tú? Cerrar sesión
             </Boton>
           </form>
         ), volverInicio);
@@ -350,7 +350,6 @@ export default function App() {
             {docente && (
               <SesionDocente
                 nombre={docente.nombre}
-                onCambiarCuenta={cambiarDeCuenta}
                 onCerrarSesion={() => cerrarSesionDocente()}
               />
             )}
