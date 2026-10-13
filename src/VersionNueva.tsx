@@ -41,11 +41,11 @@ export default function AvisoVersionNueva() {
 
   return (
     <div className="fixed bottom-4 inset-x-0 z-[400] flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-3 pl-5 pr-2 py-2 bg-[#002b5c]/95 text-white rounded-full shadow-[0_16px_32px_-10px_rgba(0,0,0,0.35)] backdrop-blur-2xl border border-white/15 bento-entrada">
+      <div className="pointer-events-auto flex items-center gap-3 pl-5 pr-2 py-2 bg-marino/95 text-white rounded-full shadow-[0_16px_32px_-10px_rgba(0,0,0,0.35)] backdrop-blur-2xl border border-white/15 bento-entrada">
         <span className="text-xs sm:text-sm font-semibold">Hay una versión nueva de Checker</span>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-white text-[#002b5c] rounded-full text-xs font-black uppercase tracking-widest cursor-pointer active:scale-95 transition-transform"
+          className="px-4 py-2 bg-white text-marino rounded-full text-xs font-black uppercase tracking-widest cursor-pointer active:scale-95 transition-transform"
         >
           Actualizar
         </button>

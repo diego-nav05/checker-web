@@ -52,7 +52,7 @@ export default function BotonCompartir({ mostrarNotificacion, lado = 'izquierda'
       </button>
 
       {mostrarQR && (
-        <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#001a38]/80 backdrop-blur-xl p-4 sm:p-8 overflow-y-auto select-none transition-all duration-500 ${isClosing ? 'opacity-0' : 'opacity-100 animate-[fade-in_0.4s_ease-out]'}`}>
+        <div className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-marino-oscuro/80 backdrop-blur-xl p-4 sm:p-8 overflow-y-auto select-none transition-all duration-500 ${isClosing ? 'opacity-0' : 'opacity-100 animate-[fade-in_0.4s_ease-out]'}`}>
           
           {/* Botón Cerrar (Fuera de la tarjeta) */}
           <button 
@@ -63,18 +63,18 @@ export default function BotonCompartir({ mostrarNotificacion, lado = 'izquierda'
           </button>
 
           {/* Modal Container */}
-          <div className={`flex flex-col items-center justify-center w-full max-w-[90vh] bg-white/95 backdrop-blur-3xl rounded-[3rem] shadow-[0_20px_60px_-10px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.4)] p-8 sm:p-12 relative overflow-hidden transition-all duration-500 transform ${isClosing ? 'scale-95 opacity-0 translate-y-8' : 'scale-100 opacity-100 translate-y-0 anim-suave'}`}>
+          <div className={`flex flex-col items-center justify-center w-full max-w-[90vh] bg-white/95 backdrop-blur-3xl rounded-bento shadow-[0_20px_60px_-10px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.4)] p-8 sm:p-12 relative overflow-hidden transition-all duration-500 transform ${isClosing ? 'scale-95 opacity-0 translate-y-8' : 'scale-100 opacity-100 translate-y-0 anim-suave'}`}>
             
             {/* Cabecera / Título */}
             <div className="mb-8 text-center space-y-2">
-              <h2 className="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#002b5c] to-[#0090d0] tracking-tight leading-tight pb-1">
+              <h2 className="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-marino to-azul tracking-tight leading-tight pb-1">
                 Escanea para unirte
               </h2>
               <p className="text-slate-500 font-medium tracking-wide">Abre la cámara de tu dispositivo y apunta al código</p>
             </div>
             
             {/* Contenedor del QR (Efecto integrado) */}
-            <div className="bg-white p-6 sm:p-10 rounded-[2.5rem] shadow-[inset_0_4px_24px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)] mb-8 aspect-square w-full flex items-center justify-center relative overflow-hidden group">
+            <div className="bg-white p-6 sm:p-10 rounded-bento shadow-[inset_0_4px_24px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.04)] mb-8 aspect-square w-full flex items-center justify-center relative overflow-hidden group">
               <div className="absolute inset-0 bg-gradient-to-tr from-blue-50 to-transparent opacity-50 pointer-events-none"></div>
               <QRCodeSVG 
                 value={window.location.href} 

@@ -6,12 +6,48 @@ import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
 import BotonCompartir from './BotonCompartir';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { traerPorLotes, traerTodas } from './consultas';
+import { Boton, Cabecera, Campo, Esqueleto, Etiqueta, Modal, Pantalla, Tarjeta, Vacio } from './ui';
 
 // Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
 const SEGUNDOS_QR = 5;
 
 interface Props {
   onVolver: () => void;
+}
+
+const ESTILO_ESTADO: Record<string, string> = {
+  PRESENTE: 'bg-emerald-50 text-emerald-600 border-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.35)]',
+  RETRASO: 'bg-amber-50 text-amber-600 border-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.35)]',
+  SE_FUE_A_MITAD: 'bg-purple-50 text-purple-600 border-purple-300 shadow-[0_0_14px_rgba(192,132,252,0.35)]',
+  FALTA_JUSTIFICADA: 'bg-sky-50 text-azul border-azul/40 shadow-[0_0_14px_rgba(0,144,208,0.3)]',
+  FALTA_INJUSTIFICADA: 'bg-rose-50 text-rose-600 border-rose-300 shadow-[0_0_14px_rgba(251,113,133,0.35)]',
+};
+
+// Una fila de la lista del aula: nombre del alumno y selector de estado
+function FilaAlumno({ item, onCambiar }: { item: Asistencia; onCambiar: (id: string, estado: EstadoAsistencia) => void }) {
+  const nombre = item.perfiles?.nombre_completo || 'Alumno registrado';
+  return (
+    <div className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 animate-[fade-in-down_0.4s_ease-out]">
+      <div className="flex flex-col overflow-hidden min-w-0">
+        <p className="font-bold text-marino text-xs tracking-tight truncate" title={nombre}>{nombre}</p>
+        {(item.perfiles as any)?.pendiente && (
+          <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+        )}
+      </div>
+      <select
+        value={item.estado}
+        onChange={(e) => onCambiar(item.id, e.target.value as EstadoAsistencia)}
+        style={{ textAlignLast: 'center' }}
+        className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center border-2 flex-shrink-0 w-[84px] hover:scale-105 ${ESTILO_ESTADO[item.estado] || ESTILO_ESTADO.FALTA_INJUSTIFICADA}`}
+      >
+        <option value="PRESENTE">Presente</option>
+        <option value="RETRASO">Retraso</option>
+        <option value="SE_FUE_A_MITAD">Abandono</option>
+        <option value="FALTA_JUSTIFICADA">Justificado</option>
+        <option value="FALTA_INJUSTIFICADA">Ausente</option>
+      </select>
+    </div>
+  );
 }
 
 export default function PantallaProfesor({ onVolver }: Props) {
@@ -369,100 +405,85 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
   return (
-    <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      <div className="glow-blob"></div>
-
+    <Pantalla ancho={sesionId ? 'amplio' : 'normal'}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
-      {/* MAIN CONTENT WRAPPER */}
-      <div className="w-full flex-1 flex flex-col anim-suave relative z-10">
-        {/* CABECERA FLOTANTE (Glassmorphism auténtico) */}
-        <div className={`flex flex-wrap items-center justify-between gap-3 glass-container px-4 sm:px-6 py-4 rounded-[2rem] sm:rounded-[2.5rem] mb-6 mx-auto w-full transition-all ${sesionId ? 'max-w-[1700px]' : 'max-w-7xl'}`}>
-        <div className="flex items-center gap-4">
-          <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Profesorado</h1>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-0.5">
-              {sesionId ? (
-                <span className="flex items-center gap-1.5">Fase: <span className={`font-bold ${fase === 'ENTRADA' ? 'text-amber-500' : fase === 'SALIDA' ? 'text-[#0090d0]' : 'text-slate-400'}`}>{fase}</span></span>
-              ) : 'Elige una asignatura'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {sesionId && fase !== 'CERRADA' && (
-            <>
-              {fase === 'ENTRADA' && (
-                <button onClick={pasarASalida} className="px-4 sm:px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                  Activar salida
-                </button>
-              )}
-              <button onClick={intentarCerrarAula} className="px-4 sm:px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
-                Cerrar clase
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      <Cabecera
+        titulo="Profesorado"
+        onVolver={onVolver}
+        subtitulo={sesionId ? (
+          <span className="flex items-center gap-1.5 uppercase tracking-widest">
+            Fase: <span className={`font-black ${fase === 'ENTRADA' ? 'text-amber-500' : fase === 'SALIDA' ? 'text-azul' : 'text-slate-400'}`}>{fase}</span>
+          </span>
+        ) : 'Elige una asignatura'}
+        acciones={sesionId && fase !== 'CERRADA' ? (
+          <>
+            {fase === 'ENTRADA' && <Boton variante="acento" tamano="pequeno" onClick={pasarASalida}>Activar salida</Boton>}
+            <Boton variante="peligro" tamano="pequeno" onClick={intentarCerrarAula}>Cerrar clase</Boton>
+          </>
+        ) : undefined}
+      />
 
       {!sesionId ? (
-        // VISTA: SELECCIÓN DE CLASE (Bento UI)
-        <div className="flex-1 flex flex-col max-w-7xl mx-auto w-full">
-          {cargandoClases ? (
-            <div className="flex justify-center py-20 text-slate-400 font-semibold tracking-wide animate-pulse">Cargando tus asignaturas...</div>
-          ) : clasesHoy.length === 0 ? (
-            <div className="glass-container rounded-[2.5rem] p-16 text-center max-w-2xl mx-auto w-full mt-10">
-              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6"><span className="text-3xl">📚</span></div>
-              <p className="text-[#002b5c] font-black text-2xl tracking-tight">Aún no tienes asignaturas</p>
-              <p className="text-sm text-slate-400 font-medium mt-3 leading-relaxed">Créalas en Gestión → Asignaturas y aparecerán aquí.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clasesHoy.map((clase, i) => {
-                const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
-                const claseActiva = sesionesActivasPorAsig[clase.id];
-                return (
-                <div key={clase.id} style={{ '--i': i } as React.CSSProperties} className={`glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:-translate-y-1 transition-all duration-500 group bento-entrada ${claseActiva ? 'border-2 border-[#0090d0]/50 shadow-[0_20px_40px_-12px_rgba(0,144,208,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.4)]' : esHoy ? 'border-2 border-emerald-400/50 shadow-[0_20px_40px_-12px_rgba(52,211,153,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(52,211,153,0.4)]' : 'hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)]'}`}>
+        // VISTA: SELECCIÓN DE ASIGNATURA
+        cargandoClases ? (
+          <Esqueleto filas={3} alto="h-[230px]" columnas={3} />
+        ) : clasesHoy.length === 0 ? (
+          <Tarjeta indice={1} className="max-w-2xl w-full mx-auto mt-6 p-6">
+            <Vacio icono="📚" titulo="Aún no tienes asignaturas" texto="Créalas en Gestión → Asignaturas y aparecerán aquí." />
+          </Tarjeta>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {clasesHoy.map((clase, i) => {
+              const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
+              const claseActiva = sesionesActivasPorAsig[clase.id];
+              return (
+                <Tarjeta
+                  key={clase.id}
+                  indice={i + 1}
+                  interactiva
+                  className={`p-7 flex flex-col justify-between group ${claseActiva ? 'ring-2 ring-azul/50' : esHoy ? 'ring-2 ring-emerald-400/50' : ''}`}
+                >
                   <div>
-                    <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center justify-between gap-2 mb-5">
                       <div className="flex items-center gap-2">
                         {claseActiva && (
-                          <span className="px-3 py-1 bg-[#0090d0]/10 text-[#0090d0] border border-[#0090d0]/20 text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#0090d0] animate-pulse"></span> ¡EN CURSO!</span>
+                          <Etiqueta tono="info"><span className="w-1.5 h-1.5 rounded-full bg-azul animate-pulse"></span>En curso</Etiqueta>
                         )}
-                        {!claseActiva && esHoy && (
-                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 text-[10px] font-black uppercase tracking-widest rounded-full animate-pulse">¡Hoy!</span>
-                        )}
-                        <span className="px-4 py-1.5 bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-bold uppercase tracking-widest rounded-full group-hover:bg-[#0090d0]/5 group-hover:text-[#0090d0] group-hover:border-[#0090d0]/10 transition-colors">{clase.aula}</span>
+                        {!claseActiva && esHoy && <Etiqueta tono="exito" className="animate-pulse">Hoy</Etiqueta>}
+                        <Etiqueta>{clase.aula}</Etiqueta>
                       </div>
                       <span className="text-slate-400 text-[11px] font-bold tracking-wider uppercase">{clase.horario}</span>
                     </div>
-                    <h3 className="text-2xl font-black text-[#002b5c] mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
+                    <h3 className="text-2xl font-black text-marino mb-6 leading-tight tracking-tight">{clase.nombre}</h3>
                   </div>
-                  <button onClick={() => iniciarClase(clase.id)} className={`w-full py-4 text-sm font-bold rounded-[1.5rem] transition-all duration-300 shadow-sm active:scale-95 cursor-pointer border ${claseActiva ? 'bg-[#0090d0] text-white hover:bg-[#0070a0] border-transparent shadow-[0_10px_20px_rgba(0,144,208,0.3)]' : esHoy ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:text-white border-emerald-100 hover:shadow-[0_10px_20px_rgba(52,211,153,0.2)]' : 'bg-slate-50 text-[#002b5c] hover:bg-[#002b5c] hover:text-white border-slate-100 hover:shadow-[0_10px_20px_rgba(0,43,92,0.15)]'}`}>
+                  <Boton
+                    ancho
+                    variante={claseActiva ? 'acento' : esHoy ? 'exito' : 'principal'}
+                    onClick={() => iniciarClase(clase.id)}
+                    className="py-4"
+                  >
                     {claseActiva ? 'Reanudar aula' : 'Iniciar aula'}
-                  </button>
-                </div>
-              )})}
-            </div>
-          )}
-        </div>
+                  </Boton>
+                </Tarjeta>
+              );
+            })}
+          </div>
+        )
       ) : (
         // VISTA: AULA ACTIVA
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 max-w-[1700px] mx-auto w-full">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 flex-1">
           
           {/* PANEL IZQUIERDO: QR lo más grande posible dentro de su tarjeta */}
-          <div className="xl:col-span-6 glass-container rounded-[2.5rem] p-4 sm:p-6 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
+          <div className="xl:col-span-6 glass-container rounded-bento p-4 sm:p-6 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
             
             {/* Orbe de luz de fondo */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.04] blur-[60px] pointer-events-none"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-azul rounded-full opacity-[0.04] blur-[60px] pointer-events-none"></div>
 
             {fase !== 'CERRADA' ? (
               <div className="relative z-10 w-full flex flex-col items-center gap-4">
                 <div className="flex items-center justify-between w-full gap-2">
-                  <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/10'}`}>
+                  <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-azul/5 text-azul border-azul/10'}`}>
                     {fase === 'ENTRADA' ? '📍 Modo entrada' : '🚪 Modo salida'}
                   </span>
 
@@ -475,7 +496,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                       En vivo
                     </span>
                     {/* Proyectar el QR en una ventana aparte */}
-                    <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-[#0090d0] text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en una ventana aparte">
+                    <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-azul text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en una ventana aparte">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                     </button>
                   </div>
@@ -483,26 +504,26 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
                 {/* El QR ocupa todo el ancho de la tarjeta, sin pasarse del alto de la pantalla */}
                 <div
-                  className="w-full aspect-square p-3 sm:p-4 bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,43,92,0.15)] border border-slate-100"
+                  className="w-full aspect-square p-3 sm:p-4 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,43,92,0.15)] border border-slate-100"
                   style={{ maxWidth: 'min(100%, calc(100dvh - 11rem))' }}
                 >
-                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-[1.25rem] object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
+                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-control object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
                 </div>
               </div>
             ) : (
               <div className="text-center py-20 relative z-10 bento-entrada">
                 <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><span className="text-4xl">✓</span></div>
-                <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase cerrada</h3>
+                <h3 className="text-2xl font-black text-marino tracking-tight mb-2">Clase cerrada</h3>
                 <p className="text-sm text-slate-400 font-medium">Los datos ya se han guardado de forma segura.</p>
               </div>
             )}
           </div>
 
           {/* PANEL DERECHO: Lista de Alumnos */}
-          <div className="xl:col-span-6 glass-container rounded-[2.5rem] p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
+          <div className="xl:col-span-6 glass-container rounded-bento p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6 sm:mb-8">
-              <h2 className="text-lg sm:text-xl font-black text-[#002b5c] tracking-tight">Alumnos de la clase</h2>
-              <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Alumnos</span>
+              <h2 className="text-lg sm:text-xl font-black text-marino tracking-tight">Alumnos de la clase</h2>
+              <Etiqueta tono="oscuro" className="px-4 py-1.5">{asistencias.length} {asistencias.length === 1 ? 'alumno' : 'alumnos'}</Etiqueta>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden relative z-10">
@@ -511,7 +532,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
               <div className="flex flex-col h-full">
                 <h3 className="text-sm font-bold text-emerald-600 mb-4 flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
-                  {fase === 'ENTRADA' ? 'Presentes' : 'Han Salido'} ({
+                  {fase === 'ENTRADA' ? 'Presentes' : 'Han salido'} ({
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null).length
                   })
                 </h3>
@@ -520,35 +541,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     .filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
-                        <div className="flex flex-col overflow-hidden min-w-0">
-                          <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
-                            {item.perfiles?.nombre_completo || 'Alumno Registrado'}
-                          </p>
-                          {(item.perfiles as any)?.pendiente && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
-                          )}
-
-                        </div>
-                        <select
-                          value={item.estado}
-                          onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          style={{ textAlignLast: 'center' }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 w-[84px] hover:scale-105 ${
-                            item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
-                            item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
-                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
-                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0090d0] border-[#0090d0]/40 shadow-[0_0_15px_rgba(0,144,208,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-[#0090d0]/20 hover:shadow-[0_0_25px_rgba(0,144,208,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' : 
-                            'bg-rose-500/10 text-rose-600 border-rose-400/50 shadow-[0_0_15px_rgba(251,113,133,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-rose-500/20 hover:shadow-[0_0_25px_rgba(251,113,133,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]'
-                          }`}
-                        >
-                          <option value="PRESENTE">Presente</option>
-                          <option value="RETRASO">Retraso</option>
-                          <option value="SE_FUE_A_MITAD">Abandono</option>
-                          <option value="FALTA_JUSTIFICADA">Justificado</option>
-                          <option value="FALTA_INJUSTIFICADA">Ausente</option>
-                        </select>
-                      </div>
+                      <FilaAlumno key={item.id} item={item} onCambiar={cambiarEstadoManual} />
                     ))}
                 </div>
               </div>
@@ -566,35 +559,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     .filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
-                        <div className="flex flex-col overflow-hidden min-w-0">
-                          <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
-                            {item.perfiles?.nombre_completo || 'Alumno Registrado'}
-                          </p>
-                          {(item.perfiles as any)?.pendiente && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
-                          )}
-
-                        </div>
-                        <select
-                          value={item.estado}
-                          onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
-                          style={{ textAlignLast: 'center' }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 w-[84px] hover:scale-105 ${
-                            item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
-                            item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
-                            item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
-                            item.estado === 'FALTA_JUSTIFICADA' ? 'bg-[#0090d0]/10 text-[#0090d0] border-[#0090d0]/40 shadow-[0_0_15px_rgba(0,144,208,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-[#0090d0]/20 hover:shadow-[0_0_25px_rgba(0,144,208,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' : 
-                            'bg-rose-500/10 text-rose-600 border-rose-400/50 shadow-[0_0_15px_rgba(251,113,133,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-rose-500/20 hover:shadow-[0_0_25px_rgba(251,113,133,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]'
-                          }`}
-                        >
-                          <option value="PRESENTE">Presente</option>
-                          <option value="RETRASO">Retraso</option>
-                          <option value="SE_FUE_A_MITAD">Abandono</option>
-                          <option value="FALTA_JUSTIFICADA">Justificado</option>
-                          <option value="FALTA_INJUSTIFICADA">Ausente</option>
-                        </select>
-                      </div>
+                      <FilaAlumno key={item.id} item={item} onCambiar={cambiarEstadoManual} />
                     ))}
                 </div>
               </div>
@@ -603,33 +568,37 @@ export default function PantallaProfesor({ onVolver }: Props) {
           </div>
         </div>
       )}
-      </div>
 
       {/* --- MODALES --- */}
       {mostrarModalCierre && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
-          <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
-            <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Cerrar la clase</h3>
-            {fase === 'ENTRADA' && (
-              <div className="text-left bg-amber-50 border border-amber-100 rounded-2xl p-4 mt-4 mb-4">
-                <p className="text-xs font-black text-amber-700 uppercase tracking-wider mb-1">No has activado la salida</p>
-                <p className="text-xs text-amber-700/90 font-medium leading-relaxed">
-                  Si cierras ahora, se dará por buena la salida de quienes ya entraron. Quien no haya escaneado quedará como ausente.
-                </p>
-              </div>
-            )}
-            <p className="text-xs text-slate-500 font-medium mb-8">Escribe tu contraseña para confirmar.</p>
-            <input type="password" placeholder="Contraseña" value={passInput} autoFocus onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
-            <div className="flex flex-col gap-3">
-              <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y guardar</button>
-              <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="w-full py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Volver</button>
-              <button onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="w-full py-3 mt-2 rounded-2xl bg-transparent text-slate-400 text-xs font-bold hover:text-rose-500 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Eliminar la clase sin guardarla</button>
+        <Modal centrado titulo="Cerrar la clase" descripcion="Escribe tu contraseña para confirmar.">
+          {fase === 'ENTRADA' && (
+            <div className="text-left bg-amber-50 border border-amber-100 rounded-control p-4 mb-4">
+              <p className="text-xs font-black text-amber-700 uppercase tracking-wider mb-1">No has activado la salida</p>
+              <p className="text-xs text-amber-700/90 font-medium leading-relaxed">
+                Si cierras ahora, se dará por buena la salida de quienes ya entraron. Quien no haya escaneado quedará como ausente.
+              </p>
             </div>
+          )}
+          <Campo
+            type="password"
+            placeholder="Contraseña"
+            value={passInput}
+            autoFocus
+            onChange={(e) => setPassInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }}
+            className="text-center mb-6"
+            autoComplete="current-password"
+          />
+          <div className="flex flex-col gap-3">
+            <Boton variante="acento" ancho onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-4">Cerrar y guardar</Boton>
+            <Boton variante="secundario" ancho onClick={() => { setMostrarModalCierre(false); setPassInput(''); }}>Volver</Boton>
+            <Boton variante="texto" onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="mt-1 hover:!text-rose-500">Eliminar la clase sin guardarla</Boton>
           </div>
-        </div>
+        </Modal>
       )}
 
       <BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />
-    </div>
+    </Pantalla>
   );
 }

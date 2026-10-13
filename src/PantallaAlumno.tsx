@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import type { Asignatura } from './types';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { traerPorLotes, traerTodas } from './consultas';
+import { Boton, Cabecera, Esqueleto, Etiqueta, Modal, Pantalla, Pestanas, Tarjeta, TituloSeccion, Vacio, retraso } from './ui';
 
 interface Props {
   onVolver: () => void;
@@ -12,6 +13,14 @@ interface Props {
 }
 
 type TabAlumno = 'HORARIO' | 'CALENDARIO';
+
+const ESTADOS_LEGIBLES: Record<string, string> = {
+  PRESENTE: 'Presente',
+  RETRASO: 'Retraso',
+  SE_FUE_A_MITAD: 'Abandono',
+  FALTA_JUSTIFICADA: 'Falta justificada',
+  FALTA_INJUSTIFICADA: 'Falta',
+};
 
 // Traduce los errores del servidor al escanear a mensajes claros
 const mensajeEscaneo = (codigo: string) => {
@@ -384,24 +393,25 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
     XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString('es-ES').replace(/\//g, '-')}.xlsx`);
   };
 
+  // Asistencia media de todas sus asignaturas (para la tarjeta de resumen)
+  const resumen = clasesHoy.reduce((acc, c: any) => ({
+    total: acc.total + (c.statsFaltas?.total || 0),
+    faltas: acc.faltas + (c.statsFaltas?.faltas || 0),
+  }), { total: 0, faltas: 0 });
+  const porcentajeAsistencia = resumen.total > 0 ? Math.round(((resumen.total - resumen.faltas) / resumen.total) * 100) : null;
+
   return (
-    <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      <div className="glow-blob"></div>
-      
+    <Pantalla>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       {sesionPerdida && (
-        <div className="fixed inset-0 z-[250] bg-[#002b5c]/40 backdrop-blur-md flex items-center justify-center p-4 modal-fondo">
-          <div className="glass-container bg-white/90 rounded-[2.5rem] p-8 max-w-sm w-full text-center flex flex-col gap-4">
-            <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Vuelve a iniciar sesión</h3>
-            <p className="text-sm text-slate-500 font-medium leading-relaxed">
-              Por seguridad necesitamos que vuelvas a entrar con tu correo y contraseña. Tu móvil sigue vinculado y no pierdes ninguna asistencia.
-            </p>
-            <button onClick={onIrARegistro} className="w-full py-4 bg-gradient-to-br from-[#0090d0] to-[#007fb8] text-white font-bold rounded-[1.5rem] text-sm tracking-wide cursor-pointer active:scale-[0.97] shadow-[0_8px_20px_rgba(0,144,208,0.3)]">
-              Iniciar sesión
-            </button>
-          </div>
-        </div>
+        <Modal
+          centrado
+          titulo="Vuelve a iniciar sesión"
+          descripcion="Por seguridad necesitamos que vuelvas a entrar con tu correo y contraseña. Tu móvil sigue vinculado y no pierdes ninguna asistencia."
+        >
+          <Boton variante="acento" ancho onClick={onIrARegistro} className="mt-2 py-4">Iniciar sesión</Boton>
+        </Modal>
       )}
 
       {/* CÁMARA INMERSIVA A PANTALLA COMPLETA (TIPO iOS) */}
@@ -423,7 +433,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
 
           {/* Visor UI (Cuadrado central) */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-40">
-            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-[2rem] border-2 border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+            <div className="w-[72vw] max-w-[280px] aspect-square relative rounded-bento border-2 border-white/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
               {/* Esquinas guía del escáner */}
               <div className="absolute -top-[1px] -left-[1px] w-14 h-14 border-t-4 border-l-4 border-[#00d2ff] rounded-tl-[2rem]"></div>
               <div className="absolute -top-[1px] -right-[1px] w-14 h-14 border-t-4 border-r-4 border-[#00d2ff] rounded-tr-[2rem]"></div>
@@ -438,7 +448,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
               </div>
               
               {procesandoQr && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-[2rem] transition-all">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm rounded-bento transition-all">
                   <div className="w-10 h-10 border-4 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin shadow-[0_0_20px_rgba(52,211,153,0.5)]"></div>
                 </div>
               )}
@@ -468,160 +478,137 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
         </div>
       )}
 
-      {/* MAIN CONTENT WRAPPER */}
-      <div className="w-full flex-1 flex flex-col anim-suave relative z-10">
-        {/* CABECERA (Fuera de la cámara) */}
-        {!camaraActiva && (
-          <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-4xl mx-auto w-full transition-all">
-          <div className="flex items-center gap-4">
-            <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <div>
-              <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Estudiante</h1>
-              <p className="text-xs font-semibold text-slate-400 tracking-wide mt-0.5 truncate max-w-[150px]">{nombre}</p>
-            </div>
-          </div>
-          <button onClick={() => setTabActual(tabActual === 'HORARIO' ? 'CALENDARIO' : 'HORARIO')} className={`px-6 py-3 rounded-full text-xs font-bold transition-all duration-300 active:scale-95 border ${tabActual === 'CALENDARIO' ? 'bg-[#002b5c] text-white shadow-md border-transparent' : 'glass-button text-[#002b5c] hover:text-[#0090d0] hover:bg-white/40'}`}>
-            {tabActual === 'HORARIO' ? 'Ver historial' : 'Volver a clases'}
-          </button>
-        </div>
-      )}
+      {!camaraActiva && (
+        <>
+          <Cabecera
+            titulo="Estudiante"
+            subtitulo={<span className="block truncate max-w-[180px] sm:max-w-none">{nombre}</span>}
+            onVolver={onVolver}
+            acciones={
+              <Pestanas<TabAlumno>
+                className="w-[230px]"
+                opciones={[{ valor: 'HORARIO', texto: 'Asignaturas' }, { valor: 'CALENDARIO', texto: 'Historial' }]}
+                valor={tabActual}
+                onCambiar={setTabActual}
+              />
+            }
+          />
 
-      {/* DASHBOARD PRINCIPAL */}
-      <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col">
-        {tabActual === 'HORARIO' && !camaraActiva && (
-          <div className="flex flex-col md:flex-row gap-6 contenido-pestana">
-            
-            {/* Columna Izquierda: Escanear */}
-            <button onClick={() => setCamaraActiva(true)} className="w-full md:w-1/3 aspect-square sm:aspect-auto sm:min-h-[380px] bg-gradient-to-br from-[#0090d0]/90 to-[#002b5c]/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,144,208,0.2)] rounded-[3rem] p-6 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden group">
-              {/* Background glowing orbs */}
-              <div className="absolute top-0 right-0 w-48 h-48 bg-[#00d2ff]/30 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-[#00d2ff]/40"></div>
-              <div className="absolute bottom-0 left-0 w-56 h-56 bg-white/10 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/20"></div>
-              
-              <div className="z-10 relative flex flex-col items-center justify-center gap-5 my-auto">
-                <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center text-white border border-white/30 shadow-[0_4px_20px_rgba(0,0,0,0.15),inset_0_1px_4px_rgba(255,255,255,0.5)] transition-all duration-500 group-hover:scale-110 group-hover:bg-white/30">
-                  <svg className="w-12 h-12 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
-                </div>
-                
-                <div className="flex flex-col items-center">
-                  <h3 className="text-3xl font-black tracking-tight text-white drop-shadow-md transition-all duration-500 group-hover:-translate-y-1">Escanear</h3>
-                  <div className="h-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:h-8 transition-all duration-300 overflow-hidden">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#002b5c] bg-white px-3.5 py-1.5 rounded-full shadow-lg">Abrir cámara</span>
+          {tabActual === 'HORARIO' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 contenido-pestana">
+              {/* Escanear: la acción principal, en la tarjeta más llamativa */}
+              <button
+                onClick={() => setCamaraActiva(true)}
+                style={retraso(1)}
+                className="bento-entrada md:row-span-2 min-h-[220px] md:min-h-[400px] bg-gradient-to-br from-azul to-marino border border-white/20 shadow-[0_16px_40px_-12px_rgba(0,144,208,0.5)] rounded-bento p-6 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden group transition-all duration-500 hover:-translate-y-1 active:scale-[0.98]"
+              >
+                <div className="absolute top-0 right-0 w-48 h-48 bg-[#00d2ff]/30 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150"></div>
+                <div className="absolute bottom-0 left-0 w-56 h-56 bg-white/10 rounded-full blur-[40px] transition-transform duration-700 group-hover:scale-150"></div>
+                <div className="relative flex flex-col items-center gap-5">
+                  <div className="w-24 h-24 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center text-white border border-white/30 shadow-[0_4px_20px_rgba(0,0,0,0.15),inset_0_1px_4px_rgba(255,255,255,0.5)] transition-transform duration-500 group-hover:scale-110">
+                    <svg className="w-12 h-12 drop-shadow-md" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-3xl font-black tracking-tight text-white drop-shadow-md">Escanear</h3>
+                    <p className="text-xs font-semibold text-white/75 mt-1.5">Toca para abrir la cámara</p>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
 
-            {/* Columna Derecha: Clases */}
-            <div className="w-full md:w-2/3 flex flex-col gap-6">
-              
+              {/* Resumen de asistencia */}
+              <Tarjeta indice={2} className="md:col-span-2 p-6 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Tu asistencia</p>
+                  <p className="text-sm font-semibold text-slate-500 mt-1">
+                    {porcentajeAsistencia === null ? 'Aún no hay clases cerradas' : `${resumen.total} ${resumen.total === 1 ? 'clase' : 'clases'} · ${resumen.faltas} ${resumen.faltas === 1 ? 'falta' : 'faltas'}`}
+                  </p>
+                </div>
+                <p className={`text-4xl font-black tracking-tighter ${porcentajeAsistencia === null ? 'text-slate-300' : porcentajeAsistencia >= 85 ? 'text-emerald-500' : porcentajeAsistencia >= 70 ? 'text-amber-500' : 'text-rose-500'}`}>
+                  {porcentajeAsistencia === null ? '—' : `${porcentajeAsistencia}%`}
+                </p>
+              </Tarjeta>
 
-
-              {/* Mis Asignaturas */}
-              <div className="bg-white/30 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.03)] rounded-[3rem] p-6 sm:p-8 flex-1 flex flex-col relative overflow-hidden group">
-                <div className="absolute bottom-0 right-0 w-64 h-64 bg-[#0090d0]/10 rounded-full blur-[60px] -mr-20 -mb-20 transition-transform duration-700 group-hover:scale-110"></div>
-                <div className="absolute top-0 left-0 w-40 h-40 bg-white/40 rounded-full blur-[40px] -ml-10 -mt-10"></div>
-                
-                <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-6 relative z-10 flex items-center gap-3">
-                  Mis Asignaturas
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#0090d0]/10 text-[#0090d0] text-xs font-bold">
-                    {clasesHoy.length}
-                  </span>
+              {/* Mis asignaturas */}
+              <Tarjeta indice={3} className="md:col-span-2 p-6 sm:p-8 flex flex-col">
+                <h3 className="text-xl font-black text-marino tracking-tight mb-6 flex items-center gap-3">
+                  Mis asignaturas
+                  <Etiqueta tono="info">{clasesHoy.length}</Etiqueta>
                 </h3>
-                
+
                 {cargandoClases ? (
-                  <div className="flex-1 flex justify-center items-center py-10 text-[#0090d0]/60 font-semibold tracking-wide animate-pulse relative z-10">Cargando tus asignaturas...</div>
+                  <Esqueleto filas={2} alto="h-[88px]" />
                 ) : clasesHoy.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white/40 backdrop-blur-sm rounded-[2rem] border border-[#0090d0]/20 border-dashed relative z-10">
-                    <p className="text-sm font-medium text-[#002b5c]/50">Tus asignaturas aparecerán aquí cuando escanees el QR de tu primera clase.</p>
-                  </div>
+                  <Vacio icono="📚" titulo="Aún no tienes asignaturas" texto="Aparecerán aquí cuando escanees el QR de tu primera clase." />
                 ) : (
-                  <div className="space-y-4 relative z-10">
+                  <div className="space-y-3">
                     {clasesHoy.map((clase: any, i: number) => {
                       const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
                       return (
-                      <div key={clase.id} style={{ '--i': i } as React.CSSProperties} className={`bento-entrada p-5 flex items-center justify-between gap-4 backdrop-blur-lg border hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default ${esHoy ? 'bg-emerald-50/80 border-emerald-300/60 shadow-[0_4px_20px_rgba(52,211,153,0.15)]' : 'bg-white/60 border-white hover:bg-white'}`}>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            {esHoy && (
-                              <span className="px-2 py-0.5 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-md animate-pulse shadow-sm">
-                                Hoy
-                              </span>
-                            )}
-                            <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight leading-snug">{clase.nombre}</h4>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2">
-                              <svg className={`w-3.5 h-3.5 ${esHoy ? 'text-emerald-500' : 'text-[#0090d0]/60'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                              <span className={`text-[11px] font-bold tracking-widest ${esHoy ? 'text-emerald-700' : 'text-[#0090d0]/80'}`}>{clase.horario}</span>
+                        <div key={clase.id} style={retraso(i + 4)} className={`bento-entrada p-5 flex items-center justify-between gap-4 border rounded-control transition-all duration-300 hover:-translate-y-0.5 ${esHoy ? 'bg-emerald-50/80 border-emerald-200 shadow-[0_4px_20px_rgba(52,211,153,0.12)]' : 'bg-white/70 border-white hover:bg-white'}`}>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              {esHoy && <Etiqueta tono="exito" className="animate-pulse">Hoy</Etiqueta>}
+                              <h4 className="font-bold text-marino text-[15px] tracking-tight leading-snug truncate">{clase.nombre}</h4>
                             </div>
-                            {clase.statsFaltas && (
-                              <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md border ${
-                                clase.statsFaltas.porcentaje >= 30 ? 'bg-rose-50 text-rose-600 border-rose-100' : 
-                                clase.statsFaltas.porcentaje >= 15 ? 'bg-amber-50 text-amber-600 border-amber-100' : 
-                                'bg-emerald-50 text-emerald-600 border-emerald-100'
-                              }`}>
-                                <span>{clase.statsFaltas.porcentaje}% Faltas ({clase.statsFaltas.faltas}/{clase.statsFaltas.total})</span>
-                              </div>
-                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`flex items-center gap-1.5 text-[11px] font-bold tracking-wider ${esHoy ? 'text-emerald-700' : 'text-azul/80'}`}>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                {clase.horario}
+                              </span>
+                              {clase.statsFaltas && clase.statsFaltas.total > 0 && (
+                                <Etiqueta tono={clase.statsFaltas.porcentaje >= 30 ? 'peligro' : clase.statsFaltas.porcentaje >= 15 ? 'aviso' : 'exito'}>
+                                  {clase.statsFaltas.porcentaje}% faltas ({clase.statsFaltas.faltas}/{clase.statsFaltas.total})
+                                </Etiqueta>
+                              )}
+                            </div>
                           </div>
+                          <Etiqueta tono={esHoy ? 'exito' : 'neutro'} className="shrink-0 px-3.5 py-2">{clase.aula}</Etiqueta>
                         </div>
-                        <div className={`border px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-widest group-hover/card:bg-gradient-to-r group-hover/card:from-[#0090d0] group-hover/card:to-[#002b5c] group-hover/card:text-white group-hover/card:border-transparent transition-colors duration-500 shadow-sm flex-shrink-0 ${esHoy ? 'bg-emerald-100 border-emerald-200 text-emerald-800' : 'bg-[#F0F4F8] border-slate-200/60 text-[#002b5c]'}`}>
-                          {clase.aula}
-                        </div>
-                      </div>
-                    )})}
+                      );
+                    })}
                   </div>
                 )}
-              </div>
+              </Tarjeta>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* HISTORIAL */}
-        {tabActual === 'CALENDARIO' && (
-          <div className="glass-container rounded-[2.5rem] p-8 contenido-pestana">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-              <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial</h3>
-              <button onClick={exportarHistorialAlumno} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
-                Descargar informe
-              </button>
-            </div>
-            
-            {cargandoHistorial ? (
-              <div className="py-16 flex justify-center text-slate-400 font-semibold tracking-wide animate-pulse">Cargando tu historial...</div>
-            ) : historial.length === 0 ? (
-              <div className="py-16 text-center text-slate-400 text-sm font-medium bg-slate-50/50 rounded-[2rem] border border-slate-100 border-dashed">Aún no tienes asistencias registradas.</div>
-            ) : (
-              <div className="space-y-4 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
-                {historial.map((registro, idx) => (
-                  <div key={idx} style={{ '--i': Math.min(idx, 10) } as React.CSSProperties} className="bento-card bento-entrada p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
-                    <div>
-                      <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight mb-2">{registro.asignatura_nombre}</h4>
-                      <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString('es-ES')}</span>
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Entrada: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Salida: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+          {tabActual === 'CALENDARIO' && (
+            <Tarjeta indice={1} className="p-6 sm:p-8 contenido-pestana">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
+                <TituloSeccion>Historial</TituloSeccion>
+                <Boton variante="acento" tamano="pequeno" onClick={exportarHistorialAlumno}>Descargar informe</Boton>
+              </div>
+
+              {cargandoHistorial ? (
+                <Esqueleto filas={4} alto="h-[92px]" />
+              ) : historial.length === 0 ? (
+                <Vacio icono="🗓️" titulo="Aún no tienes asistencias registradas" texto="Cuando escanees el QR en clase, aparecerán aquí." />
+              ) : (
+                <div className="space-y-3 max-h-[60dvh] overflow-y-auto pr-1 scrollbar-hide">
+                  {historial.map((registro, idx) => (
+                    <div key={idx} style={retraso(Math.min(idx, 10))} className="bento-entrada p-5 bg-white/70 border border-white rounded-control flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all duration-300 hover:bg-white hover:-translate-y-0.5">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-marino text-[15px] tracking-tight mb-2 truncate">{registro.asignatura_nombre}</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <Etiqueta>{new Date(registro.fecha).toLocaleDateString('es-ES')}</Etiqueta>
+                          <Etiqueta>Entrada: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</Etiqueta>
+                          <Etiqueta>Salida: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '--:--'}</Etiqueta>
+                        </div>
                       </div>
+                      <Etiqueta
+                        className="self-start sm:self-auto px-4 py-2"
+                        tono={registro.estado === 'PRESENTE' ? 'exito' : registro.estado === 'RETRASO' ? 'aviso' : registro.estado === 'FALTA_JUSTIFICADA' ? 'info' : 'peligro'}
+                      >
+                        {ESTADOS_LEGIBLES[registro.estado] || registro.estado.replace(/_/g, ' ')}
+                      </Etiqueta>
                     </div>
-                    <span className={`px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-center shadow-sm border transition-transform duration-300 group-hover:scale-105
-                      ${registro.estado === 'PRESENTE' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                        registro.estado === 'RETRASO' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                        registro.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-rose-50 text-rose-600 border-rose-100'}
-                    `}>
-                      {registro.estado.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      </div>
-
-
-    </div>
+                  ))}
+                </div>
+              )}
+            </Tarjeta>
+          )}
+        </>
+      )}
+    </Pantalla>
   );
 }

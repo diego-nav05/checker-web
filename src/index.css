@@ -1,4 +1,15 @@
 @import "tailwindcss";
+
+/* Colores y medidas comunes de toda la web (generan clases como bg-marino, text-azul, rounded-bento...) */
+@theme {
+  --color-marino: #002b5c;
+  --color-marino-oscuro: #001a38;
+  --color-azul: #0090d0;
+  --color-azul-oscuro: #007fb8;
+  --color-fondo: #f0f4f8;
+  --radius-bento: 2rem;
+  --radius-control: 1.25rem;
+}
 /* src/index.css */
 html, body {
   -webkit-font-smoothing: antialiased;
@@ -317,4 +328,15 @@ input[type="date"] {
     animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Esqueleto de carga: tarjetas grises con un brillo que pasa, mientras llegan los datos */
+@keyframes brillo-esqueleto {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.esqueleto {
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.55) 25%, rgba(255, 255, 255, 0.85) 50%, rgba(226, 232, 240, 0.55) 75%);
+  background-size: 200% 100%;
+  animation: brillo-esqueleto 1.6s ease-in-out infinite;
 }

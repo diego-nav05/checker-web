@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from './supabase';
 import { AvisoFlotante, useAviso } from './Aviso';
+import { Boton, BotonVolver, Campo, Pantalla, Pestanas, Tarjeta } from './ui';
 import { estadoCuenta, mensajeError, reclamarCuenta, vincularEsteDispositivo, type ResultadoReclamar } from './cuentas';
 
 interface Props {
@@ -241,68 +242,63 @@ export default function PantallaRegistro({ onVolver }: Props) {
     setEmailSinConfirmar(null);
   };
 
-  return (
-    <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col items-center justify-center font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-[#0090d0]/5 to-transparent pointer-events-none -z-10"></div>
+  const modo = esRecuperarPass ? 'RECUPERAR' : esRegistro ? 'REGISTRO' : 'LOGIN';
 
+  return (
+    <Pantalla ancho="estrecho" centrada>
       <AvisoFlotante aviso={aviso} onCerrar={cerrar} />
 
-      <div className="glass-container rounded-[2.5rem] p-8 sm:p-12 max-w-sm w-full anim-suave relative z-10">
+      <Tarjeta indice={0} className="p-7 sm:p-10">
+        <BotonVolver onClick={onVolver} className="mb-8" />
 
-        <button onClick={onVolver} className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90 mb-8 relative z-10">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-        </button>
-
-        <div className="relative z-10">
-          <h2 className="text-3xl font-black text-[#002b5c] tracking-tight leading-none mb-3">
-            {esRecuperarPass ? 'Recuperar contraseña' : (esRegistro ? 'Nueva cuenta' : '¡Hola de nuevo!')}
+        {/* key={modo}: al cambiar entre registro, inicio de sesión y recuperar, el contenido entra deslizándose */}
+        <div key={modo} className="contenido-pestana">
+          <h2 className="text-3xl font-black text-marino tracking-tight leading-none mb-3">
+            {modo === 'RECUPERAR' ? 'Recuperar contraseña' : modo === 'REGISTRO' ? 'Nueva cuenta' : '¡Hola de nuevo!'}
           </h2>
           <p className="text-sm text-slate-500 font-medium mb-8 leading-relaxed">
-            {esRecuperarPass ? 'Introduce tu correo y te enviaremos un enlace para cambiarla.' : (esRegistro ? 'Regístrate una sola vez para vincular tu dispositivo de forma segura.' : 'Introduce tu correo y contraseña para acceder.')}
+            {modo === 'RECUPERAR' ? 'Introduce tu correo y te enviaremos un enlace para cambiarla.' : modo === 'REGISTRO' ? 'Regístrate una sola vez para vincular tu dispositivo de forma segura.' : 'Introduce tu correo y contraseña para acceder.'}
           </p>
 
           <form onSubmit={autenticar} className="flex flex-col gap-4">
-            {!esRecuperarPass && esRegistro && (
-              <div className="animate-[fade-in-down_0.3s_ease-out] flex flex-col gap-4">
-                <div className="pestanas bg-white/50 backdrop-blur-md p-1.5 rounded-[1.5rem] border border-white shadow-[0_2px_10px_rgba(0,0,0,0.02)]" style={{ '--total': 2, '--activa': rolRegistro === 'alumno' ? 0 : 1 } as React.CSSProperties}>
-                  <span className="pestanas-indicador rounded-xl"></span>
-                  <button type="button" onClick={() => { setRolRegistro('alumno'); setEmail(''); }} className={`py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl cursor-pointer ${rolRegistro === 'alumno' ? 'text-white' : 'text-slate-500 hover:text-[#002b5c]'}`}>
-                    Estudiante
-                  </button>
-                  <button type="button" onClick={() => { setRolRegistro('profesor'); setEmail(''); setMostrarCodigo(false); }} className={`py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl cursor-pointer ${rolRegistro === 'profesor' ? 'text-white' : 'text-slate-500 hover:text-[#002b5c]'}`}>
-                    Docente
-                  </button>
-                </div>
-
-                <input type="text" placeholder="Nombre y apellidos" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
-              </div>
+            {modo === 'REGISTRO' && (
+              <>
+                <Pestanas
+                  opciones={[{ valor: 'alumno', texto: 'Estudiante' }, { valor: 'profesor', texto: 'Docente' }]}
+                  valor={rolRegistro}
+                  onCambiar={(rol) => { setRolRegistro(rol); setEmail(''); if (rol === 'profesor') setMostrarCodigo(false); }}
+                />
+                <Campo type="text" placeholder="Nombre y apellidos" value={nombre} onChange={(e) => setNombre(e.target.value)} required autoComplete="name" />
+              </>
             )}
 
-            {!esRecuperarPass && esRegistro && rolRegistro === 'profesor' ? (
-              <div className="flex w-full bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus-within:border-[#0090d0]/30 focus-within:ring-4 focus-within:ring-[#0090d0]/10 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden">
+            {modo === 'REGISTRO' && rolRegistro === 'profesor' ? (
+              <div className="flex w-full bg-white/60 backdrop-blur-md rounded-control border border-white focus-within:border-azul/30 focus-within:ring-4 focus-within:ring-azul/10 transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] overflow-hidden">
                 <input
                   type="text"
                   placeholder="nombre.apellido"
                   value={email.replace(DOMINIO_DOCENTE, '')}
                   onChange={(e) => setEmail(e.target.value.replace(DOMINIO_DOCENTE, '') + DOMINIO_DOCENTE)}
-                  className="w-full p-4 bg-transparent outline-none text-[#002b5c] text-sm font-bold tracking-wide"
+                  className="w-full pl-5 py-4 bg-transparent outline-none text-marino text-sm font-bold tracking-wide placeholder:text-slate-400 placeholder:font-semibold"
                   required
+                  autoComplete="username"
                 />
-                <div className="pr-4 py-4 flex items-center text-[#002b5c]/60 text-sm font-bold select-none pointer-events-none">
+                <div className="pr-5 py-4 flex items-center text-marino/50 text-sm font-bold select-none pointer-events-none">
                   {DOMINIO_DOCENTE}
                 </div>
               </div>
             ) : (
-              <input type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
-            )}
-            {!esRecuperarPass && (
-              <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required minLength={6}/>
+              <Campo type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
             )}
 
-            {!esRecuperarPass && esRegistro && rolRegistro === 'alumno' && (
+            {modo !== 'RECUPERAR' && (
+              <Campo type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} autoComplete={modo === 'REGISTRO' ? 'new-password' : 'current-password'} />
+            )}
+
+            {modo === 'REGISTRO' && rolRegistro === 'alumno' && (
               mostrarCodigo ? (
-                <div className="animate-[fade-in-down_0.3s_ease-out]">
-                  <input
+                <div className="contenido-pestana">
+                  <Campo
                     type="text"
                     placeholder="Código de alta"
                     value={codigoAlta}
@@ -310,58 +306,52 @@ export default function PantallaRegistro({ onVolver }: Props) {
                     maxLength={8}
                     autoCapitalize="characters"
                     autoComplete="off"
-                    className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-[#0090d0]/20 focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-black tracking-[0.3em] text-center transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] uppercase placeholder:normal-case placeholder:tracking-normal placeholder:font-bold"
+                    className="border-azul/20 font-black tracking-[0.3em] text-center uppercase placeholder:normal-case placeholder:tracking-normal"
                   />
                   <p className="text-[11px] text-slate-400 font-semibold mt-2 px-2 leading-snug">
                     Lo tienes si tu profesor te dio de alta antes de que te registraras. Tus asistencias se conservarán.
                   </p>
                 </div>
               ) : (
-                <button type="button" onClick={() => setMostrarCodigo(true)} className="text-xs font-bold text-[#0090d0] hover:text-[#002b5c] transition-colors cursor-pointer self-center">
+                <button type="button" onClick={() => setMostrarCodigo(true)} className="text-xs font-bold text-azul hover:text-marino transition-colors cursor-pointer self-center">
                   ¿Tu profesor te dio un código de alta?
                 </button>
               )
             )}
 
-            <button type="submit" disabled={cargando} className={`w-full mt-4 py-4 text-white font-bold rounded-[1.5rem] transition-all duration-300 shadow-[0_8px_20px_rgba(0,43,92,0.3)] hover:shadow-[0_12px_25px_rgba(0,144,208,0.4)] active:scale-[0.97] cursor-pointer disabled:opacity-50 text-sm tracking-wide border ${esRegistro || esRecuperarPass ? 'bg-gradient-to-br from-[#0090d0] to-[#007fb8] border-[#0090d0]/50 shadow-[0_8px_20px_rgba(0,144,208,0.3)]' : 'bg-gradient-to-br from-[#002b5c] to-[#001a38] border-[#002b5c]/50'}`}>
-              {cargando ? 'Procesando...' : (esRecuperarPass ? 'Enviar correo de recuperación' : (esRegistro ? 'Crear mi cuenta' : 'Iniciar sesión'))}
-            </button>
+            <Boton type="submit" variante={modo === 'LOGIN' ? 'principal' : 'acento'} ancho disabled={cargando} className="mt-4 py-4">
+              {cargando ? 'Procesando...' : modo === 'RECUPERAR' ? 'Enviar correo de recuperación' : modo === 'REGISTRO' ? 'Crear mi cuenta' : 'Iniciar sesión'}
+            </Boton>
 
-            {emailSinConfirmar && !esRegistro && !esRecuperarPass && (
-              <button type="button" onClick={reenviarConfirmacion} disabled={cargando} className="w-full py-3 bg-white/70 hover:bg-white border border-[#0090d0]/20 text-[#0090d0] font-bold rounded-[1.5rem] text-xs uppercase tracking-widest transition-all cursor-pointer disabled:opacity-50 active:scale-[0.97]">
+            {emailSinConfirmar && modo === 'LOGIN' && (
+              <Boton variante="secundario" ancho onClick={reenviarConfirmacion} disabled={cargando}>
                 Reenviar correo de activación
-              </button>
+              </Boton>
             )}
           </form>
 
-          <div className="mt-8 text-center flex flex-col items-center gap-3">
-            <div className="w-16 h-[1px] bg-slate-200/60 mb-1"></div>
-            {esRecuperarPass ? (
-              <button type="button" onClick={() => setEsRecuperarPass(false)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">Volver a <span className="text-[#0090d0]">iniciar sesión</span></span>
-              </button>
-            ) : esRegistro ? (
-              <button type="button" onClick={() => cambiarModo(false)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">
-                  ¿Ya tienes una cuenta? <span className="text-[#0090d0]">Inicia sesión</span>
-                </span>
-              </button>
+          <div className="mt-8 pt-6 border-t border-slate-200/60 text-center flex flex-col items-center gap-3">
+            {modo === 'RECUPERAR' ? (
+              <Boton variante="secundario" tamano="pequeno" onClick={() => setEsRecuperarPass(false)}>
+                Volver a <span className="text-azul">iniciar sesión</span>
+              </Boton>
+            ) : modo === 'REGISTRO' ? (
+              <Boton variante="secundario" tamano="pequeno" onClick={() => cambiarModo(false)}>
+                ¿Ya tienes una cuenta? <span className="text-azul">Inicia sesión</span>
+              </Boton>
             ) : (
-              <div className="flex flex-col items-center gap-4">
-                <button type="button" onClick={() => cambiarModo(true)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">
-                    ¿Eres nuevo? <span className="text-[#002b5c] opacity-70 group-hover:opacity-100">Regístrate aquí</span>
-                  </span>
-                </button>
-                <button type="button" onClick={() => { setEsRecuperarPass(true); cerrar(); setPassword(''); }} className="text-xs font-bold text-slate-400 hover:text-[#0090d0] transition-colors cursor-pointer active:scale-95">
+              <>
+                <Boton variante="secundario" tamano="pequeno" onClick={() => cambiarModo(true)}>
+                  ¿Eres nuevo? <span className="text-azul">Regístrate aquí</span>
+                </Boton>
+                <Boton variante="texto" onClick={() => { setEsRecuperarPass(true); cerrar(); setPassword(''); }}>
                   ¿Has olvidado tu contraseña?
-                </button>
-              </div>
+                </Boton>
+              </>
             )}
           </div>
         </div>
-
-      </div>
-    </div>
+      </Tarjeta>
+    </Pantalla>
   );
 }
