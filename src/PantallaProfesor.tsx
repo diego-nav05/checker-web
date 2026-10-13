@@ -6,7 +6,7 @@ import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
 import BotonCompartir from './BotonCompartir';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { traerPorLotes, traerTodas } from './consultas';
-import { Boton, Cabecera, Campo, Esqueleto, Etiqueta, Modal, Pantalla, Tarjeta, Vacio } from './ui';
+import { Boton, Cabecera, Esqueleto, Etiqueta, Modal, Pantalla, Tarjeta, Vacio } from './ui';
 import FilaAlumno from './FilaAlumno';
 import { cargarHorarios, filasDe, horaDeHoy, resumenHorario, tramo, type FilaHorario } from './horario';
 
@@ -23,7 +23,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const [secretTotp, setSecretTotp] = useState<string>('');
   const [qrSrc, setQrSrc] = useState<string>('');
   
-  const [passInput, setPassInput] = useState<string>('');
+  const [confirmarEliminar, setConfirmarEliminar] = useState<boolean>(false);
   const [mostrarModalCierre, setMostrarModalCierre] = useState<boolean>(false);
   const [cargandoCierre, setCargandoCierre] = useState<boolean>(false);
   
@@ -290,19 +290,14 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   const intentarCerrarAula = () => {
+    setConfirmarEliminar(false);
     setMostrarModalCierre(true);
   };
 
   const confirmarCierreClase = async () => {
-    if (!passInput) return;
+    if (!sesionId) return;
     setCargandoCierre(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
-      const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
-      if (authError) throw new Error("Contraseña incorrecta.");
-
-      if (!sesionId) return;
       const horaCierre = new Date().toISOString();
       const ignorarFaseSalida = fase === 'ENTRADA';
 
@@ -316,10 +311,10 @@ export default function PantallaProfesor({ onVolver }: Props) {
         }
       }
       
-      await supabase.from('sesiones').update({ fase: 'CERRADA', hora_cierre: horaCierre }).eq('id', sesionId);
+      const { error } = await supabase.from('sesiones').update({ fase: 'CERRADA', hora_cierre: horaCierre }).eq('id', sesionId);
+      if (error) throw new Error('No se pudo cerrar la clase. Revisa tu conexión e inténtalo de nuevo.');
       setFase('CERRADA');
       setMostrarModalCierre(false);
-      setPassInput('');
       cargarAsistencias(sesionId, diccionarioAlumnos);
       mostrarNotificacion('Clase cerrada y guardada.', 'exito');
       
@@ -336,24 +331,23 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   const descartarClaseSinGuardar = async () => {
-    if (!passInput) return;
+    if (!sesionId) return;
+    // Borrar es irreversible: el primer clic solo pide confirmación
+    if (!confirmarEliminar) {
+      setConfirmarEliminar(true);
+      return;
+    }
     setCargandoCierre(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Tu sesión ha caducado. Vuelve a entrar.");
-      const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: passInput });
-      if (authError) throw new Error("Contraseña incorrecta.");
+      // Al borrar la clase, la base de datos borra también sus asistencias
+      const { error } = await supabase.from('sesiones').delete().eq('id', sesionId);
+      if (error) throw new Error('No se pudo eliminar la clase. Revisa tu conexión e inténtalo de nuevo.');
 
-      if (!sesionId) return;
-      
-      await supabase.from('asistencias').delete().eq('sesion_id', sesionId);
-      await supabase.from('sesiones').delete().eq('id', sesionId);
-      
       setFase('ENTRADA');
       setSesionId(null);
       setAsistencias([]);
       setMostrarModalCierre(false);
-      setPassInput('');
+      setConfirmarEliminar(false);
       mostrarNotificacion('Clase eliminada sin guardar.', 'exito');
       
       if (popUpRef.current && !popUpRef.current.closed) {
@@ -534,29 +528,27 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
       {/* --- MODALES --- */}
       {mostrarModalCierre && (
-        <Modal centrado titulo="Cerrar la clase" descripcion="Escribe tu contraseña para confirmar.">
+        <Modal centrado titulo="Cerrar la clase" descripcion="Se guardará la asistencia de esta clase.">
           {fase === 'ENTRADA' && (
-            <div className="text-left bg-amber-50 border border-amber-100 rounded-control p-4 mb-4">
+            <div className="text-left bg-amber-50 border border-amber-100 rounded-control p-4 mb-5">
               <p className="text-xs font-black text-amber-700 uppercase tracking-wider mb-1">No has activado la salida</p>
               <p className="text-xs text-amber-700/90 font-medium leading-relaxed">
                 Si cierras ahora, se dará por buena la salida de quienes ya entraron. Quien no haya escaneado quedará como ausente.
               </p>
             </div>
           )}
-          <Campo
-            type="password"
-            placeholder="Contraseña"
-            value={passInput}
-            autoFocus
-            onChange={(e) => setPassInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }}
-            className="text-center mb-6"
-            autoComplete="current-password"
-          />
           <div className="flex flex-col gap-3">
-            <Boton variante="acento" ancho onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="py-4">Cerrar y guardar</Boton>
-            <Boton variante="secundario" ancho onClick={() => { setMostrarModalCierre(false); setPassInput(''); }}>Volver</Boton>
-            <Boton variante="texto" onClick={descartarClaseSinGuardar} disabled={cargandoCierre || !passInput} className="mt-1 hover:!text-rose-500">Eliminar la clase sin guardarla</Boton>
+            <Boton variante="acento" ancho onClick={confirmarCierreClase} disabled={cargandoCierre} className="py-4">{cargandoCierre ? 'Guardando...' : 'Cerrar y guardar'}</Boton>
+            <Boton variante="secundario" ancho onClick={() => { setMostrarModalCierre(false); setConfirmarEliminar(false); }}>Volver</Boton>
+            <Boton
+              variante={confirmarEliminar ? 'peligro' : 'texto'}
+              ancho={confirmarEliminar}
+              onClick={descartarClaseSinGuardar}
+              disabled={cargandoCierre}
+              className={confirmarEliminar ? 'mt-1' : 'mt-1 hover:!text-rose-500'}
+            >
+              {confirmarEliminar ? 'Sí, eliminar esta clase para siempre' : 'Eliminar la clase sin guardarla'}
+            </Boton>
           </div>
         </Modal>
       )}
