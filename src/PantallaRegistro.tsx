@@ -263,11 +263,12 @@ export default function PantallaRegistro({ onVolver }: Props) {
           <form onSubmit={autenticar} className="flex flex-col gap-4">
             {!esRecuperarPass && esRegistro && (
               <div className="animate-[fade-in-down_0.3s_ease-out] flex flex-col gap-4">
-                <div className="flex bg-white/50 backdrop-blur-md p-1.5 rounded-[1.5rem] border border-white shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-                  <button type="button" onClick={() => { setRolRegistro('alumno'); setEmail(''); }} className={`flex-1 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all duration-300 cursor-pointer ${rolRegistro === 'alumno' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>
+                <div className="pestanas bg-white/50 backdrop-blur-md p-1.5 rounded-[1.5rem] border border-white shadow-[0_2px_10px_rgba(0,0,0,0.02)]" style={{ '--total': 2, '--activa': rolRegistro === 'alumno' ? 0 : 1 } as React.CSSProperties}>
+                  <span className="pestanas-indicador rounded-xl"></span>
+                  <button type="button" onClick={() => { setRolRegistro('alumno'); setEmail(''); }} className={`py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl cursor-pointer ${rolRegistro === 'alumno' ? 'text-white' : 'text-slate-500 hover:text-[#002b5c]'}`}>
                     Estudiante
                   </button>
-                  <button type="button" onClick={() => { setRolRegistro('profesor'); setEmail(''); setMostrarCodigo(false); }} className={`flex-1 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all duration-300 cursor-pointer ${rolRegistro === 'profesor' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>
+                  <button type="button" onClick={() => { setRolRegistro('profesor'); setEmail(''); setMostrarCodigo(false); }} className={`py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl cursor-pointer ${rolRegistro === 'profesor' ? 'text-white' : 'text-slate-500 hover:text-[#002b5c]'}`}>
                     Docente
                   </button>
                 </div>

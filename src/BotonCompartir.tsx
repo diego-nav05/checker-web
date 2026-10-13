@@ -3,9 +3,11 @@ import { QRCodeSVG } from 'qrcode.react';
 
 interface Props {
   mostrarNotificacion: (texto: string, tipo: 'exito' | 'error' | 'info') => void;
+  // En el aula va a la derecha para no quedar encima del QR de asistencia
+  lado?: 'izquierda' | 'derecha';
 }
 
-export default function BotonCompartir({ mostrarNotificacion }: Props) {
+export default function BotonCompartir({ mostrarNotificacion, lado = 'izquierda' }: Props) {
   const [mostrarQR, setMostrarQR] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -32,7 +34,7 @@ export default function BotonCompartir({ mostrarNotificacion }: Props) {
     <>
       <button 
         onClick={() => setMostrarQR(true)}
-        className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 px-4 h-12 flex items-center justify-center gap-3 bg-white/60 hover:bg-white border border-slate-200/50 rounded-full text-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:scale-95 cursor-pointer z-20 backdrop-blur-md select-none"
+        className={`absolute bottom-4 sm:bottom-6 ${lado === 'derecha' ? 'right-4 sm:right-6' : 'left-4 sm:left-6'} px-4 h-12 flex items-center justify-center gap-3 bg-white/60 hover:bg-white border border-slate-200/50 rounded-full text-slate-600 shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 hover:shadow-[0_8px_20px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:scale-95 cursor-pointer z-20 backdrop-blur-md select-none`}
         title="Compartir y código QR"
       >
         <div className="flex items-center gap-1.5 opacity-80 pointer-events-none">

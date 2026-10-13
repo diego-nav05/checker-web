@@ -187,7 +187,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       const qrPayload = JSON.stringify({ s: sesionId, f: fase, t: bloqueTiempo, token });
       
       // Renderizamos el QR a alta resolución (width 500) para máxima nitidez
-      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 500, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
+      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 1000, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
       setQrSrc(dataUrl);
 
       // Sincronizar con la ventana emergente si existe y no se ha cerrado
@@ -366,7 +366,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       {/* MAIN CONTENT WRAPPER */}
       <div className="w-full flex-1 flex flex-col anim-suave relative z-10">
         {/* CABECERA FLOTANTE (Glassmorphism auténtico) */}
-        <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-7xl mx-auto w-full transition-all">
+        <div className={`flex flex-wrap items-center justify-between gap-3 glass-container px-4 sm:px-6 py-4 rounded-[2rem] sm:rounded-[2.5rem] mb-6 mx-auto w-full transition-all ${sesionId ? 'max-w-[1700px]' : 'max-w-7xl'}`}>
         <div className="flex items-center gap-4">
           <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
@@ -385,11 +385,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
           {sesionId && fase !== 'CERRADA' && (
             <>
               {fase === 'ENTRADA' && (
-                <button onClick={pasarASalida} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
+                <button onClick={pasarASalida} className="px-4 sm:px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
                   Activar salida
                 </button>
               )}
-              <button onClick={intentarCerrarAula} className="px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
+              <button onClick={intentarCerrarAula} className="px-4 sm:px-6 py-3 bg-gradient-to-b from-rose-500 to-rose-600 text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(244,63,94,0.3)] hover:shadow-[0_12px_28px_rgba(244,63,94,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-rose-500/20">
                 Cerrar clase
               </button>
             </>
@@ -410,11 +410,11 @@ export default function PantallaProfesor({ onVolver }: Props) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {clasesHoy.map((clase) => {
+              {clasesHoy.map((clase, i) => {
                 const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
                 const claseActiva = sesionesActivasPorAsig[clase.id];
                 return (
-                <div key={clase.id} className={`glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:-translate-y-1 transition-all duration-500 group ${claseActiva ? 'border-2 border-[#0090d0]/50 shadow-[0_20px_40px_-12px_rgba(0,144,208,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.4)]' : esHoy ? 'border-2 border-emerald-400/50 shadow-[0_20px_40px_-12px_rgba(52,211,153,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(52,211,153,0.4)]' : 'hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)]'}`}>
+                <div key={clase.id} style={{ '--i': i } as React.CSSProperties} className={`glass-container rounded-[2.5rem] p-7 flex flex-col justify-between hover:-translate-y-1 transition-all duration-500 group bento-entrada ${claseActiva ? 'border-2 border-[#0090d0]/50 shadow-[0_20px_40px_-12px_rgba(0,144,208,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.4)]' : esHoy ? 'border-2 border-emerald-400/50 shadow-[0_20px_40px_-12px_rgba(52,211,153,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(52,211,153,0.4)]' : 'hover:shadow-[0_25px_50px_-12px_rgba(0,144,208,0.15)]'}`}>
                   <div>
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-2">
@@ -440,44 +440,46 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       ) : (
         // VISTA: AULA ACTIVA
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 flex-1 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 flex-1 max-w-[1700px] mx-auto w-full">
           
-          {/* PANEL IZQUIERDO: Escáner QR */}
-          <div className="xl:col-span-5 glass-container rounded-[2.5rem] p-8 flex flex-col items-center justify-center text-center relative overflow-hidden">
+          {/* PANEL IZQUIERDO: QR lo más grande posible dentro de su tarjeta */}
+          <div className="xl:col-span-6 glass-container rounded-[2.5rem] p-4 sm:p-6 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
             
             {/* Orbe de luz de fondo */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.03] blur-[60px] pointer-events-none"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#0090d0] rounded-full opacity-[0.04] blur-[60px] pointer-events-none"></div>
 
             {fase !== 'CERRADA' ? (
-              <div className="relative z-10 w-full flex flex-col items-center">
-                <div className="mb-8 flex items-center justify-between w-full max-w-[320px]">
-                  <span className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/10'}`}>
-                    {fase === 'ENTRADA' ? '📍 Modo Entrada' : '🚪 Modo Salida'}
+              <div className="relative z-10 w-full flex flex-col items-center gap-4">
+                <div className="flex items-center justify-between w-full gap-2">
+                  <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-[#0090d0]/5 text-[#0090d0] border-[#0090d0]/10'}`}>
+                    {fase === 'ENTRADA' ? '📍 Modo entrada' : '🚪 Modo salida'}
                   </span>
-                  
-                  {/* BOTÓN MÁGICO: POP-UP */}
-                  <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-[#0090d0] text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en ventana flotante">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                  </button>
-                </div>
 
-                {/* Tarjeta del QR (Más grande: w-80 h-80 = 320px) */}
-                <div className="p-4 bg-white rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100 group relative">
-                  {/* Brillo dinámico en hover */}
-                  <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_0_0_1px_rgba(0,144,208,0.1)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                  {qrSrc && <img src={qrSrc} alt="QR Dinámico" className="w-72 h-72 sm:w-80 sm:h-80 rounded-[1.5rem] object-contain select-none pointer-events-none" draggable="false" />}
-                </div>
-
-                <div className="mt-10 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
-                  <div className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 px-3.5 py-2 rounded-full border border-slate-100" title="El código cambia cada pocos segundos">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      En vivo
+                    </span>
+                    {/* Proyectar el QR en una ventana aparte */}
+                    <button onClick={abrirPopUpQR} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-50 hover:bg-[#0090d0] text-slate-400 hover:text-white transition-colors cursor-pointer active:scale-90 shadow-sm border border-slate-100" title="Proyectar en una ventana aparte">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </button>
                   </div>
-                  Sincronizado en vivo
+                </div>
+
+                {/* El QR ocupa todo el ancho de la tarjeta, sin pasarse del alto de la pantalla */}
+                <div
+                  className="w-full aspect-square p-3 sm:p-4 bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,43,92,0.15)] border border-slate-100"
+                  style={{ maxWidth: 'min(100%, calc(100dvh - 11rem))' }}
+                >
+                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-[1.25rem] object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-20 relative z-10">
+              <div className="text-center py-20 relative z-10 bento-entrada">
                 <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner"><span className="text-4xl">✓</span></div>
                 <h3 className="text-2xl font-black text-[#002b5c] tracking-tight mb-2">Clase cerrada</h3>
                 <p className="text-sm text-slate-400 font-medium">Los datos ya se han guardado de forma segura.</p>
@@ -486,13 +488,13 @@ export default function PantallaProfesor({ onVolver }: Props) {
           </div>
 
           {/* PANEL DERECHO: Lista de Alumnos */}
-          <div className="xl:col-span-7 glass-container rounded-[2.5rem] p-8 flex flex-col relative overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black text-[#002b5c] tracking-tight">Alumnos de la clase</h2>
+          <div className="xl:col-span-6 glass-container rounded-[2.5rem] p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6 sm:mb-8">
+              <h2 className="text-lg sm:text-xl font-black text-[#002b5c] tracking-tight">Alumnos de la clase</h2>
               <span className="px-4 py-1.5 bg-[#002b5c] text-white text-[11px] font-bold tracking-widest uppercase rounded-full shadow-md">{asistencias.length} Alumnos</span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-hidden relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden relative z-10">
               
               {/* COLUMNA IZQUIERDA: COMPLETADOS */}
               <div className="flex flex-col h-full">
@@ -502,12 +504,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2 space-y-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-1 py-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado === 'PRESENTE' : item.hora_salida !== null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card p-3 flex items-center justify-between gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                      <div key={item.id} className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
                         <div className="flex flex-col overflow-hidden min-w-0">
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
@@ -521,7 +523,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
                           style={{ textAlignLast: 'center' }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[90px] sm:min-w-[100px] hover:scale-105 ${
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 w-[84px] hover:scale-105 ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
@@ -541,19 +543,19 @@ export default function PantallaProfesor({ onVolver }: Props) {
               </div>
 
               {/* COLUMNA DERECHA: PENDIENTES */}
-              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-6">
+              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-4">
                 <h3 className="text-sm font-bold text-rose-500 mb-4 flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-rose-400 rounded-full shadow-[0_0_8px_rgba(251,113,133,0.6)]"></span>
                   Pendientes ({
                     asistencias.filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null).length
                   })
                 </h3>
-                <div className="flex-1 overflow-y-auto px-1 sm:px-2 py-2 space-y-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto px-1 py-2 space-y-2 scrollbar-hide">
                   {asistencias
                     .filter(item => fase === 'ENTRADA' ? item.estado !== 'PRESENTE' : item.hora_salida === null)
                     .sort((a, b) => (a.perfiles?.nombre_completo || '').localeCompare(b.perfiles?.nombre_completo || ''))
                     .map((item) => (
-                      <div key={item.id} className="bento-card p-3 flex items-center justify-between gap-3 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
+                      <div key={item.id} className="bento-card py-2.5 pl-3.5 pr-2 flex items-center justify-between gap-2 transition-all duration-500 animate-[fade-in-down_0.4s_ease-out]">
                         <div className="flex flex-col overflow-hidden min-w-0">
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
@@ -567,7 +569,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                           value={item.estado}
                           onChange={(e) => cambiarEstadoManual(item.id, e.target.value as EstadoAsistencia)}
                           style={{ textAlignLast: 'center' }}
-                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2 sm:px-4 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 min-w-[90px] sm:min-w-[100px] hover:scale-105 ${
+                          className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-2 rounded-full outline-none transition-all duration-500 cursor-pointer appearance-none text-center backdrop-blur-xl border-2 flex-shrink-0 w-[84px] hover:scale-105 ${
                             item.estado === 'PRESENTE' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-400/50 shadow-[0_0_15px_rgba(52,211,153,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-emerald-500/20 hover:shadow-[0_0_25px_rgba(52,211,153,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'RETRASO' ? 'bg-amber-500/10 text-amber-600 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-amber-500/20 hover:shadow-[0_0_25px_rgba(251,191,36,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
                             item.estado === 'SE_FUE_A_MITAD' ? 'bg-purple-500/10 text-purple-600 border-purple-400/50 shadow-[0_0_15px_rgba(192,132,252,0.4),inset_0_1px_3px_rgba(255,255,255,0.7)] hover:bg-purple-500/20 hover:shadow-[0_0_25px_rgba(192,132,252,0.7),inset_0_1px_3px_rgba(255,255,255,0.7)]' :
@@ -594,7 +596,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
       {/* --- MODALES --- */}
       {mostrarModalCierre && (
-        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 modal-fondo">
           <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Cerrar la clase</h3>
             {fase === 'ENTRADA' && (
@@ -616,7 +618,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
         </div>
       )}
 
-      <BotonCompartir mostrarNotificacion={mostrarNotificacion} />
+      <BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />
     </div>
   );
 }

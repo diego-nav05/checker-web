@@ -387,7 +387,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       {sesionPerdida && (
-        <div className="fixed inset-0 z-[250] bg-[#002b5c]/40 backdrop-blur-md flex items-center justify-center p-4 anim-suave">
+        <div className="fixed inset-0 z-[250] bg-[#002b5c]/40 backdrop-blur-md flex items-center justify-center p-4 modal-fondo">
           <div className="glass-container bg-white/90 rounded-[2.5rem] p-8 max-w-sm w-full text-center flex flex-col gap-4">
             <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Vuelve a iniciar sesión</h3>
             <p className="text-sm text-slate-500 font-medium leading-relaxed">
@@ -487,7 +487,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       {/* DASHBOARD PRINCIPAL */}
       <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col">
         {tabActual === 'HORARIO' && !camaraActiva && (
-          <div className="flex flex-col md:flex-row gap-6 animate-[fade-in_0.4s_ease-out]">
+          <div className="flex flex-col md:flex-row gap-6 contenido-pestana">
             
             {/* Columna Izquierda: Escanear */}
             <button onClick={() => setCamaraActiva(true)} className="w-full md:w-1/3 aspect-square sm:aspect-auto sm:min-h-[380px] bg-gradient-to-br from-[#0090d0]/90 to-[#002b5c]/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_32px_rgba(0,144,208,0.2)] rounded-[3rem] p-6 flex flex-col items-center justify-center cursor-pointer relative overflow-hidden group">
@@ -534,10 +534,10 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                   </div>
                 ) : (
                   <div className="space-y-4 relative z-10">
-                    {clasesHoy.map((clase: any) => {
+                    {clasesHoy.map((clase: any, i: number) => {
                       const esHoy = (clase.dias_semana || []).includes(new Date().getDay());
                       return (
-                      <div key={clase.id} className={`p-5 flex items-center justify-between gap-4 backdrop-blur-lg border hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default ${esHoy ? 'bg-emerald-50/80 border-emerald-300/60 shadow-[0_4px_20px_rgba(52,211,153,0.15)]' : 'bg-white/60 border-white hover:bg-white'}`}>
+                      <div key={clase.id} style={{ '--i': i } as React.CSSProperties} className={`bento-entrada p-5 flex items-center justify-between gap-4 backdrop-blur-lg border hover:shadow-[0_8px_30px_rgba(0,144,208,0.08)] hover:-translate-y-1 transition-all duration-300 rounded-[2rem] group/card cursor-default ${esHoy ? 'bg-emerald-50/80 border-emerald-300/60 shadow-[0_4px_20px_rgba(52,211,153,0.15)]' : 'bg-white/60 border-white hover:bg-white'}`}>
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2 mb-1.5">
                             {esHoy && (
@@ -577,7 +577,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
 
         {/* HISTORIAL */}
         {tabActual === 'CALENDARIO' && (
-          <div className="glass-container rounded-[2.5rem] p-8 animate-[fade-in_0.4s_ease-out]">
+          <div className="glass-container rounded-[2.5rem] p-8 contenido-pestana">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
               <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Historial</h3>
               <button onClick={exportarHistorialAlumno} className="px-6 py-3 bg-gradient-to-b from-[#00a8f3] to-[#0090d0] text-white text-xs font-bold rounded-full shadow-[0_8px_20px_rgba(0,144,208,0.3)] hover:shadow-[0_12px_28px_rgba(0,144,208,0.4)] transition-all duration-300 active:scale-95 cursor-pointer border border-[#0090d0]/20">
@@ -592,7 +592,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
             ) : (
               <div className="space-y-4 max-h-[550px] overflow-y-auto pr-3 scrollbar-hide">
                 {historial.map((registro, idx) => (
-                  <div key={idx} className="bento-card p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
+                  <div key={idx} style={{ '--i': Math.min(idx, 10) } as React.CSSProperties} className="bento-card bento-entrada p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
                     <div>
                       <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight mb-2">{registro.asignatura_nombre}</h4>
                       <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
