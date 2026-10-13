@@ -8,7 +8,7 @@ import AvisoVersionNueva from './VersionNueva.tsx';
 import SesionDocente from './SesionDocente.tsx';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { supabase, hashInicial } from './supabase';
-import { Boton, BotonVolver, Campo, Pantalla, Tarjeta, retraso } from './ui';
+import { Boton, BotonVolver, Campo, Pantalla, Tarjeta } from './ui';
 
 type Vista = 'INICIO' | 'ALUMNADO' | 'PROFESORADO' | 'REGISTRO' | 'GESTION';
 
@@ -20,61 +20,6 @@ interface Docente {
 // Gestión vuelve a pedir la contraseña pasados estos minutos
 const MINUTOS_GESTION_DESBLOQUEADA = 10;
 const hoy = () => new Date().toDateString();
-
-// Iconos del inicio (trazos de 24x24)
-const ICONOS = {
-  qr: 'M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M8 8h3v3H8zM13 13h3v3h-3zM13 8h3M8 13v3',
-  pizarra: 'M3 4h18M5 4v10a2 2 0 002 2h10a2 2 0 002-2V4M12 16v4M8 20h8M9 9l2 2 4-4',
-  engranaje: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
-  persona: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
-  movil: 'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z',
-};
-
-const ESTILOS_INICIO = {
-  blanca: { tarjeta: 'bg-white/75 border border-white shadow-[0_16px_40px_-16px_rgba(0,43,92,0.18)] backdrop-blur-2xl', icono: 'bg-azul/10 text-azul', titulo: 'text-marino group-hover:text-azul', texto: 'text-slate-400', flecha: 'bg-marino text-white' },
-  cristal: { tarjeta: 'glass-container', icono: 'bg-marino/5 text-marino', titulo: 'text-marino group-hover:text-azul', texto: 'text-slate-400', flecha: 'bg-marino text-white' },
-  marino: { tarjeta: 'bg-gradient-to-br from-marino to-marino-oscuro border border-white/10 shadow-[0_16px_40px_-12px_rgba(0,43,92,0.45)]', icono: 'bg-white/10 text-white', titulo: 'text-white', texto: 'text-white/60', flecha: 'bg-white text-marino' },
-  azul: { tarjeta: 'bg-gradient-to-br from-azul to-azul-oscuro border border-white/20 shadow-[0_16px_40px_-12px_rgba(0,144,208,0.45)]', icono: 'bg-white/15 text-white', titulo: 'text-white', texto: 'text-white/75', flecha: 'bg-white text-azul' },
-};
-
-interface TarjetaInicioProps {
-  indice: number;
-  onClick: () => void;
-  icono: string;
-  titulo: string;
-  texto: string;
-  estilo: keyof typeof ESTILOS_INICIO;
-  className?: string;
-  grande?: boolean;
-}
-
-function TarjetaInicio({ indice, onClick, icono, titulo, texto, estilo, className = '', grande }: TarjetaInicioProps) {
-  const e = ESTILOS_INICIO[estilo];
-  return (
-    <button
-      onClick={onClick}
-      style={retraso(indice)}
-      className={`bento-entrada group relative overflow-hidden rounded-bento p-6 sm:p-7 flex flex-col justify-between text-left cursor-pointer transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_24px_48px_-16px_rgba(0,144,208,0.3)] active:scale-[0.98] ${e.tarjeta} ${className}`}
-    >
-      {/* Brillo que cruza la tarjeta al pasar el ratón */}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out pointer-events-none"></div>
-
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center relative ${e.icono}`}>
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d={icono} /></svg>
-      </div>
-
-      <div className="relative mt-6 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className={`font-black tracking-tighter leading-none transition-colors duration-300 ${grande ? 'text-[clamp(1.9rem,7vw,2.6rem)]' : 'text-[clamp(1.25rem,5vw,1.6rem)]'} ${e.titulo}`}>{titulo}</p>
-          <p className={`text-xs sm:text-sm font-semibold mt-2 ${e.texto}`}>{texto}</p>
-        </div>
-        <span className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 ${e.flecha}`}>
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-        </span>
-      </div>
-    </button>
-  );
-}
 
 export default function App() {
   const [vista, setVista] = useState<Vista>('INICIO');
@@ -395,11 +340,10 @@ export default function App() {
       );
     }
 
-    const tieneCuenta = alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor';
-
     return (
       <Pantalla
         centrada
+        className="items-center"
         esquinas={
           <>
             <BotonCompartir mostrarNotificacion={avisar} />
@@ -415,59 +359,51 @@ export default function App() {
       >
         <AvisoFlotante aviso={aviso} onCerrar={cerrar} />
 
-        <div className="w-full max-w-4xl mx-auto">
-          <div className="flex items-center gap-3 mb-5 px-1 bento-entrada" style={retraso(0)}>
-            <div className="w-11 h-11 rounded-2xl bg-marino flex items-center justify-center shadow-[0_8px_20px_rgba(0,43,92,0.3)]">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2"><path strokeLinecap="round" strokeLinejoin="round" d={ICONOS.qr} /></svg>
-            </div>
-            <div>
-              <p className="text-xl font-black text-marino tracking-tight leading-none">Checker</p>
-              <p className="text-xs font-semibold text-slate-400 mt-1">Asistencia en clase con QR</p>
-            </div>
-          </div>
+        <div className="w-full max-w-xl mx-auto flex flex-col gap-4 sm:gap-5 z-10">
 
-          {/* Cuadrícula bento: en el ordenador Alumnado ocupa la columna izquierda entera */}
-          <div className="grid grid-cols-2 md:grid-cols-3 md:grid-rows-2 gap-4 sm:gap-5">
-            <TarjetaInicio
-              indice={1}
-              onClick={manejarClickAlumnado}
-              icono={ICONOS.qr}
-              titulo="ALUMNADO"
-              texto="Escanea el QR de tu clase"
-              estilo="blanca"
-              className="col-span-2 md:col-span-1 md:row-span-2 min-h-[170px] md:min-h-[380px]"
-              grande
-            />
-            <TarjetaInicio
-              indice={2}
-              onClick={() => manejarClickDocente('PROFESORADO')}
-              icono={ICONOS.pizarra}
-              titulo="PROFESORADO"
-              texto="Abre tu clase y proyecta el QR"
-              estilo="cristal"
-              className="col-span-2 min-h-[150px]"
-              grande
-            />
-            <TarjetaInicio
-              indice={3}
-              onClick={() => manejarClickDocente('GESTION')}
-              icono={ICONOS.engranaje}
-              titulo="Gestión"
-              texto="Alumnos y asignaturas"
-              estilo="marino"
-              className="min-h-[150px]"
-            />
-            <TarjetaInicio
-              indice={4}
-              onClick={() => irAPanel('REGISTRO')}
-              icono={tieneCuenta ? ICONOS.persona : ICONOS.movil}
-              titulo={tieneCuenta ? 'Mi cuenta' : 'Vincular'}
-              texto={tieneCuenta ? 'Tu cuenta y tu móvil' : 'Crea tu cuenta o entra'}
-              estilo="azul"
-              className="min-h-[150px]"
-            />
-          </div>
+          <button onClick={manejarClickAlumnado} style={{ '--i': 0 } as React.CSSProperties} className="bento-entrada relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[130px] rounded-full flex flex-col items-center justify-center group cursor-pointer mt-4 sm:mt-0 overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,144,208,0.15)] bg-white/60 backdrop-blur-2xl border border-white/80 shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#00d2ff]/10 rounded-full blur-2xl -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150"></div>
+            <span className="text-[clamp(2rem,8vw,3.5rem)] font-black tracking-tighter text-[#002b5c] group-hover:text-[#0090d0] transition-colors duration-300 relative z-10 drop-shadow-sm">ALUMNADO</span>
+          </button>
 
+          <button onClick={() => manejarClickDocente('PROFESORADO')} style={{ '--i': 1 } as React.CSSProperties} className="bento-entrada relative w-full aspect-[21/9] sm:aspect-[3/1] min-h-[130px] rounded-full flex flex-col items-center justify-center group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.12)] bg-[#F0F4F8]/80 backdrop-blur-2xl border border-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.04)]">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+            <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#002b5c]/5 rounded-full blur-2xl -ml-10 -mb-10 transition-transform duration-700 group-hover:scale-150"></div>
+            <span className="text-[clamp(1.75rem,7vw,3.25rem)] font-black tracking-tighter text-[#002b5c]/90 group-hover:text-[#0090d0] transition-colors duration-300 relative z-10 drop-shadow-sm">PROFESORADO</span>
+          </button>
+
+          <div className="grid grid-cols-2 gap-4 sm:gap-5 mt-1 w-full">
+            <button onClick={() => manejarClickDocente('GESTION')} style={{ '--i': 2 } as React.CSSProperties} className="bento-entrada relative w-full aspect-square sm:aspect-auto sm:h-[130px] rounded-full flex flex-col items-center justify-center gap-2 group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,43,92,0.3)] bg-gradient-to-br from-[#002b5c]/90 to-[#001530]/90 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-[30px] -mr-10 -mt-10 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/10"></div>
+              <svg className="w-8 h-8 text-white/80 group-hover:text-white transition-colors duration-300 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              <span className="text-[clamp(1.15rem,5vw,1.5rem)] font-black text-white tracking-tight group-hover:text-[#b3e6ff] transition-colors duration-300 relative z-10">Gestión</span>
+            </button>
+
+            <button onClick={() => irAPanel('REGISTRO')} style={{ '--i': 3 } as React.CSSProperties} className="bento-entrada relative w-full aspect-square sm:aspect-auto sm:h-[130px] rounded-full flex flex-col items-center justify-center gap-2 group cursor-pointer overflow-hidden transition-all duration-500 hover:-translate-y-1 bg-gradient-to-br from-[#0090d0]/90 to-[#0070a0]/90 hover:shadow-[0_16px_40px_rgba(0,144,208,0.3)] border border-white/20 shadow-[0_8px_32px_rgba(0,144,208,0.2)] backdrop-blur-2xl">
+              <div className="absolute top-0 left-0 w-40 h-40 bg-white/10 rounded-full blur-[30px] -ml-10 -mt-10 transition-transform duration-700 group-hover:scale-150 group-hover:bg-white/20"></div>
+
+              <svg className="w-8 h-8 relative z-10 transition-colors duration-300 text-white/90 group-hover:text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                {alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor' ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                ) : (
+                  <>
+                    <path className="sm:hidden" strokeLinecap="round" strokeLinejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path className="hidden sm:block" strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </>
+                )}
+              </svg>
+
+              <span className="text-[clamp(1.15rem,5vw,1.5rem)] font-black tracking-tight transition-colors duration-300 relative z-10 text-white">
+                {alumnoVinculado || localStorage.getItem('checker_rol') === 'profesor' ? 'Mi cuenta' : (
+                  <>
+                    <span className="sm:hidden">Vincular</span>
+                    <span className="hidden sm:inline">Mi cuenta</span>
+                  </>
+                )}
+              </span>
+            </button>
+          </div>
         </div>
       </Pantalla>
     );
