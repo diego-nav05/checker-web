@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import * as XLSX from 'xlsx';
 import BotonCompartir from './BotonCompartir';
+import { AvisoFlotante, useAviso } from './Aviso';
+import { altaAlumno, mensajeError, tieneCorreoReal, type ResultadoAlta } from './cuentas';
+
+const COLUMNAS_SESION = 'id, asignatura_id, fecha, fase, hora_apertura, hora_cierre';
+const estaVinculado = (alumno: any) => !!(alumno?.dispositivo_hash || alumno?.dispositivo_id || alumno?.vinculado);
 
 interface Props {
   onVolver: () => void;
@@ -59,12 +64,17 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const [asignaturasAlumno, setAsignaturasAlumno] = useState<any[]>([]);
   const [cargandoAlumno, setCargandoAlumno] = useState(false);
 
-  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
+  const { aviso, avisar: mostrarNotificacion, cerrar: cerrarAviso } = useAviso();
 
-  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
-    setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 5000);
-  };
+  // Alumnos con cuenta que no están en ninguna clase (de ningún profe)
+  const [alumnosSinClase, setAlumnosSinClase] = useState<any[]>([]);
+  const [misAsignaturas, setMisAsignaturas] = useState<{ id: string; nombre: string }[]>([]);
+  // Alta forzosa de alumnos
+  const [modalAlta, setModalAlta] = useState(false);
+  const [formAlta, setFormAlta] = useState({ nombre: '', email: '', asignatura_id: '' });
+  const [guardandoAlta, setGuardandoAlta] = useState(false);
+  const [resultadoAlta, setResultadoAlta] = useState<ResultadoAlta | null>(null);
+  const [asignandoClase, setAsignandoClase] = useState<{ alumno: any; asignatura_id: string } | null>(null);
 
   const cargarAlumnos = async () => {
     setCargando(true);
@@ -72,30 +82,39 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: asigs } = await supabase.from('asignaturas').select('id').eq('profesor_id', user.id);
-      if (!asigs || asigs.length === 0) return setAlumnos([]);
-      
-      const asigIds = asigs.map(a => a.id);
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
-      if (!sesiones || sesiones.length === 0) return setAlumnos([]);
-      
-      const sesionIds = sesiones.map(s => s.id);
-      const { data: asistencias } = await supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', sesionIds);
-      if (!asistencias || asistencias.length === 0) return setAlumnos([]);
+      const { data: sinClase } = await supabase.rpc('alumnos_sin_clase');
+      setAlumnosSinClase(sinClase || []);
 
-      const aluIds = [...new Set(asistencias.map(a => a.alumno_id))];
+      const { data: asigs } = await supabase.from('asignaturas').select('id, nombre').eq('profesor_id', user.id).order('nombre', { ascending: true });
+      setMisAsignaturas(asigs || []);
+      if (!asigs || asigs.length === 0) return setAlumnos([]);
+
+      // Alumnos de mis clases = matriculados + los que tienen alguna asistencia
+      const asigIds = asigs.map(a => a.id);
+      const { data: matriculas } = await supabase.from('matriculas').select('alumno_id, asignatura_id').in('asignatura_id', asigIds);
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
+      const sesionIds = (sesiones || []).map(s => s.id);
+      const { data: asistencias } = sesionIds.length > 0
+        ? await supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', sesionIds)
+        : { data: [] as { alumno_id: string; sesion_id: string; estado: string }[] };
+
+      const aluIds = [...new Set([...(matriculas || []), ...(asistencias || [])].map(a => a.alumno_id))];
+      if (aluIds.length === 0) return setAlumnos([]);
 
       const { data: perfiles } = await supabase
         .from('perfiles')
-        .select('*')
+        .select('id, nombre_completo, email, rol, dispositivo_hash, dispositivo_id, pendiente, codigo_alta')
         .in('id', aluIds)
         .eq('rol', 'alumno')
         .order('nombre_completo', { ascending: true });
       if (perfiles) {
         const perfilesConStats = perfiles.map(perfil => {
-          const asistsAlumno = asistencias.filter(a => a.alumno_id === perfil.id);
-          const asigIdsAlumno = [...new Set(asistsAlumno.map(a => sesiones.find(s => s.id === a.sesion_id)?.asignatura_id).filter(Boolean))];
-          const totalSesionesPosibles = sesiones.filter(s => asigIdsAlumno.includes(s.asignatura_id)).length;
+          const asistsAlumno = (asistencias || []).filter(a => a.alumno_id === perfil.id);
+          const asigIdsAlumno = [...new Set([
+            ...asistsAlumno.map(a => (sesiones || []).find(s => s.id === a.sesion_id)?.asignatura_id),
+            ...(matriculas || []).filter(m => m.alumno_id === perfil.id).map(m => m.asignatura_id),
+          ].filter(Boolean))];
+          const totalSesionesPosibles = (sesiones || []).filter(s => asigIdsAlumno.includes(s.asignatura_id)).length;
           
           const asistenciasValidas = asistsAlumno.filter(a => {
             const st = a.estado?.toUpperCase() || '';
@@ -118,6 +137,60 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       }
     } finally {
       setCargando(false);
+    }
+  };
+
+  const abrirModalAlta = () => {
+    setFormAlta({ nombre: '', email: '', asignatura_id: misAsignaturas[0]?.id || '' });
+    setResultadoAlta(null);
+    setModalAlta(true);
+  };
+
+  const guardarAlta = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formAlta.asignatura_id) return mostrarNotificacion('Primero crea una asignatura en la pestaña "Asignaturas".', 'error');
+    setGuardandoAlta(true);
+    try {
+      const resultado = await altaAlumno({
+        nombre: formAlta.nombre,
+        email: formAlta.email.trim() || undefined,
+        asignatura_id: formAlta.asignatura_id,
+      });
+      setResultadoAlta(resultado);
+      cargarAlumnos();
+    } catch (error: any) {
+      mostrarNotificacion(mensajeError(error.message), 'error');
+    } finally {
+      setGuardandoAlta(false);
+    }
+  };
+
+  // Mete en una de mis asignaturas a un alumno que ya tiene cuenta (desde la lista "sin clase")
+  const confirmarAsignarClase = async () => {
+    if (!asignandoClase?.asignatura_id) return;
+    const { alumno, asignatura_id } = asignandoClase;
+    const { error } = await supabase.from('matriculas').upsert({ asignatura_id, alumno_id: alumno.id }, { onConflict: 'asignatura_id,alumno_id', ignoreDuplicates: true });
+    if (error) return mostrarNotificacion('No se pudo añadir el alumno a la asignatura.', 'error');
+    // Si hay una clase abierta de esa asignatura, aparece ya en la lista
+    const { data: abiertas } = await supabase.from('sesiones').select('id').eq('asignatura_id', asignatura_id).in('fase', ['ENTRADA', 'SALIDA']);
+    if (abiertas && abiertas.length > 0) {
+      await supabase.from('asistencias').upsert(
+        abiertas.map(s => ({ sesion_id: s.id, alumno_id: alumno.id, estado: 'FALTA_INJUSTIFICADA', manual: false })),
+        { onConflict: 'sesion_id,alumno_id', ignoreDuplicates: true },
+      );
+    }
+    const nombreAsig = misAsignaturas.find(a => a.id === asignatura_id)?.nombre || 'la asignatura';
+    mostrarNotificacion(`${alumno.nombre_completo} añadido a ${nombreAsig}.`, 'exito');
+    setAsignandoClase(null);
+    cargarAlumnos();
+  };
+
+  const copiarCodigo = async (codigo: string) => {
+    try {
+      await navigator.clipboard.writeText(codigo);
+      mostrarNotificacion('Código copiado.', 'exito');
+    } catch {
+      mostrarNotificacion(`Apunta el código: ${codigo}`, 'info');
     }
   };
 
@@ -145,36 +218,31 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
     if (asigs && asigs.length > 0) {
       const asigIds = asigs.map((a: any) => a.id);
+      const { data: matriculas } = await supabase.from('matriculas').select('asignatura_id').eq('alumno_id', alumno.id).in('asignatura_id', asigIds);
       const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
-
+      let asigIdsAsistidas: string[] = [];
       if (sesiones && sesiones.length > 0) {
-        const sesionIds = sesiones.map((s: any) => s.id);
-        const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesionIds);
-
-        if (asists && asists.length > 0) {
-          const attendedSesionIds = asists.map((a: any) => a.sesion_id);
-          const attendedAsigIds = [...new Set(sesiones.filter((s: any) => attendedSesionIds.includes(s.id)).map((s: any) => s.asignatura_id))];
-          const asigsActivas = asigs.filter((a: any) => attendedAsigIds.includes(a.id));
-          setAsignaturasAlumno(asigsActivas);
-        } else {
-          setAsignaturasAlumno([]);
-        }
-      } else {
-        setAsignaturasAlumno([]);
+        const { data: asists } = await supabase.from('asistencias').select('sesion_id').eq('alumno_id', alumno.id).in('sesion_id', sesiones.map((s: any) => s.id));
+        const attendedSesionIds = (asists || []).map((a: any) => a.sesion_id);
+        asigIdsAsistidas = sesiones.filter((s: any) => attendedSesionIds.includes(s.id)).map((s: any) => s.asignatura_id);
       }
+      const asigIdsAlumno = new Set([...(matriculas || []).map(m => m.asignatura_id), ...asigIdsAsistidas]);
+      setAsignaturasAlumno(asigs.filter((a: any) => asigIdsAlumno.has(a.id)));
+    } else {
+      setAsignaturasAlumno([]);
     }
     setCargandoAlumno(false);
   };
 
-  const desvincularDispositivo = async (id: string) => {
-    const confirmar = window.confirm(`¿Seguro que quieres desvincular el móvil de este alumno?`);
+  const desvincularDispositivo = async (alumno: any) => {
+    const confirmar = window.confirm(`¿Liberar el móvil de ${alumno.nombre_completo}?\n\nPodrá vincular su cuenta a otro móvil o navegador la próxima vez que inicie sesión.`);
     if (!confirmar) return;
-    const { error } = await supabase.from('perfiles').update({ dispositivo_hash: null }).eq('id', id);
-    if (error) mostrarNotificacion('Error al desvincular.', 'error');
+    const { error } = await supabase.rpc('desvincular_dispositivo', { p_alumno: alumno.id });
+    if (error) mostrarNotificacion('Error al desvincular. Inténtalo de nuevo.', 'error');
     else {
-      mostrarNotificacion('Dispositivo liberado.', 'exito');
+      mostrarNotificacion(`Móvil liberado. ${alumno.nombre_completo} ya puede iniciar sesión desde su nuevo dispositivo.`, 'exito');
       cargarAlumnos();
-      if (alumnoGestion) setAlumnoGestion({ ...alumnoGestion, dispositivo_hash: null });
+      if (alumnoGestion?.id === alumno.id) setAlumnoGestion({ ...alumnoGestion, dispositivo_hash: null, dispositivo_id: null, vinculado: false });
     }
   };
 
@@ -199,6 +267,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
           .eq('alumno_id', aluId)
           .in('sesion_id', sIds);
       }
+      await supabase.from('matriculas').delete().eq('alumno_id', aluId).eq('asignatura_id', asigId);
       mostrarNotificacion('Alumno eliminado de la materia.', 'exito');
       setAsignaturasAlumno(prev => prev.filter(a => a.id !== asigId));
       if (asignaturasAlumno.length <= 1) setAlumnoGestion(null); 
@@ -215,6 +284,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             .eq('alumno_id', aluId)
             .in('sesion_id', sIds);
         }
+        await supabase.from('matriculas').delete().eq('alumno_id', aluId).in('asignatura_id', asigIds);
       }
       mostrarNotificacion('Alumno eliminado de todas tus materias.', 'exito');
       setAlumnoGestion(null);
@@ -320,7 +390,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
 
-    const { data: sesionesDataRaw } = await supabase.from('sesiones').select('*').eq('asignatura_id', asignaturaSeleccionada.id);
+    const { data: sesionesDataRaw } = await supabase.from('sesiones').select(COLUMNAS_SESION).eq('asignatura_id', asignaturaSeleccionada.id);
     if (!sesionesDataRaw || sesionesDataRaw.length === 0) {
       mostrarNotificacion("La materia no tiene clases registradas.", 'info');
       return null;
@@ -487,7 +557,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     }
 
     const asigIds = asigs.map(a => a.id);
-    const { data: sesiones } = await supabase.from('sesiones').select('*').in('asignatura_id', asigIds);
+    const { data: sesiones } = await supabase.from('sesiones').select(COLUMNAS_SESION).in('asignatura_id', asigIds);
     if (!sesiones || sesiones.length === 0) {
       mostrarNotificacion('Ninguna clase ha sido registrada aún.', 'info');
       return null;
@@ -705,15 +775,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     <div className="min-h-[100dvh] bg-[#F5F5F9] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
 
-      {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-2xl backdrop-blur-2xl flex items-center gap-3 transition-all duration-300 animate-[fade-in_0.3s_ease-out] w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/90 border-rose-400 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 
-          'bg-[#002b5c]/90 border-[#0090d0]/50 text-white'
-        }`}>
-          <span className="text-sm font-semibold tracking-tight">{notificacion.texto}</span>
-        </div>
-      )}
+      <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
         <div className="flex items-center gap-4">
@@ -734,27 +796,39 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
         {tabActual === 'ALUMNOS' && (
           <div className="glass-container rounded-[2.5rem] p-8 flex-1">
-            <div className="flex items-center justify-between mb-8 px-2">
-              <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Estudiantes Inscritos</h2>
-              <span className="bg-[#0090d0]/10 text-[#0090d0] px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider">{alumnos.length} Registros</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 px-2 gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-[#002b5c] tracking-tight">Estudiantes Inscritos</h2>
+                <p className="text-xs font-semibold text-slate-400 mt-1">{alumnos.length} en tus clases</p>
+              </div>
+              <button onClick={abrirModalAlta} className="bg-[#002b5c] hover:bg-[#0090d0] text-white px-5 py-2.5 rounded-full text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95 self-start sm:self-auto">
+                Añadir alumno +
+              </button>
             </div>
 
             {cargando ? (
               <div className="flex justify-center py-12 text-slate-400 font-medium animate-pulse">Sincronizando...</div>
             ) : alumnos.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm font-medium">No hay alumnos vinculados a tus clases.</div>
+              <div className="text-center py-12 text-slate-400 text-sm font-medium">No hay alumnos en tus clases todavía.</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {alumnos.map((alumno) => (
                   <div key={alumno.id} className="p-5 glass-container hover:bg-white/40 rounded-[1.5rem] flex items-center justify-between transition-colors">
                     <div className="overflow-hidden pr-4">
                       <h3 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h3>
-                      <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{alumno.email}</p>
+                      <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{tieneCorreoReal(alumno.email) ? alumno.email : 'Sin correo'}</p>
                       <div className="flex flex-wrap items-center gap-3 mt-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full ${alumno.dispositivo_hash ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-                          <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{alumno.dispositivo_hash ? 'Vinculado' : 'Sin Disp.'}</span>
-                        </div>
+                        {alumno.pendiente ? (
+                          <div className="flex items-center gap-1.5" title="Dado de alta por un profesor: aún no ha activado su cuenta">
+                            <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600">Pendiente · {alumno.codigo_alta}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${estaVinculado(alumno) ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{estaVinculado(alumno) ? 'Vinculado' : 'Sin Disp.'}</span>
+                          </div>
+                        )}
                         {alumno.statsFaltas && (
                           <div className={`flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md border ${
                             alumno.statsFaltas.porcentaje >= 30 ? 'bg-rose-50 text-rose-600 border-rose-100' : 
@@ -771,6 +845,55 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {!cargando && alumnosSinClase.length > 0 && (
+              <div className="mt-12 pt-8 border-t border-slate-200/60">
+                <div className="px-2 mb-6">
+                  <h3 className="text-lg font-black text-[#002b5c] tracking-tight flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"></span>
+                    Con cuenta pero sin ninguna clase ({alumnosSinClase.length})
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-400 mt-1 leading-relaxed">
+                    Se registraron pero nunca han fichado en ninguna clase. Suelen ser alumnos con problemas: libera su móvil si no pueden entrar o añádelos a tu clase.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {alumnosSinClase.map((alumno) => (
+                    <div key={alumno.id} className="p-5 bg-amber-50/40 border border-amber-100/80 rounded-[1.5rem] flex flex-col gap-3">
+                      <div className="overflow-hidden">
+                        <h4 className="font-bold text-[#002b5c] text-sm truncate">{alumno.nombre_completo}</h4>
+                        <p className="text-[11px] font-semibold text-slate-400 mt-0.5 truncate">{tieneCorreoReal(alumno.email) ? alumno.email : 'Sin correo'}</p>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {!alumno.confirmado && !alumno.pendiente && (
+                            <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-600 border border-rose-100" title="No ha pulsado el enlace del correo de activación: no puede iniciar sesión">Correo sin confirmar</span>
+                          )}
+                          {alumno.pendiente && (
+                            <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-600 border border-amber-100">Pendiente de activar</span>
+                          )}
+                          <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md border ${alumno.vinculado ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                            {alumno.vinculado ? 'Móvil vinculado' : 'Sin móvil'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        {alumno.vinculado && (
+                          <button onClick={() => desvincularDispositivo(alumno)} className="flex-1 px-3 py-2 bg-white text-rose-500 hover:bg-rose-50 text-[11px] font-bold rounded-xl border border-slate-200 shadow-sm transition-all cursor-pointer active:scale-95">
+                            Liberar móvil
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setAsignandoClase({ alumno, asignatura_id: misAsignaturas[0]?.id || '' })}
+                          disabled={misAsignaturas.length === 0}
+                          className="flex-1 px-3 py-2 bg-white text-[#002b5c] hover:bg-[#0090d0] hover:text-white text-[11px] font-bold rounded-xl border border-slate-200 shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                        >
+                          Añadir a una clase
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -939,22 +1062,35 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h3 className="text-xl font-black text-[#002b5c] tracking-tight truncate pr-4">{alumnoGestion.nombre_completo}</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-1">{alumnoGestion.email}</p>
+                <p className="text-xs text-slate-500 font-semibold mt-1">{tieneCorreoReal(alumnoGestion.email) ? alumnoGestion.email : 'Sin correo'}</p>
               </div>
               <button onClick={() => setAlumnoGestion(null)} className="w-8 h-8 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
 
             <div className="space-y-6 overflow-y-auto max-h-[60vh] pr-2">
+              {alumnoGestion.pendiente && alumnoGestion.codigo_alta && (
+                <div className="bg-amber-50/80 border border-amber-100 rounded-[2rem] p-5">
+                  <h4 className="font-bold text-amber-700 text-xs uppercase tracking-wider mb-3">Cuenta pendiente de activar</h4>
+                  <button onClick={() => copiarCodigo(alumnoGestion.codigo_alta)} className="w-full py-3 bg-white rounded-2xl text-2xl font-black tracking-[0.3em] text-[#002b5c] border border-amber-100 cursor-pointer active:scale-95" title="Copiar código">
+                    {alumnoGestion.codigo_alta}
+                  </button>
+                  <p className="text-[11px] text-amber-700/80 font-semibold mt-3 leading-snug">
+                    {tieneCorreoReal(alumnoGestion.email)
+                      ? `Se activará sola cuando el alumno se registre o inicie sesión con ${alumnoGestion.email}. También puede usar este código al registrarse.`
+                      : 'Dale este código al alumno: al crear su cuenta, que pulse "¿Tu profesor te dio un código de alta?" y lo escriba.'}
+                  </p>
+                </div>
+              )}
               <div className="bg-slate-50/80 rounded-[2rem] p-5">
                 <h4 className="font-bold text-[#002b5c] text-xs uppercase tracking-wider mb-4">Dispositivo de Fichaje</h4>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${alumnoGestion.dispositivo_hash ? 'bg-emerald-400' : 'bg-slate-300'}`}></span>
-                    <span className="text-xs font-bold text-slate-600">{alumnoGestion.dispositivo_hash ? 'Móvil Vinculado' : 'Sin Vincular'}</span>
+                    <span className={`w-2.5 h-2.5 rounded-full ${estaVinculado(alumnoGestion) ? 'bg-emerald-400' : 'bg-slate-300'}`}></span>
+                    <span className="text-xs font-bold text-slate-600">{estaVinculado(alumnoGestion) ? 'Móvil Vinculado' : 'Sin Vincular'}</span>
                   </div>
                   <button 
-                    onClick={() => desvincularDispositivo(alumnoGestion.id)} 
-                    disabled={!alumnoGestion.dispositivo_hash}
+                    onClick={() => desvincularDispositivo(alumnoGestion)} 
+                    disabled={!estaVinculado(alumnoGestion)}
                     className="px-4 py-2 bg-white text-rose-500 hover:bg-rose-50 text-xs font-bold rounded-xl border border-slate-200 shadow-sm transition-all disabled:opacity-50"
                   >
                     Desvincular
@@ -1111,6 +1247,85 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   {cargandoHistorialAsig ? 'Procesando...' : 'Descargar Excel (.xlsx)'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: AÑADIR ALUMNO (ALTA FORZOSA) --- */}
+      {modalAlta && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Añadir alumno</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Aunque todavía no tenga cuenta</p>
+              </div>
+              <button onClick={() => setModalAlta(false)} className="w-8 h-8 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
+            </div>
+
+            {resultadoAlta ? (
+              <div className="flex flex-col gap-4 text-center">
+                <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto"><span className="text-3xl">✓</span></div>
+                {resultadoAlta.tipo === 'EXISTENTE' && !resultadoAlta.pendiente ? (
+                  <p className="text-sm text-slate-600 font-semibold leading-relaxed">
+                    <span className="text-[#002b5c] font-black">{resultadoAlta.nombre}</span> ya tenía cuenta con ese correo: lo hemos añadido a la asignatura.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm text-slate-600 font-semibold leading-relaxed">
+                      Hemos creado la cuenta de <span className="text-[#002b5c] font-black">{resultadoAlta.nombre}</span>. Ya aparece en tu clase y puedes marcarle la asistencia.
+                    </p>
+                    {resultadoAlta.codigo && (
+                      <button onClick={() => copiarCodigo(resultadoAlta.codigo!)} className="w-full py-4 bg-white rounded-2xl text-3xl font-black tracking-[0.3em] text-[#002b5c] border border-slate-100 shadow-sm cursor-pointer active:scale-95" title="Copiar código">
+                        {resultadoAlta.codigo}
+                      </button>
+                    )}
+                    <p className="text-xs text-slate-500 font-semibold leading-relaxed bg-slate-50/80 rounded-2xl p-4 text-left">
+                      {resultadoAlta.email
+                        ? `Cuando se registre o inicie sesión con ${resultadoAlta.email}, se le reconocerá automáticamente y conservará sus asistencias. Si se registra con otro correo, que use el código de arriba.`
+                        : 'Dale este código al alumno. Al crear su cuenta, que pulse "¿Tu profesor te dio un código de alta?" y lo escriba: así conservará sus asistencias. Lo puedes volver a ver en "Gestionar".'}
+                    </p>
+                  </>
+                )}
+                <div className="flex gap-3 mt-2">
+                  <button onClick={() => { setResultadoAlta(null); setFormAlta(f => ({ ...f, nombre: '', email: '' })); }} className="flex-1 py-3.5 rounded-2xl text-[#002b5c] text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Añadir otro</button>
+                  <button onClick={() => setModalAlta(false)} className="flex-1 py-3.5 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Listo</button>
+                </div>
+              </div>
+            ) : misAsignaturas.length === 0 ? (
+              <p className="text-sm text-slate-500 font-semibold text-center py-6">Primero crea una asignatura en la pestaña "Asignaturas".</p>
+            ) : (
+              <form onSubmit={guardarAlta} className="flex flex-col gap-4">
+                <input type="text" placeholder="Nombre y apellidos *" value={formAlta.nombre} onChange={(e) => setFormAlta({ ...formAlta, nombre: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" required minLength={3} autoFocus />
+                <div>
+                  <input type="email" placeholder="Correo del alumno (opcional)" value={formAlta.email} onChange={(e) => setFormAlta({ ...formAlta, email: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c]" />
+                  <p className="text-[11px] text-slate-400 font-semibold mt-2 px-2 leading-snug">Si lo pones, el alumno se reconocerá solo al registrarse con ese correo. Si no, te daremos un código para dárselo.</p>
+                </div>
+                <select value={formAlta.asignatura_id} onChange={(e) => setFormAlta({ ...formAlta, asignatura_id: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c] cursor-pointer">
+                  {misAsignaturas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+                <button type="submit" disabled={guardandoAlta} className="w-full mt-2 py-4 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all cursor-pointer">
+                  {guardandoAlta ? 'Creando...' : 'Añadir a la clase'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: AÑADIR A UNA CLASE (alumnos sin clase) --- */}
+      {asignandoClase && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight">Añadir a una clase</h3>
+            <p className="text-sm text-slate-500 font-semibold">{asignandoClase.alumno.nombre_completo}</p>
+            <select value={asignandoClase.asignatura_id} onChange={(e) => setAsignandoClase({ ...asignandoClase, asignatura_id: e.target.value })} className="w-full p-4 bg-white/60 border border-white rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-sm font-semibold text-[#002b5c] cursor-pointer">
+              {misAsignaturas.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+            </select>
+            <div className="flex gap-3 mt-2">
+              <button onClick={() => setAsignandoClase(null)} className="flex-1 py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
+              <button onClick={confirmarAsignarClase} className="flex-1 py-3.5 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Añadir</button>
             </div>
           </div>
         </div>

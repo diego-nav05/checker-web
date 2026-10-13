@@ -4,6 +4,10 @@ import CryptoJS from 'crypto-js';
 import { supabase } from './supabase';
 import type { Asistencia, EstadoAsistencia, FaseSesion } from './types';
 import BotonCompartir from './BotonCompartir';
+import { AvisoFlotante, useAviso } from './Aviso';
+
+// Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
+const SEGUNDOS_QR = 5;
 
 interface Props {
   onVolver: () => void;
@@ -31,22 +35,15 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
 
-  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
-
-  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
-    setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 5000);
-  };
+  const { aviso, avisar: mostrarNotificacion, cerrar: cerrarAviso } = useAviso();
+  // Diferencia entre el reloj de este ordenador y el del servidor (el QR usa la hora del servidor)
+  const desfaseRelojRef = useRef(0);
 
   useEffect(() => {
     const arrancarDatos = async () => {
       setCargandoClases(true);
-      const { data: perfilesData } = await supabase.from('perfiles').select('id, nombre_completo, email');
-      if (perfilesData) {
-        const dict: Record<string, any> = {};
-        perfilesData.forEach(p => dict[p.id] = p);
-        setDiccionarioAlumnos(dict);
-      }
+      const { data: horaServidor } = await supabase.rpc('hora_servidor');
+      if (typeof horaServidor === 'number') desfaseRelojRef.current = horaServidor * 1000 - Date.now();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data } = await supabase.from('asignaturas').select('*').eq('profesor_id', user.id).order('horario', { ascending: true });
@@ -56,7 +53,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
           let sAbiertas: any[] | null = null;
           if (asigIds.length > 0) {
             const { data: sesiones } = await supabase.from('sesiones')
-              .select('*')
+              .select('id, asignatura_id, fase')
               .in('asignatura_id', asigIds)
               .in('fase', ['ENTRADA', 'SALIDA']);
             
@@ -91,41 +88,46 @@ export default function PantallaProfesor({ onVolver }: Props) {
   const iniciarClase = async (idAsignatura: string) => {
     if (sesionesActivasPorAsig[idAsignatura]) {
       const sesionData = sesionesActivasPorAsig[idAsignatura];
+      const { data: secreto, error: errorSecreto } = await supabase.rpc('secreto_sesion', { p_sesion: sesionData.id });
+      if (errorSecreto || !secreto) return mostrarNotificacion('No se pudo reanudar el aula. Recarga la página e inténtalo de nuevo.', 'error');
       setSesionId(sesionData.id);
       setFase(sesionData.fase);
-      setSecretTotp(sesionData.secret_totp);
+      setSecretTotp(secreto);
       cargarAsistencias(sesionData.id, diccionarioAlumnos);
       mostrarNotificacion('Aula reanudada. Puedes continuar gestionando la clase.', 'info');
       return;
     }
 
-    const nuevoSecret = Math.random().toString(36).substring(2, 10);
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const nuevoSecret = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
     setSecretTotp(nuevoSecret);
 
     const { data: sesionData, error: sesionError } = await supabase
       .from('sesiones')
       .insert({ fase: 'ENTRADA', secret_totp: nuevoSecret, asignatura_id: idAsignatura })
-      .select()
+      .select('id')
       .single();
 
     if (sesionError || !sesionData) return mostrarNotificacion(`Error BD: ${sesionError?.message || 'Fallo al abrir'}`, 'error');
     setSesionId(sesionData.id);
 
+    // Lista inicial: alumnos matriculados (incluye los dados de alta por el profe) y los de clases anteriores
+    const { data: matriculados } = await supabase.from('matriculas').select('alumno_id').eq('asignatura_id', idAsignatura);
     const { data: pastSesiones } = await supabase.from('sesiones').select('id').eq('asignatura_id', idAsignatura).neq('id', sesionData.id);
+    let pastAsistencias: { alumno_id: string }[] = [];
     if (pastSesiones && pastSesiones.length > 0) {
-      const sesionIds = pastSesiones.map(s => s.id);
-      const { data: pastAsistencias } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', sesionIds);
-      
-      if (pastAsistencias && pastAsistencias.length > 0) {
-        const uniqueIds = Array.from(new Set(pastAsistencias.map(a => a.alumno_id)));
-        const asistenciasIniciales = uniqueIds.map((aluId) => ({
-          sesion_id: sesionData.id,
-          alumno_id: aluId,
-          estado: 'FALTA_INJUSTIFICADA' as EstadoAsistencia,
-          manual: false
-        }));
-        await supabase.from('asistencias').insert(asistenciasIniciales);
-      }
+      const { data } = await supabase.from('asistencias').select('alumno_id').in('sesion_id', pastSesiones.map(s => s.id));
+      pastAsistencias = data || [];
+    }
+    const uniqueIds = Array.from(new Set([...(matriculados || []), ...pastAsistencias].map(a => a.alumno_id)));
+    if (uniqueIds.length > 0) {
+      const asistenciasIniciales = uniqueIds.map((aluId) => ({
+        sesion_id: sesionData.id,
+        alumno_id: aluId,
+        estado: 'FALTA_INJUSTIFICADA' as EstadoAsistencia,
+        manual: false
+      }));
+      await supabase.from('asistencias').insert(asistenciasIniciales);
     }
 
     cargarAsistencias(sesionData.id, diccionarioAlumnos);
@@ -139,7 +141,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       let dictActualizado = { ...dict };
 
       if (idsFaltantes.length > 0) {
-        const { data: perfilesNuevos } = await supabase.from('perfiles').select('id, nombre_completo, email').in('id', idsFaltantes);
+        const { data: perfilesNuevos } = await supabase.from('perfiles').select('id, nombre_completo, email, pendiente').in('id', idsFaltantes);
         if (perfilesNuevos) {
           perfilesNuevos.forEach(p => { dictActualizado[p.id] = p; });
           setDiccionarioAlumnos(dictActualizado);
@@ -166,7 +168,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asistencias', filter: `sesion_id=eq.${sesionId}` }, () => cargarAsistencias(sesionId, diccionarioAlumnos))
       .subscribe();
 
-    const intervaloRespaldo = setInterval(() => cargarAsistencias(sesionId, diccionarioAlumnos), 2000);
+    // Respaldo por si se pierde el tiempo real. Cada 15 s basta y gasta mucho menos del plan gratuito.
+    const intervaloRespaldo = setInterval(() => cargarAsistencias(sesionId, diccionarioAlumnos), 15000);
 
     return () => { 
       supabase.removeChannel(instantChannel);
@@ -178,7 +181,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
   useEffect(() => {
     if (!sesionId || !secretTotp || fase === 'CERRADA') return;
     const actualizarQR = async () => {
-      const bloqueTiempo = Math.floor(Date.now() / 1000);
+      const bloqueTiempo = Math.floor((Date.now() + desfaseRelojRef.current) / 1000);
       const payload = `${sesionId}|${fase}|${bloqueTiempo}`;
       const token = CryptoJS.HmacSHA256(payload, secretTotp).toString();
       const qrPayload = JSON.stringify({ s: sesionId, f: fase, t: bloqueTiempo, token });
@@ -202,7 +205,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     };
     
     actualizarQR();
-    timerRef.current = setInterval(actualizarQR, 1000);
+    timerRef.current = setInterval(actualizarQR, SEGUNDOS_QR * 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [sesionId, secretTotp, fase]);
 
@@ -351,7 +354,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   const cambiarEstadoManual = async (asistenciaId: string, nuevoEstado: EstadoAsistencia) => {
-    await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
+    const { error } = await supabase.from('asistencias').update({ estado: nuevoEstado, manual: true }).eq('id', asistenciaId);
+    if (error) mostrarNotificacion('No se pudo cambiar el estado. Revisa tu conexión.', 'error');
     cargarAsistencias(sesionId!, diccionarioAlumnos); 
   };
 
@@ -361,16 +365,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
 
-      {/* NOTIFICACIONES PREMIUM */}
-      {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-          'bg-[#002b5c]/95 border-white/10 text-white'
-        }`}>
-          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
-        </div>
-      )}
+      <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       {/* MAIN CONTENT WRAPPER */}
       <div className="w-full flex-1 flex flex-col anim-suave relative z-10">
@@ -521,6 +516,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
+                          {(item.perfiles as any)?.pendiente && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+                          )}
 
                         </div>
                         <select
@@ -564,6 +562,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
                           <p className="font-bold text-[#002b5c] text-xs tracking-tight truncate" title={item.perfiles?.nombre_completo || 'Alumno Registrado'}>
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
+                          {(item.perfiles as any)?.pendiente && (
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+                          )}
 
                         </div>
                         <select
@@ -600,8 +601,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
-            <p className="text-xs text-slate-500 font-medium mb-8">Confirma tu identidad docente.</p>
-            <input type="password" placeholder="Contraseña" value={passInput} onChange={(e) => setPassInput(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
+            <p className="text-xs text-slate-500 font-medium mb-8">Escribe tu contraseña para confirmar.</p>
+            <input type="password" placeholder="Contraseña" value={passInput} autoFocus onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
             <div className="flex flex-col gap-3">
               <button onClick={confirmarCierreClase} disabled={cargandoCierre || !passInput} className="w-full py-4 rounded-2xl bg-[#0090d0] hover:bg-[#007ba8] text-white text-sm font-bold shadow-md shadow-[#0090d0]/20 active:scale-95 disabled:opacity-50 transition-all cursor-pointer">Cerrar y Guardar</button>
               <button onClick={() => { setMostrarModalCierre(false); setPassInput(''); }} className="w-full py-4 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Volver</button>

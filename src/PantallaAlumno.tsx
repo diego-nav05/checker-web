@@ -1,17 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
-import CryptoJS from 'crypto-js';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 import type { Asignatura } from './types';
+import { AvisoFlotante, useAviso } from './Aviso';
 
 interface Props {
   onVolver: () => void;
+  onIrARegistro: () => void;
 }
 
 type TabAlumno = 'HORARIO' | 'CALENDARIO';
 
-export default function PantallaAlumno({ onVolver }: Props) {
+// Traduce los errores del servidor al escanear a mensajes claros
+const mensajeEscaneo = (codigo: string) => {
+  if (codigo.includes('NO_SESION') || codigo.toLowerCase().includes('jwt')) return 'SESION_PERDIDA';
+  if (codigo.includes('SIN_PERFIL')) return 'SESION_PERDIDA';
+  if (codigo.includes('AULA_CERRADA')) return 'El aula ya no admite entradas: el profesor ha cerrado la clase.';
+  if (codigo.includes('QR_CADUCADO')) return 'Código caducado. Vuelve a enfocar el QR de la pantalla.';
+  if (codigo.includes('QR_FALSO')) return 'Este QR no es auténtico. Escanea el de la pantalla del profesor.';
+  if (codigo.includes('FASE_CAMBIADA')) return 'El profesor acaba de cambiar de fase. Vuelve a escanear el QR.';
+  if (codigo.includes('BLOQUEADO')) return 'El docente ha bloqueado o modificado tu registro para esta sesión. Habla con él si crees que es un error.';
+  if (codigo.includes('NO_ALUMNO')) return 'Esta cuenta es de docente: no puede registrar asistencia.';
+  if (codigo.toLowerCase().includes('failed to fetch') || codigo.toLowerCase().includes('network')) return 'Sin conexión a internet. Revisa tu conexión y vuelve a escanear.';
+  return 'No se pudo registrar la asistencia. Vuelve a intentarlo.';
+};
+
+export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
   const [nombre] = useState<string>(() => localStorage.getItem('checker_nombre') || 'Estudiante');
   const [alumnoId] = useState<string>(() => localStorage.getItem('checker_alumno_id') || '');
   
@@ -20,7 +35,8 @@ export default function PantallaAlumno({ onVolver }: Props) {
   const [procesandoQr, setProcesandoQr] = useState(false);
   const [zoomActual, setZoomActual] = useState<number | string>(1);
   
-  const [notificacion, setNotificacion] = useState<{ texto: string; tipo: 'exito' | 'error' | 'info' } | null>(null);
+  const { aviso, avisar: mostrarNotificacion, cerrar: cerrarAviso } = useAviso();
+  const [sesionPerdida, setSesionPerdida] = useState(false);
   const [clasesHoy, setClasesHoy] = useState<Asignatura[]>([]);
   const [cargandoClases, setCargandoClases] = useState(true);
 
@@ -30,10 +46,16 @@ export default function PantallaAlumno({ onVolver }: Props) {
 
   const qrScannerRef = useRef<Html5Qrcode | null>(null);
 
-  const mostrarNotificacion = (texto: string, tipo: 'exito' | 'error' | 'info' = 'info') => {
-    setNotificacion({ texto, tipo });
-    setTimeout(() => setNotificacion(null), 4000);
-  };
+  // Con la seguridad activada, el móvil necesita su sesión de Supabase además del id guardado
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) return; // sin conexión: no echamos a nadie por eso
+      if (!data.session || data.session.user.id !== alumnoId) {
+        localStorage.removeItem('checker_alumno_id');
+        setSesionPerdida(true);
+      }
+    });
+  }, [alumnoId]);
 
   const cargarAsignaturas = async () => {
     if (!alumnoId) return;
@@ -175,65 +197,18 @@ export default function PantallaAlumno({ onVolver }: Props) {
             setProcesandoQr(true);
 
             try {
-              const payload = JSON.parse(decodedText);
-              const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload;
+              let payload: any = null;
+              try { payload = JSON.parse(decodedText); } catch { /* no es JSON */ }
+              const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload ?? {};
+              if (!sesionId || !fase || !bloqueTiempo || !token) throw new Error('Ese código QR no es de Checker. Escanea el de la pantalla del profesor.');
 
-              const { data: sesion, error: sesionErr } = await supabase.from('sesiones').select('*').eq('id', sesionId).single();
-              if (sesionErr || !sesion || sesion.fase === 'CERRADA') throw new Error('El aula ya no admite entradas.');
-              
-              if (Math.abs(Math.floor(Date.now() / 1000) - bloqueTiempo) > 4) throw new Error('Código caducado. Vuelve a enfocar.');
-              
-              const tokenEsperado = CryptoJS.HmacSHA256(`${sesionId}|${fase}|${bloqueTiempo}`, sesion.secret_totp).toString();
-              if (token !== tokenEsperado) throw new Error('El QR no es auténtico.');
+              // El servidor comprueba el QR y guarda la asistencia (la clave del QR nunca llega al móvil)
+              const { data: resultado, error: errorRegistro } = await supabase.rpc('registrar_asistencia', {
+                p_sesion: sesionId, p_fase: fase, p_t: bloqueTiempo, p_token: token,
+              });
+              if (errorRegistro) throw new Error(mensajeEscaneo(errorRegistro.message));
 
-              const ahora = new Date().toISOString();
-              
-              const { data: existe } = await supabase.from('asistencias').select('*').eq('sesion_id', sesionId).eq('alumno_id', alumnoId).maybeSingle();
-
-              if (existe && existe.manual) {
-                throw new Error('El docente ha bloqueado o modificado tu registro para esta sesión.');
-              }
-
-              if (fase === 'ENTRADA') {
-                if (existe) {
-                  const { error } = await supabase.from('asistencias').update({ estado: 'PRESENTE', hora_entrada: ahora }).eq('id', existe.id);
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                } else {
-                  const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'PRESENTE', hora_entrada: ahora });
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                }
-                mostrarNotificacion('¡Entrada registrada!', 'exito');
-              } else {
-                if (existe) {
-                  const nuevoEstado = existe.hora_entrada ? existe.estado : 'RETRASO';
-                  const { error } = await supabase.from('asistencias').update({ hora_salida: ahora, estado: nuevoEstado }).eq('id', existe.id);
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                } else {
-                  const { error } = await supabase.from('asistencias').insert({ sesion_id: sesionId, alumno_id: alumnoId, estado: 'RETRASO', hora_salida: ahora });
-                  if (error) {
-                    if (error.message.includes('asistencias_alumno_id_fkey')) {
-                      throw new Error('Cuenta eliminada o desvinculada. Vuelve a iniciar sesión.');
-                    }
-                    throw new Error(error.message);
-                  }
-                }
-                mostrarNotificacion('¡Salida completada!', 'exito');
-              }
+              mostrarNotificacion(resultado === 'SALIDA_OK' ? '¡Salida completada!' : '¡Entrada registrada!', 'exito');
 
               try {
                 const pingChannel = supabase.channel('aula-realtime');
@@ -253,12 +228,12 @@ export default function PantallaAlumno({ onVolver }: Props) {
               setCamaraActiva(false);
               
             } catch (e: any) {
-              if (e.message && e.message.includes('Cuenta eliminada o desvinculada')) {
+              if (e.message === 'SESION_PERDIDA') {
                 localStorage.removeItem('checker_alumno_id');
-                mostrarNotificacion('Tu sesión expiró o fue eliminada. Vincula tu móvil de nuevo.', 'error');
-                setTimeout(() => {
-                  window.location.reload();
-                }, 2000);
+                if (html5QrCode.getState() !== 1) await html5QrCode.stop().catch(() => {});
+                setCamaraActiva(false);
+                setSesionPerdida(true);
+                return;
               } else {
                 mostrarNotificacion(e.message || 'Error procesando código.', 'error');
               }
@@ -408,14 +383,19 @@ export default function PantallaAlumno({ onVolver }: Props) {
     <div className="min-h-[100dvh] bg-[#F0F4F8] p-4 sm:p-8 flex flex-col font-sans selection:bg-[#0090d0] selection:text-white relative overflow-hidden">
       <div className="glow-blob"></div>
       
-      {/* NOTIFICACIONES */}
-      {notificacion && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[200] px-6 py-3.5 rounded-full shadow-[0_10px_40px_-10px_rgba(0,0,0,0.2)] backdrop-blur-2xl flex items-center gap-3 transition-all duration-500 cubic-bezier(0.16,1,0.3,1) animate-[fade-in-down_0.4s_ease-out] w-fit min-w-[280px] max-w-sm border ${
-          notificacion.tipo === 'error' ? 'bg-rose-500/95 border-rose-400/50 text-white' : 
-          notificacion.tipo === 'exito' ? 'bg-emerald-500/95 border-emerald-400/50 text-white' : 
-          'bg-[#002b5c]/95 border-white/10 text-white'
-        }`}>
-          <span className="text-sm font-semibold tracking-wide">{notificacion.texto}</span>
+      <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
+
+      {sesionPerdida && (
+        <div className="fixed inset-0 z-[250] bg-[#002b5c]/40 backdrop-blur-md flex items-center justify-center p-4 anim-suave">
+          <div className="glass-container bg-white/90 rounded-[2.5rem] p-8 max-w-sm w-full text-center flex flex-col gap-4">
+            <h3 className="text-2xl font-black text-[#002b5c] tracking-tight">Vuelve a iniciar sesión</h3>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">
+              Por seguridad necesitamos que vuelvas a entrar con tu correo y contraseña. Tu móvil sigue vinculado y no pierdes ninguna asistencia.
+            </p>
+            <button onClick={onIrARegistro} className="w-full py-4 bg-gradient-to-br from-[#0090d0] to-[#007fb8] text-white font-bold rounded-[1.5rem] text-sm tracking-wide cursor-pointer active:scale-[0.97] shadow-[0_8px_20px_rgba(0,144,208,0.3)]">
+              Iniciar sesión
+            </button>
+          </div>
         </div>
       )}
 
