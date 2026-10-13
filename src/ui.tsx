@@ -13,14 +13,14 @@ export const retraso = (indice: number): CSSProperties => ({ '--i': indice } as 
 interface PantallaProps {
   children: ReactNode;
   // Ancho máximo del contenido: 'estrecho' para formularios, 'normal' para casi todo, 'amplio' para el aula
-  ancho?: 'estrecho' | 'normal' | 'amplio';
+  ancho?: 'estrecho' | 'normal' | 'grande' | 'amplio';
   centrada?: boolean;
   className?: string;
   // Elementos pegados a los bordes de la pantalla (botón de compartir, sesión del docente...)
   esquinas?: ReactNode;
 }
 
-const ANCHOS = { estrecho: 'max-w-sm', normal: 'max-w-6xl', amplio: 'max-w-[1700px]' };
+const ANCHOS = { estrecho: 'max-w-sm', normal: 'max-w-6xl', grande: 'max-w-[1500px]', amplio: 'max-w-[1700px]' };
 
 export function Pantalla({ children, ancho = 'normal', centrada = false, className, esquinas }: PantallaProps) {
   return (

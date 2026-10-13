@@ -316,7 +316,9 @@ export default function PantallaProfesor({ onVolver }: Props) {
       setFase('CERRADA');
       setMostrarModalCierre(false);
       cargarAsistencias(sesionId, diccionarioAlumnos);
-      mostrarNotificacion('Clase cerrada y guardada.', 'exito');
+      mostrarNotificacion('Clase cerrada y guardada. Volviendo al inicio...', 'exito');
+      // Tras un momento para leer el aviso, el profe vuelve solo al menú de inicio
+      setTimeout(onVolver, 1500);
       
       // Cerramos automáticamente el pop-up al acabar la clase
       if (popUpRef.current && !popUpRef.current.closed) {
@@ -370,7 +372,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
   return (
-    <Pantalla ancho="normal" esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} lado={sesionId ? 'derecha' : 'izquierda'} />}>
+    <Pantalla ancho={sesionId ? 'grande' : 'normal'} esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} />}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       <Cabecera
@@ -446,7 +448,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
             {fase !== 'CERRADA' ? (
               <div className="relative z-10 w-full flex flex-col items-center">
-                <div className="mb-6 flex items-center justify-between w-full max-w-[25rem]">
+                <div className="mb-6 flex items-center justify-between w-full max-w-[32rem]">
                   <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-azul/5 text-azul border-azul/10'}`}>
                     {fase === 'ENTRADA' ? '📍 Modo entrada' : '🚪 Modo salida'}
                   </span>
@@ -455,8 +457,8 @@ export default function PantallaProfesor({ onVolver }: Props) {
                   </button>
                 </div>
 
-                <div className="p-4 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100">
-                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-72 h-72 sm:w-[25rem] sm:h-[25rem] rounded-control object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
+                <div className="w-full max-w-[32rem] aspect-square p-4 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100">
+                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-control object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
                 </div>
 
                 <div className="mt-8 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
