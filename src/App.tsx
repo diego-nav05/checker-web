@@ -306,9 +306,15 @@ export default function App() {
       ), volverInicio);
     }
 
-    return vista === 'PROFESORADO'
-      ? <PantallaProfesor onVolver={volverInicio} />
-      : <PantallaGestionDocente onVolver={volverInicio} />;
+    return (
+      <>
+        {/* El saludo tras iniciar sesión sigue visible al entrar en el aula o en Gestión */}
+        <AvisoFlotante aviso={aviso} onCerrar={cerrar} />
+        {vista === 'PROFESORADO'
+          ? <PantallaProfesor onVolver={volverInicio} />
+          : <PantallaGestionDocente onVolver={volverInicio} />}
+      </>
+    );
   }
 
   return (

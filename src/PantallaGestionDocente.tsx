@@ -92,8 +92,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
       // Alumnos de mis clases = matriculados + los que tienen alguna asistencia
       const asigIds = asigs.map(a => a.id);
       const { data: matriculas } = await supabase.from('matriculas').select('alumno_id, asignatura_id').in('asignatura_id', asigIds);
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id').in('asignatura_id', asigIds);
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id, fase').in('asignatura_id', asigIds);
       const sesionIds = (sesiones || []).map(s => s.id);
+      const sesionesCerradas = new Set((sesiones || []).filter(s => s.fase === 'CERRADA').map(s => s.id));
       const { data: asistencias } = sesionIds.length > 0
         ? await supabase.from('asistencias').select('alumno_id, sesion_id, estado').in('sesion_id', sesionIds)
         : { data: [] as { alumno_id: string; sesion_id: string; estado: string }[] };
@@ -109,12 +110,10 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         .order('nombre_completo', { ascending: true });
       if (perfiles) {
         const perfilesConStats = perfiles.map(perfil => {
-          const asistsAlumno = (asistencias || []).filter(a => a.alumno_id === perfil.id);
-          const asigIdsAlumno = [...new Set([
-            ...asistsAlumno.map(a => (sesiones || []).find(s => s.id === a.sesion_id)?.asignatura_id),
-            ...(matriculas || []).filter(m => m.alumno_id === perfil.id).map(m => m.asignatura_id),
-          ].filter(Boolean))];
-          const totalSesionesPosibles = (sesiones || []).filter(s => asigIdsAlumno.includes(s.asignatura_id)).length;
+          // Las clases aún abiertas no cuentan: el alumno todavía puede escanear
+          const asistsAlumno = (asistencias || []).filter(a => a.alumno_id === perfil.id && sesionesCerradas.has(a.sesion_id));
+          // Solo cuentan las clases en las que el alumno ya estaba en la lista (no las anteriores a su alta)
+          const totalSesionesPosibles = asistsAlumno.length;
           
           const asistenciasValidas = asistsAlumno.filter(a => {
             const st = a.estado?.toUpperCase() || '';
@@ -234,9 +233,13 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     setCargandoAlumno(false);
   };
 
-  const desvincularDispositivo = async (alumno: any) => {
-    const confirmar = window.confirm(`¿Liberar el móvil de ${alumno.nombre_completo}?\n\nPodrá vincular su cuenta a otro móvil o navegador la próxima vez que inicie sesión.`);
-    if (!confirmar) return;
+  const [alumnoALiberar, setAlumnoALiberar] = useState<any | null>(null);
+  const desvincularDispositivo = (alumno: any) => setAlumnoALiberar(alumno);
+
+  const confirmarLiberarMovil = async () => {
+    const alumno = alumnoALiberar;
+    if (!alumno) return;
+    setAlumnoALiberar(null);
     const { error } = await supabase.rpc('desvincular_dispositivo', { p_alumno: alumno.id });
     if (error) mostrarNotificacion('Error al desvincular. Inténtalo de nuevo.', 'error');
     else {
@@ -373,7 +376,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         const d = new Date(f);
         const pad = (n: number) => n.toString().padStart(2, '0');
         localYMD = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-        fechaStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`;
+        fechaStr = `${d.toLocaleDateString('es-ES')} ${d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' })}`;
       }
 
       return {
@@ -385,7 +388,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
     });
   };
 
-  const formatTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '--:--';
+  const formatTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' }) : '--:--';
 
   const generarMatrizReporte = async () => {
     if (!asignaturaSeleccionada) return null;
@@ -667,7 +670,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
         XLSX.utils.book_append_sheet(libro, hoja, asig.nombre.substring(0, 31));
       });
       
-      XLSX.writeFile(libro, `Reporte_Global_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+      XLSX.writeFile(libro, `Reporte_Global_${new Date().toLocaleDateString('es-ES').replace(/\//g, '-')}.xlsx`);
       mostrarNotificacion('Descarga completada.', 'exito');
       setModalExportadorGlobal(false);
     } catch {
@@ -779,7 +782,9 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
 
       <div className="flex items-center justify-between glass-container px-6 py-4 rounded-[2.5rem] mb-8 max-w-5xl mx-auto w-full animate-[fade-in_0.4s_ease-out]">
         <div className="flex items-center gap-4">
-          <button onClick={onVolver} className="flex items-center justify-center w-10 h-10 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors cursor-pointer active:scale-95">←</button>
+          <button onClick={onVolver} className="flex items-center justify-center w-11 h-11 bg-white hover:bg-slate-50 border border-slate-100/80 rounded-full text-slate-500 shadow-sm transition-all duration-300 hover:shadow-md cursor-pointer active:scale-90">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          </button>
           <div>
             <h1 className="text-xl font-black text-[#002b5c] tracking-tight leading-tight">Gestión Docente</h1>
             <p className="text-xs font-semibold text-slate-400">Panel Global</p>
@@ -821,7 +826,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                         {alumno.pendiente ? (
                           <div className="flex items-center gap-1.5" title="Dado de alta por un profesor: aún no ha activado su cuenta">
                             <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                            <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600">Pendiente · {alumno.codigo_alta}</span>
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-amber-600 whitespace-nowrap">Pendiente · {alumno.codigo_alta}</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5">
@@ -1076,7 +1081,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                   </button>
                   <p className="text-[11px] text-amber-700/80 font-semibold mt-3 leading-snug">
                     {tieneCorreoReal(alumnoGestion.email)
-                      ? `Se activará sola cuando el alumno se registre o inicie sesión con ${alumnoGestion.email}. También puede usar este código al registrarse.`
+                      ? `Se activará cuando el alumno entre con ${alumnoGestion.email} y pulse el enlace del correo de activación que le llegará (que mire en spam). También puede usar este código al registrarse.`
                       : 'Dale este código al alumno: al crear su cuenta, que pulse "¿Tu profesor te dio un código de alta?" y lo escriba.'}
                   </p>
                 </div>
@@ -1326,6 +1331,22 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="flex gap-3 mt-2">
               <button onClick={() => setAsignandoClase(null)} className="flex-1 py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
               <button onClick={confirmarAsignarClase} className="flex-1 py-3.5 rounded-2xl bg-[#002b5c] hover:bg-[#0090d0] text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Añadir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: CONFIRMAR LIBERAR MÓVIL --- */}
+      {alumnoALiberar && (
+        <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-[fade-in_0.2s_ease-out]">
+          <div className="glass-container rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center flex flex-col gap-4">
+            <h3 className="text-xl font-black text-[#002b5c] tracking-tight">¿Liberar el móvil?</h3>
+            <p className="text-sm text-slate-500 font-medium leading-relaxed">
+              <span className="font-bold text-[#002b5c]">{alumnoALiberar.nombre_completo}</span> podrá vincular su cuenta a otro móvil o navegador la próxima vez que inicie sesión.
+            </p>
+            <div className="flex gap-3 mt-2">
+              <button onClick={() => setAlumnoALiberar(null)} className="flex-1 py-3.5 rounded-2xl text-slate-500 text-sm font-bold bg-slate-50 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer">Cancelar</button>
+              <button onClick={confirmarLiberarMovil} className="flex-1 py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-95 transition-all cursor-pointer">Liberar</button>
             </div>
           </div>
         </div>

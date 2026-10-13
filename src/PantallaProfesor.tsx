@@ -272,10 +272,6 @@ export default function PantallaProfesor({ onVolver }: Props) {
   };
 
   const intentarCerrarAula = () => {
-    if (fase === 'ENTRADA') {
-      const confirmar = window.confirm('Aviso: No activaste la salida.\nSi cierras ahora, se validará automáticamente la salida a los alumnos que ya estaban en clase.\nLos alumnos que no entraron a tiempo ya no podrán escanear y quedarán como pendientes/ausentes.\n\n¿Cerrar clase de todos modos?');
-      if (!confirmar) return;
-    }
     setMostrarModalCierre(true);
   };
 
@@ -517,7 +513,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
                           {(item.perfiles as any)?.pendiente && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
                           )}
 
                         </div>
@@ -563,7 +559,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
                             {item.perfiles?.nombre_completo || 'Alumno Registrado'}
                           </p>
                           {(item.perfiles as any)?.pendiente && (
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-amber-500 whitespace-nowrap truncate" title="Dado de alta por el profesor: aún no ha activado su cuenta">Sin cuenta activa</span>
                           )}
 
                         </div>
@@ -601,6 +597,14 @@ export default function PantallaProfesor({ onVolver }: Props) {
         <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-[fade-in_0.2s_ease-out]">
           <div className="glass-container rounded-[2.5rem] p-10 max-w-sm w-full text-center">
             <h3 className="text-xl font-black text-[#002b5c] tracking-tight mb-2">Finalizar Aula</h3>
+            {fase === 'ENTRADA' && (
+              <div className="text-left bg-amber-50 border border-amber-100 rounded-2xl p-4 mt-4 mb-4">
+                <p className="text-xs font-black text-amber-700 uppercase tracking-wider mb-1">No has activado la salida</p>
+                <p className="text-xs text-amber-700/90 font-medium leading-relaxed">
+                  Si cierras ahora, se dará por buena la salida de quienes ya entraron. Quien no haya escaneado quedará como ausente.
+                </p>
+              </div>
+            )}
             <p className="text-xs text-slate-500 font-medium mb-8">Escribe tu contraseña para confirmar.</p>
             <input type="password" placeholder="Contraseña" value={passInput} autoFocus onChange={(e) => setPassInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && passInput) confirmarCierreClase(); }} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl mb-8 focus:outline-none focus:ring-2 focus:ring-[#0090d0]/20 text-center text-sm font-semibold transition-all"/>
             <div className="flex flex-col gap-3">

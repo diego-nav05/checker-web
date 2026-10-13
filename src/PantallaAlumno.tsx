@@ -65,7 +65,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       if (!misAsistencias || misAsistencias.length === 0) return setClasesHoy([]);
       
       const sesionIdsAlumno = [...new Set(misAsistencias.map(a => a.sesion_id))];
-      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id');
+      const { data: sesiones } = await supabase.from('sesiones').select('id, asignatura_id, fase');
       if (!sesiones || sesiones.length === 0) return;
       
       const asigIdsAlumno = [...new Set(sesiones.filter(s => sesionIdsAlumno.includes(s.id)).map(s => s.asignatura_id))].filter(Boolean);
@@ -78,9 +78,10 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       if (asignaturas) {
         const asigsConStats = asignaturas.map(asig => {
            const sesionesDeAsig = sesiones.filter(s => s.asignatura_id === asig.id);
-           const totalSesionesPosibles = sesionesDeAsig.length;
-           
-           const asistsDeEstaAsig = misAsistencias.filter(a => sesionesDeAsig.some(s => s.id === a.sesion_id));
+           // Las clases aún abiertas no cuentan: todavía puede escanear
+           const asistsDeEstaAsig = misAsistencias.filter(a => sesionesDeAsig.some(s => s.id === a.sesion_id && s.fase === 'CERRADA'));
+           // Solo cuentan las clases en las que el alumno ya estaba en la lista (no las anteriores a su alta)
+           const totalSesionesPosibles = asistsDeEstaAsig.length;
            const asistenciasValidas = asistsDeEstaAsig.filter(a => {
               const st = a.estado?.toUpperCase() || '';
               return !(st.includes('AUSENTE') || st.includes('INJUSTIFICADA') || st === 'FALTA');
@@ -349,7 +350,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
     const fechasOrdenadas: string[] = [];
 
     historial.forEach(reg => {
-      const fechaStr = new Date(reg.fecha).toLocaleDateString();
+      const fechaStr = new Date(reg.fecha).toLocaleDateString('es-ES');
       if (!registrosPorFecha[fechaStr]) {
         registrosPorFecha[fechaStr] = { Fecha: fechaStr };
         fechasOrdenadas.push(fechaStr); // Como el historial viene ordenado desc, esto mantiene el orden
@@ -357,8 +358,8 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       
       const estadoLimpio = reg.estado.replace(/_/g, ' ');
       const horaStr = reg.hora_entrada 
-        ? new Date(reg.hora_entrada).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
-        : (reg.hora_salida ? new Date(reg.hora_salida).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '');
+        ? new Date(reg.hora_entrada).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}) 
+        : (reg.hora_salida ? new Date(reg.hora_salida).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}) : '');
       
       const valor = horaStr ? `${estadoLimpio} (${horaStr})` : estadoLimpio;
       
@@ -376,7 +377,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
     const hoja = XLSX.utils.json_to_sheet(filasFinales);
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Mi_Asistencia');
-    XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+    XLSX.writeFile(libro, `Mi_Asistencia_${new Date().toLocaleDateString('es-ES').replace(/\//g, '-')}.xlsx`);
   };
 
   return (
@@ -595,9 +596,9 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
                     <div>
                       <h4 className="font-bold text-[#002b5c] text-[15px] tracking-tight mb-2">{registro.asignatura_nombre}</h4>
                       <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString()}</span>
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">In: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
-                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Out: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">{new Date(registro.fecha).toLocaleDateString('es-ES')}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Entrada: {registro.hora_entrada ? new Date(registro.hora_entrada).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
+                        <span className="bg-slate-50/80 px-2.5 py-1.5 rounded-md border border-slate-100">Salida: {registro.hora_salida ? new Date(registro.hora_salida).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
                       </div>
                     </div>
                     <span className={`px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-center shadow-sm border transition-transform duration-300 group-hover:scale-105

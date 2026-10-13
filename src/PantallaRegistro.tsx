@@ -262,8 +262,8 @@ export default function PantallaRegistro({ onVolver }: Props) {
 
           <form onSubmit={autenticar} className="flex flex-col gap-4">
             {!esRecuperarPass && esRegistro && (
-              <div className="animate-[fade-in-down_0.3s_ease-out]">
-                <div className="flex bg-white/50 backdrop-blur-md p-1.5 rounded-[1.5rem] border border-white mb-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+              <div className="animate-[fade-in-down_0.3s_ease-out] flex flex-col gap-4">
+                <div className="flex bg-white/50 backdrop-blur-md p-1.5 rounded-[1.5rem] border border-white shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
                   <button type="button" onClick={() => { setRolRegistro('alumno'); setEmail(''); }} className={`flex-1 py-3 text-[11px] uppercase tracking-widest font-bold rounded-xl transition-all duration-300 cursor-pointer ${rolRegistro === 'alumno' ? 'bg-[#002b5c] text-white shadow-md' : 'text-slate-500 hover:text-[#002b5c]'}`}>
                     Estudiante
                   </button>
@@ -272,7 +272,7 @@ export default function PantallaRegistro({ onVolver }: Props) {
                   </button>
                 </div>
 
-                <input type="text" placeholder="Nombre y Apellidos" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full mb-4 p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
+                <input type="text" placeholder="Nombre y Apellidos" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-white focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-bold tracking-wide transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)]" required/>
               </div>
             )}
 
@@ -302,13 +302,13 @@ export default function PantallaRegistro({ onVolver }: Props) {
                 <div className="animate-[fade-in-down_0.3s_ease-out]">
                   <input
                     type="text"
-                    placeholder="Código de alta (ej. K7P2QX)"
+                    placeholder="Código de alta"
                     value={codigoAlta}
                     onChange={(e) => setCodigoAlta(e.target.value.toUpperCase())}
                     maxLength={8}
                     autoCapitalize="characters"
                     autoComplete="off"
-                    className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-[#0090d0]/20 focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-black tracking-[0.3em] text-center transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] uppercase"
+                    className="w-full p-4 bg-white/50 backdrop-blur-md rounded-[1.5rem] border border-[#0090d0]/20 focus:border-[#0090d0]/30 focus:ring-4 focus:ring-[#0090d0]/10 focus:outline-none text-[#002b5c] text-sm font-black tracking-[0.3em] text-center transition-all shadow-[0_2px_10px_rgba(0,0,0,0.02)] uppercase placeholder:normal-case placeholder:tracking-normal placeholder:font-bold"
                   />
                   <p className="text-[11px] text-slate-400 font-semibold mt-2 px-2 leading-snug">
                     Lo tienes si tu profesor te dio de alta antes de que te registraras. Tus asistencias se conservarán.
@@ -335,19 +335,19 @@ export default function PantallaRegistro({ onVolver }: Props) {
           <div className="mt-8 text-center flex flex-col items-center gap-3">
             <div className="w-16 h-[1px] bg-slate-200/60 mb-1"></div>
             {esRecuperarPass ? (
-              <button type="button" onClick={() => setEsRecuperarPass(false)} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">Volver a <span className="text-[#0090d0]">Iniciar Sesión</span></span>
+              <button type="button" onClick={() => setEsRecuperarPass(false)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">Volver a <span className="text-[#0090d0]">Iniciar Sesión</span></span>
               </button>
             ) : esRegistro ? (
-              <button type="button" onClick={() => cambiarModo(false)} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
+              <button type="button" onClick={() => cambiarModo(false)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,144,208,0.15)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">
                   ¿Ya tienes una cuenta? <span className="text-[#0090d0]">Inicia sesión</span>
                 </span>
               </button>
             ) : (
               <div className="flex flex-col items-center gap-4">
-                <button type="button" onClick={() => cambiarModo(true)} className="group relative px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
-                  <span className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-[#002b5c] transition-colors">
+                <button type="button" onClick={() => cambiarModo(true)} className="group relative px-5 sm:px-6 py-3 bg-white/60 backdrop-blur-md rounded-full border border-white/80 shadow-sm hover:shadow-[0_8px_20px_rgba(0,43,92,0.1)] hover:bg-white transition-all duration-300 hover:-translate-y-0.5 cursor-pointer">
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest text-[#002b5c] transition-colors whitespace-nowrap">
                     ¿Eres nuevo? <span className="text-[#002b5c] opacity-70 group-hover:opacity-100">Regístrate aquí</span>
                   </span>
                 </button>
