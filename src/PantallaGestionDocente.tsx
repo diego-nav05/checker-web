@@ -1256,7 +1256,7 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h3 className="text-xl font-black text-marino tracking-tight">Añadir alumno</h3>
-                <p className="text-xs text-slate-500 font-semibold mt-1">Aunque todavía no tenga cuenta</p>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Tenga cuenta o no: si ya la tiene, se usa la suya</p>
               </div>
               <button onClick={() => setModalAlta(false)} aria-label="Cerrar" className="w-9 h-9 flex shrink-0 items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full cursor-pointer transition-colors active:scale-95">✕</button>
             </div>
@@ -1266,12 +1266,14 @@ export default function PantallaGestionDocente({ onVolver }: Props) {
                 <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto"><span className="text-3xl">✓</span></div>
                 {resultadoAlta.tipo === 'EXISTENTE' && !resultadoAlta.pendiente ? (
                   <p className="text-sm text-slate-600 font-semibold leading-relaxed">
-                    <span className="text-marino font-black">{resultadoAlta.nombre}</span> ya tenía cuenta con ese correo: lo hemos añadido a la asignatura.
+                    <span className="text-marino font-black">{resultadoAlta.nombre}</span> ya tenía cuenta{resultadoAlta.porNombre ? '' : ' con ese correo'}: no hemos creado otra, solo lo hemos añadido a la asignatura con la suya.{resultadoAlta.porNombre && ' Puede seguir escaneando como siempre.'}
                   </p>
                 ) : (
                   <>
                     <p className="text-sm text-slate-600 font-semibold leading-relaxed">
-                      Hemos creado la cuenta de <span className="text-marino font-black">{resultadoAlta.nombre}</span>. Ya aparece en tu clase y puedes marcarle la asistencia.
+                      {resultadoAlta.tipo === 'EXISTENTE'
+                        ? <><span className="text-marino font-black">{resultadoAlta.nombre}</span> ya estaba dado de alta (aún sin activar): lo hemos añadido a tu clase sin duplicarlo.</>
+                        : <>Hemos creado la cuenta de <span className="text-marino font-black">{resultadoAlta.nombre}</span>. Ya aparece en tu clase y puedes marcarle la asistencia.</>}
                     </p>
                     {resultadoAlta.codigo && (
                       <button onClick={() => copiarCodigo(resultadoAlta.codigo!)} className="w-full py-4 bg-white rounded-control text-3xl font-black tracking-[0.3em] text-marino border border-slate-100 shadow-sm cursor-pointer active:scale-95" title="Copiar código">

@@ -1,7 +1,8 @@
 // Edge Function "cuentas": operaciones que necesitan la clave de administrador de Supabase.
 //
-//  · accion "alta"     → un profesor da de alta a un alumno que no tiene cuenta (solo con el nombre;
-//                         el correo es opcional). Si el correo ya tiene cuenta, solo lo matricula.
+//  · accion "alta"     → un profesor mete a un alumno en su asignatura (solo con el nombre; el correo
+//                         es opcional). Si ya tiene cuenta (por el correo o, sin correo, por el nombre),
+//                         solo lo matricula; si no, le crea una cuenta pendiente de activar.
 //  · accion "reclamar" → el alumno activa la cuenta que le creó el profesor, con su correo y su
 //                         contraseña. Se identifica por el correo o por el código de alta.
 //
@@ -27,6 +28,9 @@ const responder = (cuerpo: unknown, status = 200) =>
 const normalizarEmail = (email: unknown) => (typeof email === 'string' ? email.trim().toLowerCase() : '');
 // ilike trata '_' y '%' como comodines: los escapamos para comparar el correo exacto sin mayúsculas
 const patronExacto = (texto: string) => texto.replace(/[\\%_]/g, (c) => `\\${c}`);
+// Para comparar nombres sin que importen mayúsculas, tildes ni espacios de más
+const normalizarNombre = (texto: string) =>
+  texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -67,12 +71,29 @@ async function alta(req: Request, admin: SupabaseClient, cuerpo: Record<string, 
   const email = normalizarEmail(cuerpo.email);
   if (email && !EMAIL_VALIDO.test(email)) throw new ErrorCuenta('EMAIL_NO_VALIDO');
 
-  // 2. Si el correo ya tiene cuenta, no creamos otra: solo lo metemos en la asignatura
+  // 2. Si el alumno ya tiene cuenta, no creamos otra: solo lo metemos en la asignatura.
+  //    Con correo lo buscamos por el correo; sin correo, por el nombre (así no se duplica a quien
+  //    ya usa Checker en otra asignatura y el profe solo ha escrito su nombre).
   let alumnoId: string;
   let tipo: 'EXISTENTE' | 'NUEVO';
-  const { data: existente } = email
+  let porNombre = false;
+  let { data: existente } = email
     ? await admin.from('perfiles').select('id, rol').ilike('email', patronExacto(email)).maybeSingle()
-    : { data: null };
+    : { data: null as { id: string; rol: string } | null };
+
+  if (!email) {
+    const buscado = normalizarNombre(nombre);
+    const { data: alumnos } = await admin.from('perfiles').select('id, rol, nombre_completo, pendiente').eq('rol', 'alumno');
+    const iguales = (alumnos || []).filter((a) => normalizarNombre(a.nombre_completo || '') === buscado);
+    // Si hay varios con ese nombre, vale el único que ya ha activado su cuenta; si no, pedimos el correo
+    const activos = iguales.filter((a) => !a.pendiente);
+    const candidatos = iguales.length <= 1 ? iguales : activos.length === 1 ? activos : null;
+    if (!candidatos) throw new ErrorCuenta('NOMBRE_REPETIDO');
+    if (candidatos.length === 1) {
+      existente = { id: candidatos[0].id, rol: candidatos[0].rol };
+      porNombre = true;
+    }
+  }
 
   if (existente) {
     if (existente.rol === 'profesor') throw new ErrorCuenta('ES_PROFESOR');
@@ -106,6 +127,7 @@ async function alta(req: Request, admin: SupabaseClient, cuerpo: Record<string, 
   const { data: perfil } = await admin.from('perfiles').select('nombre_completo, codigo_alta, pendiente').eq('id', alumnoId).single();
   return {
     tipo,
+    porNombre,
     nombre: perfil?.nombre_completo ?? nombre,
     email: email || null,
     pendiente: perfil?.pendiente ?? false,

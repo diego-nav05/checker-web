@@ -37,6 +37,8 @@ export const reclamarCuenta = (datos: { email: string; password: string; nombre?
 
 export interface ResultadoAlta {
   tipo: 'NUEVO' | 'EXISTENTE';
+  // true si se ha reconocido una cuenta que ya existía por el nombre (el profe no puso correo)
+  porNombre?: boolean;
   nombre: string;
   email: string | null;
   pendiente: boolean;
@@ -67,6 +69,7 @@ const MENSAJES: Record<string, string> = {
   EMAIL_YA_REGISTRADO: 'Ese correo ya tiene otra cuenta. Si es tuya, escribe su contraseña correcta para unir tus asistencias. Si no la recuerdas, recupérala primero desde "Iniciar sesión".',
   EMAIL_SIN_CONFIRMAR: 'Ese correo tiene una cuenta sin confirmar. Busca en tu correo (también en spam) el enlace de confirmación y vuelve a intentarlo.',
   PASSWORD_CORTA: 'La contraseña debe tener al menos 6 caracteres.',
+  NOMBRE_REPETIDO: 'Hay varios alumnos con ese mismo nombre. Escribe también su correo para saber cuál es.',
   CODIGO_NO_VALIDO: 'Ese código de alta no existe o ya se ha usado. Revísalo con tu profesor.',
   NO_PENDIENTE: 'No hay ninguna cuenta pendiente con ese correo.',
   ERROR_CREANDO: 'No se pudo crear la cuenta. Inténtalo de nuevo en unos segundos.',

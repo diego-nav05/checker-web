@@ -3,8 +3,8 @@ import wasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 // Lector de QR de la cámara. Usa dos motores:
 // - El detector que trae el propio móvil (Android/Chrome), que es rapidísimo, si existe.
 // - ZXing (el mismo motor que usan muchas apps nativas) para el resto, sobre todo iPhone.
-// Alterna fotogramas enteros con un recorte del centro a resolución completa: así lee tanto un QR
-// descentrado como uno pequeño y lejano (proyector, pizarra del fondo de la clase).
+// Alterna la imagen entera con recortes del centro a resolución completa: así lee tanto un QR
+// descentrado (sin tener que encajarlo en el recuadro) como uno pequeño y lejano.
 
 type Detector = (fuente: HTMLVideoElement | HTMLCanvasElement) => Promise<string | null>;
 
@@ -85,18 +85,48 @@ export async function abrirLector(video: HTMLVideoElement, onLeido: (texto: stri
   const nativo = await detectorNativo();
   let respaldo: Detector | null = null;
 
-  const fotograma = (recortar: boolean) => {
+  // Qué parte de la imagen se analiza en cada vuelta. Se van turnando:
+  //  - 'entera': toda la imagen, para los QR que se ven grandes
+  //  - 'centro': el centro de lo que se ve en pantalla (con el zoom puesto), a resolución completa
+  //  - trozos: la imagen dividida en recuadros que se solapan. Un QR pequeño y lejano solo se encuentra
+  //    bien si se analiza un trozo; así se pilla esté donde esté, sin tener que encajarlo en el recuadro.
+  // Con zoom por software la cámara no amplía de verdad: por eso analizamos el trozo ampliado a
+  // resolución completa, que es lo que hace que el zoom ayude a leer y no sea solo visual.
+  type Zona = { x: number; y: number; lado: number } | 'entera';
+  const trozos = (w: number, h: number) => {
+    const lado = Math.round(Math.min(w, h) * 0.6);
+    const posiciones = (total: number) => {
+      const n = Math.max(1, Math.ceil((total - lado) / (lado * 0.6)) + 1);
+      return Array.from({ length: n }, (_, k) => (n === 1 ? (total - lado) / 2 : ((total - lado) * k) / (n - 1)));
+    };
+    return posiciones(w).flatMap(x => posiciones(h).map(y => ({ x, y, lado })));
+  };
+  const centro = (w: number, h: number, fraccion: number): Zona => {
+    const lado = Math.round(Math.min(w, h) * fraccion / zoom);
+    return { x: (w - lado) / 2, y: (h - lado) / 2, lado };
+  };
+  // Orden de la vuelta: el centro muy a menudo (es donde suele estar el QR) y el resto repartido
+  const zonasDeLaVuelta = (w: number, h: number): Zona[] => {
+    if (zoom > 1) return [centro(w, h, 1), centro(w, h, 0.6), 'entera'];
+    const resto: Zona[] = ['entera', ...trozos(w, h)];
+    return resto.flatMap(z => [centro(w, h, 0.6), z]);
+  };
+
+  const fotograma = (zona: Zona) => {
     const w = video.videoWidth, h = video.videoHeight;
-    let lado = Math.min(w, h);
-    let sx = 0, sy = 0, sw = w, sh = h;
-    if (recortar) {
-      lado = Math.round(lado * 0.7 / zoom);
-      sx = Math.round((w - lado) / 2); sy = Math.round((h - lado) / 2); sw = sh = lado;
+    if (zona === 'entera') {
+      // La imagen entera se reduce un poco para no atascar los móviles lentos (los trozos van a tamaño real)
+      const escala = Math.min(1, 1280 / Math.max(w, h));
+      lienzo.width = Math.round(w * escala); lienzo.height = Math.round(h * escala);
+      ctx.drawImage(video, 0, 0, w, h, 0, 0, lienzo.width, lienzo.height);
+    } else {
+      // Con zoom, el trozo se amplía como en pantalla: los cuadraditos del QR salen más grandes y suaves,
+      // y ZXing los distingue mejor que con 1 o 2 píxeles por cuadradito
+      const salida = Math.min(Math.round(zona.lado * zoom), 1200);
+      lienzo.width = lienzo.height = salida;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(video, Math.round(zona.x), Math.round(zona.y), zona.lado, zona.lado, 0, 0, salida, salida);
     }
-    // El fotograma entero se reduce un poco para que el iPhone no se atasque
-    const escala = recortar ? 1 : Math.min(1, 1280 / Math.max(w, h));
-    lienzo.width = Math.round(sw * escala); lienzo.height = Math.round(sh * escala);
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, lienzo.width, lienzo.height);
     return lienzo;
   };
 
@@ -105,15 +135,19 @@ export async function abrirLector(video: HTMLVideoElement, onLeido: (texto: stri
     let texto: string | null = null;
     try {
       if (video.readyState >= 2 && video.videoWidth > 0) {
-        const recortar = vuelta++ % 2 === 1 || zoom > 1;
+        const turno = vuelta++;
+        const zonas = zonasDeLaVuelta(video.videoWidth, video.videoHeight);
+        const zona = zonas[turno % zonas.length];
         if (nativo) {
           try {
-            texto = await nativo(recortar ? fotograma(true) : video);
+            // El detector del móvil es rápido: puede mirar la imagen entera a tamaño real
+            texto = await nativo(zona === 'entera' ? video : fotograma(zona));
           } catch { /* algunos móviles fallan con el detector propio: tiramos de ZXing */ }
         }
-        if (!texto && (!nativo || vuelta % 4 === 0)) {
+        // Sin detector propio, ZXing en cada vuelta; con él, ZXing de refuerzo de vez en cuando
+        if (!texto && (!nativo || turno % 3 === 2)) {
           respaldo ??= await detectorZxing();
-          texto = await respaldo(fotograma(recortar));
+          texto = await respaldo(fotograma(zona));
         }
       }
     } catch { /* fotograma raro: probamos con el siguiente */ }
@@ -122,7 +156,7 @@ export async function abrirLector(video: HTMLVideoElement, onLeido: (texto: stri
       const seguir = await onLeido(texto);
       if (!seguir) return;
     }
-    setTimeout(buscar, texto ? 600 : 40);
+    setTimeout(buscar, texto ? 600 : 30);
   };
   buscar();
 
