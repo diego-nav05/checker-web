@@ -8,7 +8,7 @@ import type { FaseSesion } from './types';
 //
 // - La sesión es su identificador escrito en base 36 (más corto que con guiones).
 // - Del segundo en que se generó solo van las 4 últimas cifras: el móvil reconstruye el resto con su reloj.
-// - La firma son los 16 primeros caracteres del HMAC: imposible de adivinar en los 20 s que vale.
+// - La firma son los 16 primeros caracteres del HMAC: imposible de adivinar en los 45 s que vale.
 
 export interface CodigoAsistencia {
   sesion: string;

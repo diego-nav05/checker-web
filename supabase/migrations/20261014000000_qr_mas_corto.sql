@@ -1,6 +1,6 @@
 -- QR más fácil de leer: el QR nuevo lleva solo los primeros 16 caracteres de la firma (64 bits),
 -- en vez de los 64. Así tiene muchos menos cuadraditos y se lee mejor desde lejos.
--- Adivinar 64 bits en los 20 segundos que vale cada código es imposible, así que sigue siendo seguro.
+-- Adivinar 64 bits en los 45 segundos que vale cada código es imposible, así que sigue siendo seguro.
 -- Se sigue aceptando la firma completa, para que los QR de la versión anterior funcionen igual.
 create or replace function public.registrar_asistencia(p_sesion uuid, p_fase text, p_t bigint, p_token text)
 returns text language plpgsql security definer set search_path = '' as $$
@@ -27,7 +27,7 @@ begin
   if not found or s.fase = 'CERRADA' then
     raise exception 'AULA_CERRADA';
   end if;
-  if abs(extract(epoch from v_ahora) - p_t) > 20 then
+  if abs(extract(epoch from v_ahora) - p_t) > 45 then
     raise exception 'QR_CADUCADO';
   end if;
   v_firma := encode(extensions.hmac(p_sesion::text || '|' || p_fase || '|' || p_t::text, s.secret_totp, 'sha256'), 'hex');

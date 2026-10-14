@@ -11,8 +11,8 @@ import FilaAlumno from './FilaAlumno';
 import { cargarHorarios, filasDe, horaDeHoy, resumenHorario, tramo, type FilaHorario } from './horario';
 import { crearCodigo } from './codigoQr';
 
-// Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
-const SEGUNDOS_QR = 5;
+// Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 45 s de antigüedad)
+const SEGUNDOS_QR = 15;
 
 interface Props {
   onVolver: () => void;
