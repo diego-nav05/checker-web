@@ -218,9 +218,10 @@ export default function PantallaAlumno({ onVolver, onIrARegistro, codigoPendient
   // llega al móvil). Devuelve el error del servidor traducido, o null si ha ido bien.
   const registrarCodigo = async (codigo: CodigoAsistencia): Promise<string | null> => {
     try {
-      const { data: resultado, error } = await supabase.rpc('registrar_asistencia', {
-        p_sesion: codigo.sesion, p_fase: codigo.fase, p_t: codigo.t, p_token: codigo.firma,
-      });
+      // Los QR actuales no dicen qué clase son (la averigua el servidor); los antiguos, sí
+      const { data: resultado, error } = codigo.sesion
+        ? await supabase.rpc('registrar_asistencia', { p_sesion: codigo.sesion, p_fase: codigo.fase, p_t: codigo.t, p_token: codigo.firma })
+        : await supabase.rpc('registrar_asistencia_qr', { p_fase: codigo.fase, p_t: codigo.t, p_token: codigo.firma });
       if (error) return mensajeEscaneo(error.message);
       mostrarNotificacion(resultado === 'SALIDA_OK' ? '¡Salida completada!' : '¡Entrada registrada!', 'exito');
       try {
@@ -496,7 +497,7 @@ export default function PantallaAlumno({ onVolver, onIrARegistro, codigoPendient
               {/* Indicador de ayuda */}
               <div className="absolute -bottom-10 inset-x-0 flex justify-center text-center">
                 <span className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md bg-black/40 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/10">
-                  Enfoca el código QR aquí
+                  Apunta al QR: no hace falta encajarlo
                 </span>
               </div>
               

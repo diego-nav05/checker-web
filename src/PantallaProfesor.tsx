@@ -203,7 +203,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
       const bloqueTiempo = Math.floor((Date.now() + desfaseRelojRef.current) / 1000);
       const payload = `${sesionId}|${fase}|${bloqueTiempo}`;
       const firma = CryptoJS.HmacSHA256(payload, secretTotp).toString();
-      const contenido = crearCodigo({ sesion: sesionId, fase, t: bloqueTiempo, firma });
+      const contenido = crearCodigo({ fase, t: bloqueTiempo, firma });
 
       // Negro puro sobre blanco y con margen blanco de 4 cuadraditos: lo que mejor leen las cámaras,
       // sobre todo con proyector o pizarra (poco contraste y reflejos)
