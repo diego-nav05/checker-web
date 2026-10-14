@@ -314,11 +314,6 @@ input[type="date"] {
 .contenido-pestana { animation: contenido-pestana 0.5s var(--curva-suave) backwards; }
 
 /* El QR se renueva con un leve "latido" para que se note que está vivo */
-@keyframes qr-latido {
-  0% { transform: scale(0.985); opacity: 0.85; }
-  100% { transform: none; opacity: 1; }
-}
-.qr-latido { animation: qr-latido 0.45s var(--curva-suave); }
 .qr-nitido { image-rendering: pixelated; }
 
 /* ---------- Racha de asistencia (fueguito del alumno) ---------- */

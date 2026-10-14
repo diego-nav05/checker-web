@@ -1,4 +1,8 @@
 {
+  "rewrites": [
+    { "source": "/A/:codigo*", "destination": "/index.html" },
+    { "source": "/a/:codigo*", "destination": "/index.html" }
+  ],
   "crons": [
     { "path": "/api/mantener-activo", "schedule": "0 7 * * *" }
   ]

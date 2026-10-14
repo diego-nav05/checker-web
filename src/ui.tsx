@@ -18,16 +18,18 @@ interface PantallaProps {
   className?: string;
   // Elementos pegados a los bordes de la pantalla (botón de compartir, sesión del docente...)
   esquinas?: ReactNode;
+  // En pantallas grandes ocupa justo el alto de la ventana: la página no se mueve y lo largo hace scroll por dentro
+  fija?: boolean;
 }
 
 const ANCHOS = { estrecho: 'max-w-sm', normal: 'max-w-6xl', grande: 'max-w-[1500px]', amplio: 'max-w-[1700px]' };
 
-export function Pantalla({ children, ancho = 'normal', centrada = false, className, esquinas }: PantallaProps) {
+export function Pantalla({ children, ancho = 'normal', centrada = false, className, esquinas, fija }: PantallaProps) {
   return (
-    <div className={unir('min-h-[100dvh] bg-fondo p-4 sm:p-8 flex flex-col font-sans selection:bg-azul selection:text-white relative overflow-hidden', esquinas && 'pb-24 sm:pb-24')}>
+    <div className={unir('min-h-[100dvh] bg-fondo p-4 sm:p-8 flex flex-col font-sans selection:bg-azul selection:text-white relative overflow-hidden', esquinas && 'pb-24 sm:pb-24', fija && 'xl:h-[100dvh]')}>
       <div className="glow-blob"></div>
       {esquinas}
-      <div className={unir('relative z-10 w-full mx-auto flex flex-col flex-1', ANCHOS[ancho], centrada && 'justify-center', className)}>
+      <div className={unir('relative z-10 w-full mx-auto flex flex-col flex-1', ANCHOS[ancho], centrada && 'justify-center', fija && 'min-h-0', className)}>
         {children}
       </div>
     </div>

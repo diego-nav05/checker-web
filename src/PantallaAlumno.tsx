@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 import type { Asignatura } from './types';
@@ -7,11 +6,15 @@ import { AvisoFlotante, useAviso } from './Aviso';
 import { traerPorLotes, traerTodas } from './consultas';
 import TarjetaRacha from './Racha';
 import { cargarHorarios, filasDe, horaDeHoy, resumenHorario, tramo, type FilaHorario } from './horario';
+import { abrirLector, prepararLector, type Lector } from './lectorQr';
+import { leerCodigo, type CodigoAsistencia } from './codigoQr';
 import { Boton, Cabecera, Esqueleto, Etiqueta, Modal, Pantalla, Pestanas, Tarjeta, TituloSeccion, Vacio, retraso } from './ui';
 
 interface Props {
   onVolver: () => void;
   onIrARegistro: () => void;
+  // Código del QR con el que se ha abierto la web (escaneado con la cámara normal del móvil)
+  codigoPendiente?: CodigoAsistencia | null;
 }
 
 type TabAlumno = 'HORARIO' | 'CALENDARIO';
@@ -62,7 +65,7 @@ function calcularRacha(
   return { actual, record };
 }
 
-export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
+export default function PantallaAlumno({ onVolver, onIrARegistro, codigoPendiente }: Props) {
   const [nombre] = useState<string>(() => localStorage.getItem('checker_nombre') || 'Estudiante');
   const [alumnoId] = useState<string>(() => localStorage.getItem('checker_alumno_id') || '');
   
@@ -82,7 +85,9 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
   const [historial, setHistorial] = useState<any[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
 
-  const qrScannerRef = useRef<Html5Qrcode | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lectorRef = useRef<Lector | null>(null);
+  const [procesandoEnlace, setProcesandoEnlace] = useState(false);
 
   // Con la seguridad activada, el móvil necesita su sesión de Supabase además del id guardado
   useEffect(() => {
@@ -209,115 +214,122 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
     cargarHistorial();
   }, [tabActual, alumnoId]);
 
-  useEffect(() => {
-    let isMounted = true;
-    let isProcessingLocally = false;
-
-    const inicializarCamara = async () => {
-      if (!camaraActiva) return;
-      setProcesandoQr(false);
-      setZoomActual(1);
-      
+  // Manda un código leído al servidor, que lo comprueba y guarda la asistencia (la clave del QR nunca
+  // llega al móvil). Devuelve el error del servidor traducido, o null si ha ido bien.
+  const registrarCodigo = async (codigo: CodigoAsistencia): Promise<string | null> => {
+    try {
+      const { data: resultado, error } = await supabase.rpc('registrar_asistencia', {
+        p_sesion: codigo.sesion, p_fase: codigo.fase, p_t: codigo.t, p_token: codigo.firma,
+      });
+      if (error) return mensajeEscaneo(error.message);
+      mostrarNotificacion(resultado === 'SALIDA_OK' ? '¡Salida completada!' : '¡Entrada registrada!', 'exito');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        stream.getTracks().forEach(track => track.stop());
-      } catch {
-        if (isMounted) {
-          mostrarNotificacion('Necesitamos la cámara para escanear el QR. Dale permiso en los ajustes del navegador.', 'error');
-          setCamaraActiva(false);
-        }
-        return;
-      }
-
-      setTimeout(async () => {
-        if (!isMounted || !camaraActiva) return;
-        
-        try {
-          const html5QrCode = new Html5Qrcode('qr-reader');
-          qrScannerRef.current = html5QrCode;
-          
-          const onScanSuccess = async (decodedText: string) => {
-            if (isProcessingLocally) return;
-            isProcessingLocally = true;
-
-            if (html5QrCode.getState() === 2) html5QrCode.pause();
-            setProcesandoQr(true);
-
-            try {
-              let payload: any = null;
-              try { payload = JSON.parse(decodedText); } catch { /* no es JSON */ }
-              const { s: sesionId, f: fase, t: bloqueTiempo, token } = payload ?? {};
-              if (!sesionId || !fase || !bloqueTiempo || !token) throw new Error('Ese código QR no es de Checker. Escanea el de la pantalla del profesor.');
-
-              // El servidor comprueba el QR y guarda la asistencia (la clave del QR nunca llega al móvil)
-              const { data: resultado, error: errorRegistro } = await supabase.rpc('registrar_asistencia', {
-                p_sesion: sesionId, p_fase: fase, p_t: bloqueTiempo, p_token: token,
-              });
-              if (errorRegistro) throw new Error(mensajeEscaneo(errorRegistro.message));
-
-              mostrarNotificacion(resultado === 'SALIDA_OK' ? '¡Salida completada!' : '¡Entrada registrada!', 'exito');
-
-              try {
-                const pingChannel = supabase.channel('aula-realtime');
-                pingChannel.subscribe((status) => {
-                  if (status === 'SUBSCRIBED') {
-                    pingChannel.send({ type: 'broadcast', event: 'update-lista', payload: { action: 'refresh' } });
-                    setTimeout(() => supabase.removeChannel(pingChannel), 1000);
-                  }
-                });
-              } catch (e) {}
-
-
-              cargarAsignaturas();
-              
-              if (html5QrCode.getState() !== 1) await html5QrCode.stop();
-              html5QrCode.clear();
-              setCamaraActiva(false);
-              
-            } catch (e: any) {
-              if (e.message === 'SESION_PERDIDA') {
-                localStorage.removeItem('checker_alumno_id');
-                if (html5QrCode.getState() !== 1) await html5QrCode.stop().catch(() => {});
-                setCamaraActiva(false);
-                setSesionPerdida(true);
-                return;
-              } else {
-                mostrarNotificacion(e.message || 'No se pudo leer el código. Vuelve a intentarlo.', 'error');
-              }
-              setProcesandoQr(false);
-              isProcessingLocally = false;
-              if (html5QrCode.getState() === 3) html5QrCode.resume();
-            }
-          };
-
-          html5QrCode.start(
-            { facingMode: "environment" },
-            { fps: 10 },
-            onScanSuccess,
-            () => {}
-          ).catch(() => {
-            if (isMounted) {
-              mostrarNotificacion('No se pudo abrir la cámara. Comprueba que el navegador tiene permiso para usarla.', 'error');
-              setCamaraActiva(false);
-            }
-          });
-        } catch {
-          if (isMounted) {
-            mostrarNotificacion('No se pudo abrir la cámara. Comprueba que el navegador tiene permiso para usarla.', 'error');
-            setCamaraActiva(false);
+        // Aviso instantáneo a la pantalla del profesor para que te vea en la lista
+        const pingChannel = supabase.channel('aula-realtime');
+        pingChannel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            pingChannel.send({ type: 'broadcast', event: 'update-lista', payload: { action: 'refresh' } });
+            setTimeout(() => supabase.removeChannel(pingChannel), 1000);
           }
-        }
-      }, 100);
+        });
+      } catch { /* la lista del profe se refresca sola igualmente */ }
+      cargarAsignaturas();
+      return null;
+    } catch (e: any) {
+      return mensajeEscaneo(e?.message || '');
+    }
+  };
+
+  const perderSesion = () => {
+    localStorage.removeItem('checker_alumno_id');
+    setCamaraActiva(false);
+    setSesionPerdida(true);
+  };
+
+  // Precarga el motor del lector para que la cámara lea al instante
+  useEffect(() => { prepararLector().catch(() => {}); }, []);
+
+  // Si ha llegado escaneando el QR con la cámara normal del móvil, registramos ese código directamente
+  const codigoUsadoRef = useRef(false);
+  useEffect(() => {
+    if (!codigoPendiente || codigoUsadoRef.current) return;
+    codigoUsadoRef.current = true;
+    (async () => {
+      setProcesandoEnlace(true);
+      const error = await registrarCodigo(codigoPendiente);
+      setProcesandoEnlace(false);
+      if (!error) return;
+      if (error === 'SESION_PERDIDA') return perderSesion();
+      if (error.startsWith('Código caducado') || error.startsWith('El profesor acaba')) {
+        // Ha tardado en abrirse la web y el QR ya ha cambiado: abrimos la cámara para leerlo desde aquí
+        mostrarNotificacion('El código ya había cambiado. Apunta al QR otra vez desde aquí.', 'info');
+        setCamaraActiva(true);
+      } else {
+        mostrarNotificacion(error, 'error');
+      }
+    })();
+  }, [codigoPendiente]);
+
+  useEffect(() => {
+    if (!camaraActiva) return;
+    let cerrado = false;
+    let lector: Lector | null = null;
+    let ultimoAviso = { texto: '', hora: 0 };
+    setProcesandoQr(false);
+    setZoomActual(1);
+
+    // Si el mismo QR inválido se sigue viendo, no repetimos el aviso cada medio segundo
+    const avisarUnaVez = (texto: string) => {
+      if (texto === ultimoAviso.texto && Date.now() - ultimoAviso.hora < 4000) return;
+      ultimoAviso = { texto, hora: Date.now() };
+      mostrarNotificacion(texto, 'error');
     };
 
-    inicializarCamara();
+    const alLeer = async (texto: string) => {
+      const codigo = leerCodigo(texto);
+      if (!codigo) {
+        avisarUnaVez('Ese código QR no es de Checker. Escanea el de la pantalla del profesor.');
+        return true;
+      }
+      setProcesandoQr(true);
+      const error = await registrarCodigo(codigo);
+      if (cerrado) return false;
+      if (!error) {
+        setCamaraActiva(false);
+        return false;
+      }
+      if (error === 'SESION_PERDIDA') {
+        perderSesion();
+        return false;
+      }
+      setProcesandoQr(false);
+      avisarUnaVez(error);
+      return true;
+    };
+
+    (async () => {
+      try {
+        // Esperamos a que exista el <video> (se pinta en este mismo cambio de estado)
+        await new Promise(r => requestAnimationFrame(r));
+        if (cerrado || !videoRef.current) return;
+        const abierto = await abrirLector(videoRef.current, alLeer);
+        if (cerrado) return abierto.parar();
+        lector = abierto;
+        lectorRef.current = abierto;
+      } catch (e: any) {
+        if (cerrado) return;
+        const sinPermiso = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
+        mostrarNotificacion(sinPermiso
+          ? 'Necesitamos la cámara para escanear el QR. Dale permiso en los ajustes del navegador.'
+          : 'No se pudo abrir la cámara. Cierra otras apps que la estén usando y vuelve a intentarlo.', 'error');
+        setCamaraActiva(false);
+      }
+    })();
 
     return () => {
-      isMounted = false;
-      if (qrScannerRef.current && qrScannerRef.current.getState() !== 1) {
-        qrScannerRef.current.stop().catch(() => {});
-        qrScannerRef.current.clear();
-      }
+      cerrado = true;
+      lector?.parar();
+      lectorRef.current = null;
     };
   }, [camaraActiva, alumnoId]);
 
@@ -348,12 +360,14 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
           await track.applyConstraints({ advanced: [{ zoom: targetZoom }] } as any);
           
           const softwareZoom = (nivel !== 'MAX' && targetNivel > targetZoom) ? (targetNivel / targetZoom) : 1;
+          lectorRef.current?.setZoom(softwareZoom);
           videoElement.style.transform = `scale(${softwareZoom})`;
           videoElement.style.transformOrigin = 'center center';
           return;
         }
       }
       // 2. Intento por Software (Fallback para iPhones antiguos y webkit estricto)
+      lectorRef.current?.setZoom(targetNivel);
       videoElement.style.transform = `scale(${targetNivel})`;
       videoElement.style.transformOrigin = 'center center';
     } catch (e) {
@@ -361,16 +375,14 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
       const videoElement = document.querySelector('#qr-reader video') as HTMLVideoElement;
       if (videoElement) {
         const targetNivel = typeof nivel === 'number' ? nivel : 5;
+        lectorRef.current?.setZoom(targetNivel);
         videoElement.style.transform = `scale(${targetNivel})`;
         videoElement.style.transformOrigin = 'center center';
       }
     }
   };
 
-  const cerrarCamara = () => {
-    if (qrScannerRef.current) qrScannerRef.current.stop().catch(()=>{});
-    setCamaraActiva(false);
-  };
+  const cerrarCamara = () => setCamaraActiva(false);
 
 
 
@@ -437,6 +449,14 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
     <Pantalla>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
+      {procesandoEnlace && (
+        <Modal centrado titulo="Registrando tu asistencia…" descripcion="Un segundo, estamos comprobando el código.">
+          <div className="flex justify-center py-2">
+            <div className="w-10 h-10 border-4 border-azul/20 border-t-azul rounded-full animate-spin"></div>
+          </div>
+        </Modal>
+      )}
+
       {sesionPerdida && (
         <Modal
           centrado
@@ -490,7 +510,9 @@ export default function PantallaAlumno({ onVolver, onIrARegistro }: Props) {
 
           {/* Contenedor de Video del Escáner */}
           <div className="flex-1 w-full h-full overflow-hidden bg-black flex items-center justify-center">
-            <div id="qr-reader" className="w-full h-full [&>video]:w-full [&>video]:h-full [&>video]:object-cover [&>video]:transition-transform [&>video]:duration-300 [&_#qr-shaded-region]:hidden"></div>
+            <div id="qr-reader" className="w-full h-full">
+              <video ref={videoRef} muted playsInline className="w-full h-full object-cover transition-transform duration-300"></video>
+            </div>
           </div>
 
           {/* Barra Inferior (Controles de Zoom Híbrido) */}

@@ -8,6 +8,7 @@ import AvisoVersionNueva from './VersionNueva.tsx';
 import SesionDocente from './SesionDocente.tsx';
 import { AvisoFlotante, useAviso } from './Aviso';
 import { supabase, hashInicial } from './supabase';
+import { codigoInicial } from './codigoQr';
 import { Boton, BotonVolver, Campo, Pantalla, Tarjeta } from './ui';
 
 type Vista = 'INICIO' | 'ALUMNADO' | 'PROFESORADO' | 'REGISTRO' | 'GESTION';
@@ -21,8 +22,11 @@ interface Docente {
 const MINUTOS_GESTION_DESBLOQUEADA = 10;
 const hoy = () => new Date().toDateString();
 
+// ¿Se ha abierto la web escaneando el QR de clase con la cámara normal, en un móvil ya vinculado?
+const entraConQr = !!codigoInicial && !!localStorage.getItem('checker_alumno_id') && localStorage.getItem('checker_rol') !== 'profesor';
+
 export default function App() {
-  const [vista, setVista] = useState<Vista>('INICIO');
+  const [vista, setVista] = useState<Vista>(entraConQr ? 'ALUMNADO' : 'INICIO');
   // Hacia dónde se desliza la pantalla nueva: desde la derecha al avanzar, desde la izquierda al volver
   const [direccion, setDireccion] = useState<'adelante' | 'atras'>('adelante');
   // El docente se queda conectado en este ordenador hasta que cierra sesión o termina el día
@@ -56,6 +60,12 @@ export default function App() {
       avisar('El enlace del correo ha caducado o ya se usó. Pide uno nuevo desde "Vincular" (en el ordenador, "Mi cuenta").', 'error', { fijo: true });
     } else if (tipoEnlace === 'signup' || tipoEnlace === 'invite' || tipoEnlace === 'email') {
       avisar('✅ ¡Correo confirmado! Tu cuenta ya está activa.\n\nAhora entra en "Vincular" (en el ordenador, "Mi cuenta") e inicia sesión desde el navegador que vayas a usar en clase.', 'exito', { fijo: true });
+    } else if (codigoInicial && localStorage.getItem('checker_rol') === 'profesor') {
+      avisar('Has escaneado el QR de clase, pero en este navegador hay una sesión de docente abierta.', 'info');
+    } else if (codigoInicial && !entraConQr) {
+      // No iniciamos sesión aquí directamente: si el alumno ya usa Checker en otro navegador (o desde el
+      // icono de la pantalla de inicio), vincular este le dejaría sin acceso en el otro.
+      avisar('📷 Has escaneado el QR de clase, pero este navegador no tiene tu cuenta.\n\nSi ya usas Checker (por ejemplo, desde el icono de tu pantalla de inicio), ábrelo desde ahí y pulsa "Escanear".\n\nSi es tu primera vez, pulsa "Vincular" para crear tu cuenta.', 'info', { fijo: true });
     } else if (!localStorage.getItem('checker_alumno_id') && localStorage.getItem('checker_rol') !== 'profesor') {
       avisar('👋 ¿Eres nuevo? Pulsa "Vincular" (en el ordenador, "Mi cuenta") para crear tu cuenta.', 'info');
     }
@@ -115,6 +125,8 @@ export default function App() {
   useEffect(() => {
     if (!window.history.state || !window.history.state.panel) {
       window.history.replaceState({ panel: 'INICIO' }, '');
+      // Entrando con el QR vamos directos a Alumnado, pero "atrás" debe llevar al inicio
+      if (entraConQr) window.history.pushState({ panel: 'ALUMNADO' }, '');
     }
 
     const handlePopState = (e: PopStateEvent) => {
@@ -290,7 +302,7 @@ export default function App() {
         window.history.replaceState({ panel: 'REGISTRO' }, '');
         setVista('REGISTRO');
       };
-      return <PantallaAlumno onVolver={volverInicio} onIrARegistro={irARegistro} />;
+      return <PantallaAlumno onVolver={volverInicio} onIrARegistro={irARegistro} codigoPendiente={entraConQr ? codigoInicial : null} />;
     }
     if (vista === 'REGISTRO') return <PantallaRegistro onVolver={volverInicio} />;
 

@@ -9,9 +9,10 @@ import { traerPorLotes, traerTodas } from './consultas';
 import { Boton, Cabecera, Esqueleto, Etiqueta, Modal, Pantalla, Tarjeta, Vacio } from './ui';
 import FilaAlumno from './FilaAlumno';
 import { cargarHorarios, filasDe, horaDeHoy, resumenHorario, tramo, type FilaHorario } from './horario';
+import { crearCodigo } from './codigoQr';
 
-// Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 20 s de antigüedad)
-const SEGUNDOS_QR = 5;
+// Cada cuántos segundos cambia el QR (el servidor acepta códigos de hasta 45 s de antigüedad)
+const SEGUNDOS_QR = 15;
 
 interface Props {
   onVolver: () => void;
@@ -201,11 +202,12 @@ export default function PantallaProfesor({ onVolver }: Props) {
     const actualizarQR = async () => {
       const bloqueTiempo = Math.floor((Date.now() + desfaseRelojRef.current) / 1000);
       const payload = `${sesionId}|${fase}|${bloqueTiempo}`;
-      const token = CryptoJS.HmacSHA256(payload, secretTotp).toString();
-      const qrPayload = JSON.stringify({ s: sesionId, f: fase, t: bloqueTiempo, token });
-      
-      // Renderizamos el QR a alta resolución (width 500) para máxima nitidez
-      const dataUrl = await QRCode.toDataURL(qrPayload, { width: 1000, margin: 1, color: { dark: '#002b5c', light: '#ffffff' } });
+      const firma = CryptoJS.HmacSHA256(payload, secretTotp).toString();
+      const contenido = crearCodigo({ sesion: sesionId, fase, t: bloqueTiempo, firma });
+
+      // Negro puro sobre blanco y con margen blanco de 4 cuadraditos: lo que mejor leen las cámaras,
+      // sobre todo con proyector o pizarra (poco contraste y reflejos)
+      const dataUrl = await QRCode.toDataURL(contenido, { errorCorrectionLevel: 'M', width: 1000, margin: 4, color: { dark: '#000000', light: '#ffffff' } });
       setQrSrc(dataUrl);
 
       // Sincronizar con la ventana emergente si existe y no se ha cerrado
@@ -372,7 +374,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
 
 
   return (
-    <Pantalla ancho={sesionId ? 'grande' : 'normal'} esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} />}>
+    <Pantalla ancho={sesionId ? 'grande' : 'normal'} fija={!!sesionId} esquinas={<BotonCompartir mostrarNotificacion={mostrarNotificacion} />}>
       <AvisoFlotante aviso={aviso} onCerrar={cerrarAviso} />
 
       <Cabecera
@@ -440,15 +442,15 @@ export default function PantallaProfesor({ onVolver }: Props) {
         )
       ) : (
         // VISTA: AULA ACTIVA
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 flex-1">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 sm:gap-6 flex-1 min-h-0">
           
           {/* PANEL IZQUIERDO: QR */}
-          <div className="xl:col-span-5 glass-container rounded-bento p-6 sm:p-8 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
+          <div className="xl:col-span-5 xl:min-h-0 glass-container rounded-bento p-6 sm:p-8 xl:p-6 flex flex-col items-center justify-center text-center relative overflow-hidden entra-izquierda">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-azul rounded-full opacity-[0.04] blur-[60px] pointer-events-none"></div>
 
             {fase !== 'CERRADA' ? (
               <div className="relative z-10 w-full flex flex-col items-center">
-                <div className="mb-6 flex items-center justify-between w-full max-w-[32rem]">
+                <div className="mb-5 flex items-center justify-between w-full max-w-[32rem] xl:max-w-[min(32rem,calc(100dvh-24rem))]">
                   <span key={fase} className={`text-[10px] uppercase tracking-widest font-bold px-4 py-2 rounded-full border bento-entrada ${fase === 'ENTRADA' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-azul/5 text-azul border-azul/10'}`}>
                     {fase === 'ENTRADA' ? '📍 Modo entrada' : '🚪 Modo salida'}
                   </span>
@@ -457,16 +459,21 @@ export default function PantallaProfesor({ onVolver }: Props) {
                   </button>
                 </div>
 
-                <div className="w-full max-w-[32rem] aspect-square p-4 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100">
-                  {qrSrc && <img key={qrSrc} src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-control object-contain select-none pointer-events-none qr-nitido qr-latido" draggable="false" />}
+                {/* Sin animación al cambiar: un QR a medio animar no lo lee ninguna cámara */}
+                <div className="w-full max-w-[32rem] xl:max-w-[min(32rem,calc(100dvh-24rem))] aspect-square p-2 bg-white rounded-bento shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100">
+                  {qrSrc && <img src={qrSrc} alt="Código QR de asistencia" className="w-full h-full rounded-control object-contain select-none pointer-events-none qr-nitido" draggable="false" />}
                 </div>
 
-                <div className="mt-8 flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-5 py-2.5 rounded-full border border-slate-100">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  Sincronizado en vivo
+                {/* Para quien no tiene Checker guardado: el QR también se abre con la cámara normal del móvil */}
+                <div className="mt-5 flex flex-col items-center gap-1.5">
+                  <p className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-500">
+                    <span className="relative flex h-2.5 w-2.5 shrink-0" title="En vivo">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    Escanéalo desde Checker o con la cámara del móvil
+                  </p>
+                  <p className="text-sm sm:text-base font-black text-marino tracking-tight select-all">{window.location.host}</p>
                 </div>
               </div>
             ) : (
@@ -479,16 +486,16 @@ export default function PantallaProfesor({ onVolver }: Props) {
           </div>
 
           {/* PANEL DERECHO: Lista de Alumnos */}
-          <div className="xl:col-span-7 glass-container rounded-bento p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
+          <div className="xl:col-span-7 max-h-[85dvh] xl:max-h-none xl:min-h-0 glass-container rounded-bento p-6 sm:p-8 flex flex-col relative overflow-hidden entra-derecha" style={{ '--i': 1 } as React.CSSProperties}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-6 sm:mb-8">
               <h2 className="text-lg sm:text-xl font-black text-marino tracking-tight">Alumnos de la clase</h2>
               <Etiqueta tono="oscuro" className="px-4 py-1.5">{asistencias.length} {asistencias.length === 1 ? 'alumno' : 'alumnos'}</Etiqueta>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 overflow-hidden relative z-10">
+            <div className="flex flex-col md:grid md:grid-cols-2 gap-4 flex-1 min-h-0 overflow-hidden relative z-10">
               
               {/* COLUMNA IZQUIERDA: COMPLETADOS */}
-              <div className="flex flex-col h-full">
+              <div className="flex flex-col flex-1 min-h-0">
                 <h3 className="text-sm font-bold text-emerald-600 mb-4 flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.6)]"></span>
                   {fase === 'ENTRADA' ? 'Presentes' : 'Han salido'} ({
@@ -506,7 +513,7 @@ export default function PantallaProfesor({ onVolver }: Props) {
               </div>
 
               {/* COLUMNA DERECHA: PENDIENTES */}
-              <div className="flex flex-col h-full border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-4">
+              <div className="flex flex-col flex-1 min-h-0 border-t md:border-t-0 md:border-l border-white/40 pt-6 md:pt-0 md:pl-4">
                 <h3 className="text-sm font-bold text-rose-500 mb-4 flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-rose-400 rounded-full shadow-[0_0_8px_rgba(251,113,133,0.6)]"></span>
                   Pendientes ({
